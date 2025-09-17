@@ -15,6 +15,46 @@ app.use(express.json());
 // Global connection pool
 let connectionPool = null;
 
+// Helper function to convert JavaScript dates to MySQL format
+function convertDateForMySQL(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  
+  // If it's already a string that looks like a MySQL datetime, return as is
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return value;
+  }
+  
+  // If it's an ISO string or Date object, convert to MySQL format
+  if (typeof value === 'string' || value instanceof Date) {
+    try {
+      const date = new Date(value);
+      if (isNaN(date.getTime())) {
+        return value; // Return original if not a valid date
+      }
+      
+      // Convert to MySQL datetime format (YYYY-MM-DD HH:MM:SS)
+      return date.toISOString().slice(0, 19).replace('T', ' ');
+    } catch (error) {
+      return value; // Return original if conversion fails
+    }
+  }
+  
+  return value;
+}
+
+// Helper function to process data object for MySQL
+function processDataForMySQL(data) {
+  const processedData = {};
+  
+  for (const [key, value] of Object.entries(data)) {
+    processedData[key] = convertDateForMySQL(value);
+  }
+  
+  return processedData;
+}
+
 // Load database configuration
 async function loadConfig() {
   try {
@@ -47,7 +87,8 @@ async function createConnectionPool(config) {
         cert: config.database.sslCertificate || undefined,
         key: config.database.sslKey || undefined,
       } : false,
-      multipleStatements: config.security.allowMultipleStatements
+      multipleStatements: config.security.allowMultipleStatements,
+      timezone: '+00:00' // Use UTC timezone
     });
 
     return true;
@@ -75,7 +116,8 @@ app.post('/api/test-connection', async (req, res) => {
         cert: config.database.sslCertificate || undefined,
         key: config.database.sslKey || undefined,
       } : false,
-      connectTimeout: config.database.connectionTimeout
+      connectTimeout: config.database.connectionTimeout,
+      timezone: '+00:00'
     });
 
     await testConnection.execute('SELECT 1');
@@ -296,9 +338,12 @@ app.put('/api/databases/:database/tables/:table/cell', async (req, res) => {
         return res.status(400).json({ error: 'Table has no primary key' });
       }
 
+      // Convert date values if needed
+      const processedValue = convertDateForMySQL(newValue);
+
       // Build UPDATE query
       const updateQuery = `UPDATE \`${table}\` SET \`${columnName}\` = ? WHERE \`${pkColumn.Field}\` = ?`;
-      const [result] = await connection.execute(updateQuery, [newValue, primaryKey]);
+      const [result] = await connection.execute(updateQuery, [processedValue, primaryKey]);
 
       res.json({
         success: true,
@@ -344,15 +389,18 @@ app.put('/api/databases/:database/tables/:table/row', async (req, res) => {
         return res.status(400).json({ error: 'Table has no primary key' });
       }
 
+      // Process data for MySQL compatibility
+      const processedData = processDataForMySQL(data);
+
       // Build UPDATE query
-      const setClause = Object.keys(data)
+      const setClause = Object.keys(processedData)
         .filter(key => key !== pkColumn.Field) // Don't update PK
         .map(key => `\`${key}\` = ?`)
         .join(', ');
       
-      const values = Object.keys(data)
+      const values = Object.keys(processedData)
         .filter(key => key !== pkColumn.Field)
-        .map(key => data[key]);
+        .map(key => processedData[key]);
       
       const updateQuery = `UPDATE \`${table}\` SET ${setClause} WHERE \`${pkColumn.Field}\` = ?`;
       const [result] = await connection.execute(updateQuery, [...values, primaryKey]);
@@ -397,10 +445,24 @@ app.post('/api/databases/:database/tables/:table/row', async (req, res) => {
       const [columns] = await connection.query(`DESCRIBE \`${table}\``);
       const pkColumn = columns.find(col => col.Key === 'PRI');
       
+      // Process data for MySQL compatibility
+      let processedData = processDataForMySQL(data);
+      
       // Remove primary key from data if it's auto increment
-      const insertData = { ...data };
       if (pkColumn && pkColumn.Extra.includes('auto_increment')) {
-        delete insertData[pkColumn.Field];
+        delete processedData[pkColumn.Field];
+      }
+
+      // Filter out any undefined or empty values that shouldn't be inserted
+      const insertData = {};
+      Object.entries(processedData).forEach(([key, value]) => {
+        if (value !== undefined) {
+          insertData[key] = value;
+        }
+      });
+
+      if (Object.keys(insertData).length === 0) {
+        return res.status(400).json({ error: 'No valid data to insert' });
       }
 
       // Build INSERT query
@@ -409,6 +471,10 @@ app.post('/api/databases/:database/tables/:table/row', async (req, res) => {
       const values = Object.values(insertData);
       
       const insertQuery = `INSERT INTO \`${table}\` (${columnNames}) VALUES (${placeholders})`;
+      
+      console.log('Insert query:', insertQuery);
+      console.log('Values:', values);
+      
       const [result] = await connection.execute(insertQuery, values);
 
       res.json({
