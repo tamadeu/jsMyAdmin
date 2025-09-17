@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,15 @@ interface DatabaseInfo {
   totalTables: number;
   totalViews: number;
 }
+
+// Helper function for deep comparison of string arrays
+const arraysEqual = (a: string[], b: string[]) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
 
 const Sidebar = () => {
   const location = useLocation();
@@ -51,21 +60,26 @@ const Sidebar = () => {
   // Update expanded databases based on current active tab
   useEffect(() => {
     const activeTab = getTabById(activeTabId);
+    let targetExpandedDatabases: string[] = [];
+    let targetExpandedSections: string[] = [];
+
     if (activeTab && activeTab.type === 'table' && activeTab.params?.database) {
-      setExpandedDatabases([activeTab.params.database]);
+      targetExpandedDatabases = [activeTab.params.database];
       if (activeTab.params.table) {
-        // Determine which section (tables/views) to expand
+        // Find the database from the current `databases` state
         const db = databases.find(d => d.name === activeTab.params?.database);
         if (db) {
           const isView = db.views.some(view => view.name === activeTab.params?.table);
-          setExpandedSections([`${activeTab.params.database}-${isView ? 'views' : 'tables'}`]);
+          targetExpandedSections = [`${activeTab.params.database}-${isView ? 'views' : 'tables'}`];
         }
       }
-    } else {
-      setExpandedDatabases([]);
-      setExpandedSections([]);
     }
-  }, [activeTabId, databases, getTabById]);
+
+    // Only update state if the new value is different from the current state
+    setExpandedDatabases(prev => arraysEqual(prev, targetExpandedDatabases) ? prev : targetExpandedDatabases);
+    setExpandedSections(prev => arraysEqual(prev, targetExpandedSections) ? prev : targetExpandedSections);
+
+  }, [activeTabId, databases, getTabById]); // Dependencies are activeTabId, databases, getTabById
 
   const loadDatabases = async () => {
     try {
