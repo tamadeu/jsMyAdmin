@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,8 @@ const DatabaseBrowser = () => {
   const { database, table } = useParams();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
+  const [liveSearchTerm, setLiveSearchTerm] = useState("");
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [tableInfo, setTableInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +74,30 @@ const DatabaseBrowser = () => {
     setOffset(0); // Reset to first page when searching
   };
 
+  const handleLiveSearch = (value: string) => {
+    setLiveSearchTerm(value);
+  };
+
+  const handleColumnFilter = (columnName: string, value: string) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [columnName]: value
+    }));
+  };
+
+  const clearColumnFilter = (columnName: string) => {
+    setColumnFilters(prev => {
+      const newFilters = { ...prev };
+      delete newFilters[columnName];
+      return newFilters;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setColumnFilters({});
+    setLiveSearchTerm("");
+  };
+
   const handleLimitChange = (value: string) => {
     setLimit(parseInt(value));
     setOffset(0); // Reset to first page when changing limit
@@ -88,6 +114,37 @@ const DatabaseBrowser = () => {
       setOffset(offset + limit);
     }
   };
+
+  // Filter data based on live search and column filters
+  const filteredData = useMemo(() => {
+    if (!tableData?.data) return [];
+
+    let filtered = tableData.data;
+
+    // Apply live search (searches in visible data only)
+    if (liveSearchTerm) {
+      filtered = filtered.filter(row => {
+        return tableData.columns.some(column => {
+          const value = row[column.name];
+          if (value === null || value === undefined) return false;
+          return String(value).toLowerCase().includes(liveSearchTerm.toLowerCase());
+        });
+      });
+    }
+
+    // Apply column filters
+    Object.entries(columnFilters).forEach(([columnName, filterValue]) => {
+      if (filterValue) {
+        filtered = filtered.filter(row => {
+          const value = row[columnName];
+          if (value === null || value === undefined) return false;
+          return String(value).toLowerCase().includes(filterValue.toLowerCase());
+        });
+      }
+    });
+
+    return filtered;
+  }, [tableData, liveSearchTerm, columnFilters]);
 
   const formatCellValue = (value: any) => {
     if (value === null) return <span className="text-muted-foreground italic">NULL</span>;
@@ -132,6 +189,7 @@ const DatabaseBrowser = () => {
   const totalPages = tableData ? Math.ceil(tableData.total / limit) : 1;
   const startRow = offset + 1;
   const endRow = Math.min(offset + limit, tableData?.total || 0);
+  const hasActiveFilters = Object.keys(columnFilters).length > 0 || liveSearchTerm;
 
   return (
     <div className="overflow-y-auto h-full">
@@ -201,6 +259,7 @@ const DatabaseBrowser = () => {
                 <CardTitle>Browse Data</CardTitle>
                 <CardDescription>
                   {tableData ? `${tableData.total.toLocaleString()} total rows` : 'No data'}
+                  {hasActiveFilters && ` • ${filteredData.length} filtered`}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -225,16 +284,27 @@ const DatabaseBrowser = () => {
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
-                    placeholder="Search in table..." 
+                    placeholder="Search in database (server-side)..." 
                     className="pl-10"
                     value={searchTerm}
                     onChange={(e) => handleSearch(e.target.value)}
                   />
                 </div>
-                <Button variant="outline" size="sm">
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filter
-                </Button>
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Live search in visible data..." 
+                    className="pl-10"
+                    value={liveSearchTerm}
+                    onChange={(e) => handleLiveSearch(e.target.value)}
+                  />
+                </div>
+                {hasActiveFilters && (
+                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                    <X className="h-4 w-4 mr-2" />
+                    Clear Filters
+                  </Button>
+                )}
                 <Select value={limit.toString()} onValueChange={handleLimitChange}>
                   <SelectTrigger className="w-32">
                     <SelectValue />
@@ -259,14 +329,34 @@ const DatabaseBrowser = () => {
                               <Checkbox />
                             </th>
                             {tableData.columns.map((column) => (
-                              <th key={column.name} className="p-3 text-left">
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{column.name}</span>
-                                  <span className="text-xs text-muted-foreground font-normal">
-                                    {column.type}
-                                    {column.key === 'PRI' && ' (PK)'}
-                                    {!column.null && ' NOT NULL'}
-                                  </span>
+                              <th key={column.name} className="p-3 text-left min-w-[200px]">
+                                <div className="flex flex-col space-y-2">
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{column.name}</span>
+                                    <span className="text-xs text-muted-foreground font-normal">
+                                      {column.type}
+                                      {column.key === 'PRI' && ' (PK)'}
+                                      {!column.null && ' NOT NULL'}
+                                    </span>
+                                  </div>
+                                  <div className="relative">
+                                    <Input
+                                      placeholder="Filter..."
+                                      className="h-8 text-xs"
+                                      value={columnFilters[column.name] || ''}
+                                      onChange={(e) => handleColumnFilter(column.name, e.target.value)}
+                                    />
+                                    {columnFilters[column.name] && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                                        onClick={() => clearColumnFilter(column.name)}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
                               </th>
                             ))}
@@ -274,7 +364,7 @@ const DatabaseBrowser = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {tableData.data.map((row, index) => (
+                          {filteredData.map((row, index) => (
                             <tr key={index} className="border-t hover:bg-muted/50">
                               <td className="p-3">
                                 <Checkbox />
@@ -306,7 +396,8 @@ const DatabaseBrowser = () => {
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
                       Showing {startRow} to {endRow} of {tableData.total.toLocaleString()} entries
-                      {searchTerm && ` (filtered)`}
+                      {searchTerm && ` (database filtered)`}
+                      {hasActiveFilters && ` • ${filteredData.length} visible after filters`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
