@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { QueryResult, apiService } from "@/services/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2 } from "lucide-react";
+import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,6 +59,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
   const [offset, setOffset] = useState(0);
   const [isLoadingData, setIsLoadingData] = useState(false); // For re-executing query
   const [isSearching, setIsSearching] = useState(false); // For client-side filtering
+  const [isQueryExpanded, setIsQueryExpanded] = useState(false); // State for query expansion
 
   // Debounce the search input and column filters
   const debouncedSearchTerm = useDebounce(searchInput, 300);
@@ -100,6 +101,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
     setOffset(0);
     setSearchInput("");
     setColumnFilters({});
+    setIsQueryExpanded(false); // Reset expansion state
   }, [initialQueryResult, reExecuteQuery]);
 
   // Client-side filtering and searching
@@ -188,6 +190,19 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
     return String(value);
   };
 
+  const toggleQueryExpansion = () => {
+    setIsQueryExpanded(prev => !prev);
+  };
+
+  const displayedQuery = useMemo(() => {
+    const query = currentQueryResult.originalQuery || '';
+    const maxLength = 300; // Max length before truncating
+    if (isQueryExpanded || query.length <= maxLength) {
+      return query;
+    }
+    return query.substring(0, maxLength) + '...';
+  }, [currentQueryResult.originalQuery, isQueryExpanded]);
+
   if (isLoadingData) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -206,7 +221,20 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
         <span className="font-medium">Error:</span> {currentQueryResult.error}
         {currentQueryResult.originalQuery && (
           <div className="font-mono text-xs bg-muted p-2 rounded mt-2">
-            {currentQueryResult.originalQuery}
+            {displayedQuery}
+            {currentQueryResult.originalQuery.length > 300 && (
+              <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
+                {isQueryExpanded ? (
+                  <>
+                    <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -223,7 +251,20 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
         )}
         {currentQueryResult.originalQuery && (
           <div className="font-mono text-xs bg-muted p-2 rounded mt-2">
-            {currentQueryResult.originalQuery}
+            {displayedQuery}
+            {currentQueryResult.originalQuery.length > 300 && (
+              <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
+                {isQueryExpanded ? (
+                  <>
+                    <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -252,7 +293,20 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
               </div>
               {currentQueryResult.originalQuery && (
                 <div className="font-mono text-xs bg-muted p-2 rounded">
-                  {currentQueryResult.originalQuery}
+                  {displayedQuery}
+                  {currentQueryResult.originalQuery.length > 300 && (
+                    <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
+                      {isQueryExpanded ? (
+                        <>
+                          <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
