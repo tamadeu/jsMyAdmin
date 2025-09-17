@@ -50,8 +50,11 @@ const TabsDisplay = () => {
                   e.stopPropagation(); // Prevent activating the tab when closing
                   removeTab(tab.id);
                 }}
+                asChild // Render as a child element, not a button itself
               >
-                <X className="h-3 w-3" />
+                <span className="flex items-center justify-center"> {/* Use a span as the child */}
+                  <X className="h-3 w-3" />
+                </span>
               </Button>
             )}
           </TabsTrigger>
