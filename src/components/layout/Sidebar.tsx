@@ -274,7 +274,7 @@ const Sidebar = () => {
                             <AccordionTrigger className="hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs">
                               <div className="flex items-center gap-2">
                                 <Table className="h-3 w-3" />
-                                <span>Tables ({db.totalTables})</span>
+                                <span className="text-foreground">Tables ({db.totalTables})</span>
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pb-1">
@@ -292,7 +292,7 @@ const Sidebar = () => {
                                     >
                                       <div className="flex items-center gap-2">
                                         <Table className="h-3 w-3" />
-                                        <span className="text-sm">{table.name}</span>
+                                        <span className="text-sm text-foreground">{table.name}</span>
                                       </div>
                                     </div>
                                   ))
@@ -308,7 +308,7 @@ const Sidebar = () => {
                             <AccordionTrigger className="hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs">
                               <div className="flex items-center gap-2">
                                 <Eye className="h-3 w-3" />
-                                <span>Views ({db.totalViews})</span>
+                                <span className="text-foreground">Views ({db.totalViews})</span>
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pb-1">
@@ -326,7 +326,7 @@ const Sidebar = () => {
                                     >
                                       <div className="flex items-center gap-2">
                                         <Eye className="h-3 w-3" />
-                                        <span className="text-sm">{view.name}</span>
+                                        <span className="text-sm text-foreground">{view.name}</span>
                                       </div>
                                     </div>
                                   ))

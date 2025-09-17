@@ -201,6 +201,8 @@ app.get('/api/databases/:database/tables', async (req, res) => {
 
     const { database } = req.params;
     
+    console.log(`Loading tables and views for database: ${database}`);
+    
     // Get detailed information about tables and views
     const [tablesAndViews] = await connectionPool.execute(`
       SELECT 
@@ -215,11 +217,15 @@ app.get('/api/databases/:database/tables', async (req, res) => {
       ORDER BY table_type, table_name
     `, [database]);
 
+    console.log(`Found ${tablesAndViews.length} items in ${database}`);
+
     // Separate tables and views
     const tables = [];
     const views = [];
 
     tablesAndViews.forEach(item => {
+      console.log(`Processing: ${item.table_name} - Type: ${item.table_type}`);
+      
       const tableInfo = {
         name: item.table_name,
         rows: item.table_rows || 0,
@@ -230,17 +236,27 @@ app.get('/api/databases/:database/tables', async (req, res) => {
 
       if (item.table_type === 'VIEW') {
         views.push(tableInfo);
+      } else if (item.table_type === 'BASE TABLE') {
+        tables.push(tableInfo);
       } else {
+        // Fallback for other types, treat as table
+        console.log(`Unknown table type: ${item.table_type}, treating as table`);
         tables.push(tableInfo);
       }
     });
+
+    console.log(`Separated into: ${tables.length} tables, ${views.length} views`);
     
-    res.json({
+    const result = {
       tables,
       views,
       totalTables: tables.length,
       totalViews: views.length
-    });
+    };
+
+    console.log('Final result:', result);
+    
+    res.json(result);
   } catch (error) {
     console.error('Error fetching tables:', error);
     res.status(500).json({ error: error.message });
