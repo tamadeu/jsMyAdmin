@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { QueryResult } from "@/services/api";
 
@@ -49,7 +49,19 @@ interface TabProviderProps {
 
 export function TabProvider({ children }: TabProviderProps) {
   const [tabs, setTabs] = useState<AppTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
+  const [activeTabId, _setActiveTabId] = useState<string>(''); // Internal state for activeTabId
+  const activeTabIdRef = useRef(activeTabId); // Ref para manter o valor mais recente de activeTabId
+
+  // Mantém o ref em sincronia com o estado
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
+  // Setter memoizado para activeTabId, atualiza tanto o estado quanto o ref
+  const setActiveTab = useCallback((id: string) => {
+    _setActiveTabId(id);
+    activeTabIdRef.current = id; // Atualiza o ref imediatamente
+  }, []);
 
   // Function to save current tabs to localStorage
   const saveTabsToLocalStorage = useCallback((currentTabs: AppTab[]) => {
@@ -92,9 +104,9 @@ export function TabProvider({ children }: TabProviderProps) {
         });
         setTabs(hydratedTabs);
         if (savedActiveTabId && hydratedTabs.some(tab => tab.id === savedActiveTabId)) {
-          setActiveTabId(savedActiveTabId);
+          setActiveTab(savedActiveTabId);
         } else if (hydratedTabs.length > 0) {
-          setActiveTabId(hydratedTabs[0].id);
+          setActiveTab(hydratedTabs[0].id);
         } else {
           // Fallback to default dashboard if no valid tabs or active tab
           const dashboardTab: AppTab = {
@@ -104,7 +116,7 @@ export function TabProvider({ children }: TabProviderProps) {
             closable: false,
           };
           setTabs([dashboardTab]);
-          setActiveTabId(dashboardTab.id);
+          setActiveTab(dashboardTab.id);
         }
       } else {
         // No saved tabs, initialize with a default Dashboard tab
@@ -115,7 +127,7 @@ export function TabProvider({ children }: TabProviderProps) {
           closable: false,
         };
         setTabs([dashboardTab]);
-        setActiveTabId(dashboardTab.id);
+        setActiveTab(dashboardTab.id);
       }
     } catch (error) {
       console.error("Failed to load tabs from localStorage:", error);
@@ -127,9 +139,9 @@ export function TabProvider({ children }: TabProviderProps) {
         closable: false,
       };
       setTabs([dashboardTab]);
-      setActiveTabId(dashboardTab.id);
+      setActiveTab(dashboardTab.id);
     }
-  }, [saveTabsToLocalStorage]); // Run only once on mount
+  }, [saveTabsToLocalStorage, setActiveTab]); // Adicionado setActiveTab às dependências
 
   // Save activeTabId to localStorage whenever it changes
   React.useEffect(() => {
@@ -149,7 +161,7 @@ export function TabProvider({ children }: TabProviderProps) {
         );
 
         if (existingTab) {
-          setActiveTabId(existingTab.id);
+          setActiveTab(existingTab.id);
           return prevTabs;
         }
       }
@@ -165,10 +177,10 @@ export function TabProvider({ children }: TabProviderProps) {
 
       const updatedTabs = [...prevTabs, tabToAdd];
       saveTabsToLocalStorage(updatedTabs); // Save to localStorage
-      setActiveTabId(id);
+      setActiveTab(id);
       return updatedTabs;
     });
-  }, [saveTabsToLocalStorage]);
+  }, [saveTabsToLocalStorage, setActiveTab]); // Adicionado setActiveTab às dependências
 
   const removeTab = useCallback((tabId: string) => {
     setTabs(prevTabs => {
@@ -177,14 +189,14 @@ export function TabProvider({ children }: TabProviderProps) {
 
       const newTabs = prevTabs.filter(tab => tab.id !== tabId);
 
-      // If the removed tab was active, activate another tab
-      if (activeTabId === tabId) {
+      // Usa activeTabIdRef.current para obter o activeTabId mais recente
+      if (activeTabIdRef.current === tabId) { // Se a aba removida era a aba ativa atual
         if (newTabs.length > 0) {
-          // Activate the tab to the left, or the first one if it was the first
+          // Ativa a aba à esquerda, ou a primeira se era a primeira
           const newActiveIndex = Math.max(0, tabIndex - 1);
-          setActiveTabId(newTabs[newActiveIndex].id);
+          setActiveTab(newTabs[newActiveIndex].id);
         } else {
-          // No tabs left, add a default dashboard tab
+          // Nenhuma aba restante, adiciona uma aba de dashboard padrão
           const dashboardTab: AppTab = {
             id: uuidv4(),
             title: 'Dashboard',
@@ -192,15 +204,15 @@ export function TabProvider({ children }: TabProviderProps) {
             closable: false,
           };
           const updatedTabs = [dashboardTab];
-          saveTabsToLocalStorage(updatedTabs); // Save to localStorage
-          setActiveTabId(dashboardTab.id);
+          saveTabsToLocalStorage(updatedTabs); // Salva no localStorage
+          setActiveTab(dashboardTab.id);
           return updatedTabs;
         }
       }
-      saveTabsToLocalStorage(newTabs); // Save to localStorage
+      saveTabsToLocalStorage(newTabs); // Salva no localStorage
       return newTabs;
     });
-  }, [activeTabId, saveTabsToLocalStorage]);
+  }, [saveTabsToLocalStorage, setActiveTab]); // Adicionado setActiveTab às dependências
 
   const updateTabContent = useCallback((tabId: string, content: { sqlQueryContent?: string }) => {
     setTabs(prevTabs => {
@@ -221,10 +233,10 @@ export function TabProvider({ children }: TabProviderProps) {
     activeTabId,
     addTab,
     removeTab,
-    setActiveTab: setActiveTabId,
+    setActiveTab,
     getTabById,
     updateTabContent,
-  }), [tabs, activeTabId, addTab, removeTab, setActiveTabId, getTabById, updateTabContent]);
+  }), [tabs, activeTabId, addTab, removeTab, setActiveTab, getTabById, updateTabContent]);
 
   return (
     <TabContext.Provider value={value}>
