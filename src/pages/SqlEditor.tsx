@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Play, Save, RotateCcw, AlertCircle, AlignLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // Added CardDescription
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiService, QueryResult } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
@@ -12,7 +12,7 @@ import { format } from "sql-formatter";
 
 const SqlEditor = () => {
   const { toast } = useToast();
-  const { addTab, activeTabId, getTabById, updateTabContent } = useTabs();
+  const { addTab, activeTabId, getTabById, updateTabContent, removeTab } = useTabs(); // Adicionado removeTab
   
   const activeTab = getTabById(activeTabId);
 
@@ -58,6 +58,7 @@ const SqlEditor = () => {
             queryResult: { ...result, originalQuery: sqlQuery },
             closable: true,
           });
+          removeTab(activeTabId); // Fecha a aba atual do SQL Editor
         } else {
           toast({
             title: "Query executed",
@@ -81,7 +82,7 @@ const SqlEditor = () => {
     } finally {
       setIsExecuting(false);
     }
-  }, [sqlQuery, addTab, toast]);
+  }, [sqlQuery, addTab, toast, removeTab, activeTabId]); // Adicionado removeTab e activeTabId às dependências
 
   const saveQuery = () => {
     toast({
@@ -121,7 +122,7 @@ const SqlEditor = () => {
   }, [executeQuery]);
 
   return (
-    <div className="flex flex-col h-full p-6 space-y-6"> {/* Changed to flex-col and added p-6 space-y-6 */}
+    <div className="flex flex-col h-full p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">SQL Editor</h1>
@@ -144,7 +145,7 @@ const SqlEditor = () => {
       </div>
 
       {/* Query Editor Area */}
-      <div className="flex-1 min-h-[150px]"> {/* Use min-h to ensure it's not too small */}
+      <div className="flex-1 min-h-[150px]">
         <Textarea
           value={sqlQuery}
           onChange={(e) => setSqlQuery(e.target.value)}
@@ -187,7 +188,7 @@ const SqlEditor = () => {
           <CardTitle>Quick Actions</CardTitle>
           <CardDescription>Common SQL commands</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-2"> {/* Responsive grid */}
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Button 
             variant="outline" 
             className="w-full justify-start"
