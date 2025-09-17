@@ -351,17 +351,17 @@ const DatabaseBrowser = () => {
                 <>
                   <div className="border rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
-                      <table className="w-full">
+                      <table className="w-full text-xs">
                         <thead className="bg-muted">
                           <tr>
-                            <th className="p-3 text-left">
+                            <th className="p-2 text-left">
                               <Checkbox />
                             </th>
                             {tableData.columns.map((column) => (
-                              <th key={column.name} className="p-3 text-left min-w-[200px]">
+                              <th key={column.name} className="p-2 text-left min-w-[150px]">
                                 <div className="flex flex-col space-y-2">
                                   <div className="flex flex-col">
-                                    <span className="font-medium">{column.name}</span>
+                                    <span className="font-medium text-sm">{column.name}</span>
                                     <span className="text-xs text-muted-foreground font-normal">
                                       {column.type}
                                       {column.key === 'PRI' && ' (PK)'}
@@ -371,7 +371,7 @@ const DatabaseBrowser = () => {
                                   <div className="relative">
                                     <Input
                                       placeholder="Filter..."
-                                      className="h-8 text-xs"
+                                      className="h-7 text-xs"
                                       value={columnFilters[column.name] || ''}
                                       onChange={(e) => handleColumnFilter(column.name, e.target.value)}
                                     />
@@ -379,7 +379,7 @@ const DatabaseBrowser = () => {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-5 w-5 p-0"
                                         onClick={() => clearColumnFilter(column.name)}
                                       >
                                         <X className="h-3 w-3" />
@@ -389,29 +389,29 @@ const DatabaseBrowser = () => {
                                 </div>
                               </th>
                             ))}
-                            <th className="p-3 text-left">Actions</th>
+                            <th className="p-2 text-left">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {tableData.data.map((row, index) => (
                             <tr key={index} className="border-t hover:bg-muted/50">
-                              <td className="p-3">
+                              <td className="p-2">
                                 <Checkbox />
                               </td>
                               {tableData.columns.map((column) => (
-                                <td key={column.name} className="p-3 max-w-xs">
+                                <td key={column.name} className="p-2 max-w-xs">
                                   <div className="truncate" title={String(row[column.name])}>
                                     {formatCellValue(row[column.name])}
                                   </div>
                                 </td>
                               ))}
-                              <td className="p-3">
-                                <div className="flex gap-2">
-                                  <Button variant="ghost" size="sm">
-                                    <Edit className="h-4 w-4" />
+                              <td className="p-2">
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                    <Edit className="h-3 w-3" />
                                   </Button>
-                                  <Button variant="ghost" size="sm">
-                                    <Trash2 className="h-4 w-4 text-red-400" />
+                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                    <Trash2 className="h-3 w-3 text-red-400" />
                                   </Button>
                                 </div>
                               </td>
