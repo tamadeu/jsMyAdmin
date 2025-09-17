@@ -1,14 +1,18 @@
+"use client";
+
 import { ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
-import TabsDisplay from "../TabsDisplay"; // Import TabsDisplay
-import { useTabs } from "@/context/TabContext"; // Import useTabs
+import TabsDisplay from "../TabsDisplay";
+import { useTabs } from "@/context/TabContext";
+import { useIsMobile } from "@/hooks/use-mobile"; // Import the useIsMobile hook
+import { MobileSidebar } from "./MobileSidebar"; // Import the new MobileSidebar
 
 const Layout = () => {
   const { activeTabId, getTabById } = useTabs();
   const activeTab = getTabById(activeTabId);
+  const isMobile = useIsMobile(); // Determine if on mobile
 
-  // Determine header title and subtitle based on the active tab
   let headerTitle = "phpMyAdmin";
   let headerSubtitle: string | undefined = undefined;
   let databaseParam: string | undefined = undefined;
@@ -34,6 +38,10 @@ const Layout = () => {
         databaseParam = activeTab.params?.database;
         tableParam = activeTab.params?.table;
         break;
+      case 'query-result':
+        headerTitle = activeTab.title;
+        headerSubtitle = 'Results from your SQL query';
+        break;
       default:
         headerTitle = activeTab.title;
         break;
@@ -42,7 +50,7 @@ const Layout = () => {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      <Sidebar />
+      {isMobile ? null : <Sidebar />} {/* Render Sidebar only on non-mobile */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header 
           title={headerTitle} 
@@ -50,7 +58,7 @@ const Layout = () => {
           database={databaseParam}
           table={tableParam}
         />
-        <div className="flex-1 overflow-y-auto"> {/* Changed to overflow-y-auto */}
+        <div className="flex-1 overflow-y-auto">
           <TabsDisplay />
         </div>
       </div>

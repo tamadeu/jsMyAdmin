@@ -1,16 +1,16 @@
+"use client";
+
 import { Wifi, Bell, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useTabs } from "@/context/TabContext"; // Import useTabs
-
-interface HeaderProps {
-  // Remove direct props, will get from activeTab
-}
+import { useTabs } from "@/context/TabContext";
+import { useIsMobile } from "@/hooks/use-mobile"; // Import the useIsMobile hook
+import { MobileSidebar } from "./MobileSidebar"; // Import the MobileSidebar component
 
 const Header = () => {
   const { activeTabId, getTabById } = useTabs();
   const activeTab = getTabById(activeTabId);
+  const isMobile = useIsMobile(); // Determine if on mobile
 
-  // Determine header title and subtitle based on the active tab
   let headerTitle = "phpMyAdmin";
   let headerSubtitle: string | undefined = undefined;
   let databaseParam: string | undefined = undefined;
@@ -36,8 +36,8 @@ const Header = () => {
         databaseParam = activeTab.params?.database;
         tableParam = activeTab.params?.table;
         break;
-      case 'query-result': // New case for query results
-        headerTitle = activeTab.title; // Use the tab's title (e.g., "Query Result (HH:MM:SS)")
+      case 'query-result':
+        headerTitle = activeTab.title;
         headerSubtitle = 'Results from your SQL query';
         break;
       default:
@@ -49,24 +49,27 @@ const Header = () => {
   return (
     <header className="border-b border-border px-6 py-4 bg-card">
       <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          {databaseParam && tableParam ? (
-            <>
-              <h1 className="text-xl font-semibold">Table: {tableParam}</h1>
-              <div className="text-sm text-muted-foreground">
-                Databases / {databaseParam} / {tableParam}
-              </div>
-            </>
-          ) : (
-            <>
-              <h1 className="text-xl font-semibold">{headerTitle}</h1>
-              {headerSubtitle && (
+        <div className="flex items-center gap-3"> {/* Added flex container for mobile sidebar and title */}
+          {isMobile && <MobileSidebar />} {/* Render MobileSidebar toggle on mobile */}
+          <div className="flex flex-col gap-1">
+            {databaseParam && tableParam ? (
+              <>
+                <h1 className="text-xl font-semibold">Table: {tableParam}</h1>
                 <div className="text-sm text-muted-foreground">
-                  {headerSubtitle}
+                  Databases / {databaseParam} / {tableParam}
                 </div>
-              )}
-            </>
-          )}
+              </>
+            ) : (
+              <>
+                <h1 className="text-xl font-semibold">{headerTitle}</h1>
+                {headerSubtitle && (
+                  <div className="text-sm text-muted-foreground">
+                    {headerSubtitle}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
