@@ -59,7 +59,7 @@ const Dashboard = () => {
       const databasesWithInfo = await Promise.all(
         databaseNames.map(async (dbName) => {
           try {
-            const tables = await apiService.getTables(dbName);
+            const { tables, totalTables } = await apiService.getTables(dbName); // Desestruturando a resposta
             
             // Calculate total size (simplified calculation)
             const totalSizeMB = tables.reduce((acc, table) => {
@@ -70,7 +70,7 @@ const Dashboard = () => {
 
             return {
               name: dbName,
-              totalTables: tables.length,
+              totalTables: totalTables, // Usando totalTables do objeto retornado
               totalSize: totalSizeMB > 1024 
                 ? `${(totalSizeMB / 1024).toFixed(1)} GB` 
                 : `${totalSizeMB.toFixed(1)} MB`,
