@@ -1,53 +1,159 @@
 import { useState, useEffect } from "react";
-import { Database, Table, Server, Users, Play } from "lucide-react";
+import { Database, Table, Server, Users, Play, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { apiService } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
+
+interface DatabaseStats {
+  totalDatabases: number;
+  totalTables: number;
+  storageUsed: string;
+  storagePercent: number;
+  activeConnections: number;
+}
+
+interface DatabaseInfo {
+  name: string;
+  totalTables: number;
+  totalSize: string;
+  status: string;
+}
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    totalDatabases: 4,
-    totalTables: 39,
-    storageUsed: "10.2 GB",
-    storagePercent: 68,
-    activeConnections: 3
+  const { toast } = useToast();
+  const [stats, setStats] = useState<DatabaseStats>({
+    totalDatabases: 0,
+    totalTables: 0,
+    storageUsed: "0 GB",
+    storagePercent: 0,
+    activeConnections: 0
   });
-
-  const databases = [
-    { 
-      name: "ecommerce_prod", 
-      totalTables: 15,
-      totalSize: "2.4 GB",
-      status: "active"
-    },
-    { 
-      name: "user_analytics", 
-      totalTables: 8,
-      totalSize: "856 MB",
-      status: "active"
-    },
-    { 
-      name: "content_management", 
-      totalTables: 12,
-      totalSize: "1.2 GB",
-      status: "active"
-    },
-    { 
-      name: "logs_archive", 
-      totalTables: 4,
-      totalSize: "5.8 GB",
-      status: "active"
-    }
-  ];
+  const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const queryHistory = [
     { query: "SELECT * FROM users WHERE status = \"active\" ORDER BY created_at...", time: "0.045s", timestamp: "2024-01-15 14:30:22" },
     { query: "UPDATE products SET stock = stock - 1 WHERE id = 123", time: "0.012s", timestamp: "2024-01-15 14:25:15" },
     { query: "SELECT COUNT(*) as total_orders FROM orders WHERE DATE(created_...", time: "0.089s", timestamp: "2024-01-15 14:20:08" }
   ];
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Load databases
+      const databaseNames = await apiService.getDatabases();
+      
+      // Load detailed information for each database
+      const databasesWithInfo = await Promise.all(
+        databaseNames.map(async (dbName) => {
+          try {
+            const tables = await apiService.getTables(dbName);
+            
+            // Calculate total size (simplified calculation)
+            const totalSizeMB = tables.reduce((acc, table) => {
+              const sizeStr = table.size.replace(' MB', '').replace(' GB', '');
+              const size = parseFloat(sizeStr);
+              return acc + (table.size.includes('GB') ? size * 1024 : size);
+            }, 0);
+
+            return {
+              name: dbName,
+              totalTables: tables.length,
+              totalSize: totalSizeMB > 1024 
+                ? `${(totalSizeMB / 1024).toFixed(1)} GB` 
+                : `${totalSizeMB.toFixed(1)} MB`,
+              status: "active"
+            };
+          } catch (error) {
+            console.error(`Error loading info for ${dbName}:`, error);
+            return {
+              name: dbName,
+              totalTables: 0,
+              totalSize: "0 MB",
+              status: "error"
+            };
+          }
+        })
+      );
+
+      setDatabases(databasesWithInfo);
+
+      // Calculate overall statistics
+      const totalTables = databasesWithInfo.reduce((acc, db) => acc + db.totalTables, 0);
+      const totalSizeMB = databasesWithInfo.reduce((acc, db) => {
+        const sizeStr = db.totalSize.replace(' MB', '').replace(' GB', '');
+        const size = parseFloat(sizeStr);
+        return acc + (db.totalSize.includes('GB') ? size * 1024 : size);
+      }, 0);
+
+      // Try to get server status
+      let connections = 0;
+      try {
+        const serverStatus = await apiService.getServerStatus();
+        connections = serverStatus.connections;
+      } catch (error) {
+        console.warn('Could not fetch server status:', error);
+      }
+
+      setStats({
+        totalDatabases: databaseNames.length,
+        totalTables,
+        storageUsed: totalSizeMB > 1024 
+          ? `${(totalSizeMB / 1024).toFixed(1)} GB` 
+          : `${totalSizeMB.toFixed(1)} MB`,
+        storagePercent: Math.min((totalSizeMB / 1024 / 15) * 100, 100), // Assuming 15GB limit
+        activeConnections: connections
+      });
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load dashboard data');
+      toast({
+        title: "Error loading dashboard",
+        description: "Please check your database connection in Configuration",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
+          <p className="text-red-500 mb-4">Failed to load dashboard data</p>
+          <Button onClick={loadDashboardData} variant="outline">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -67,7 +173,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalDatabases}</div>
-            <p className="text-xs text-muted-foreground">+2 from last month</p>
+            <p className="text-xs text-muted-foreground">Connected databases</p>
           </CardContent>
         </Card>
 
@@ -80,7 +186,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalTables}</div>
-            <p className="text-xs text-muted-foreground">+12 from last month</p>
+            <p className="text-xs text-muted-foreground">Across all databases</p>
           </CardContent>
         </Card>
 
@@ -94,7 +200,7 @@ const Dashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">{stats.storageUsed}</div>
             <Progress value={stats.storagePercent} className="mt-2 h-2" />
-            <p className="text-xs text-muted-foreground mt-1">{stats.storagePercent}% of 15 GB limit</p>
+            <p className="text-xs text-muted-foreground mt-1">{stats.storagePercent.toFixed(1)}% of estimated limit</p>
           </CardContent>
         </Card>
 
@@ -107,7 +213,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeConnections}</div>
-            <p className="text-xs text-muted-foreground">2 admin, 1 read-only</p>
+            <p className="text-xs text-muted-foreground">Current connections</p>
           </CardContent>
         </Card>
       </div>
@@ -123,18 +229,28 @@ const Dashboard = () => {
             <CardDescription>Manage your database instances</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {databases.map((db) => (
-              <div key={db.name} className="flex items-center justify-between p-3 bg-accent rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <div>
-                    <div className="font-medium">{db.name}</div>
-                    <div className="text-sm text-muted-foreground">{db.totalTables} tables • {db.totalSize}</div>
-                  </div>
-                </div>
-                <div className="text-sm text-muted-foreground">utf8mb4_unicode_ci</div>
+            {databases.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-muted-foreground">No databases found</p>
               </div>
-            ))}
+            ) : (
+              databases.map((db) => (
+                <div key={db.name} className="flex items-center justify-between p-3 bg-accent rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      db.status === 'active' ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                    <div>
+                      <div className="font-medium">{db.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {db.totalTables} {db.totalTables === 1 ? 'table' : 'tables'} • {db.totalSize}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">utf8mb4_unicode_ci</div>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
 

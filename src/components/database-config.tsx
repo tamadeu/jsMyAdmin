@@ -10,43 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-
-interface DatabaseConfig {
-  database: {
-    host: string;
-    port: number;
-    username: string;
-    password: string;
-    defaultDatabase: string;
-    charset: string;
-    collation: string;
-    connectionTimeout: number;
-    maxConnections: number;
-    ssl: boolean;
-    sslCertificate: string;
-    sslKey: string;
-    sslCA: string;
-  };
-  application: {
-    theme: string;
-    language: string;
-    queryTimeout: number;
-    maxQueryResults: number;
-    autoRefresh: boolean;
-    refreshInterval: number;
-  };
-  security: {
-    allowMultipleStatements: boolean;
-    allowLocalInfile: boolean;
-    requireSSL: boolean;
-  };
-}
+import { apiService, DatabaseConfig } from "@/services/api";
 
 const DatabaseConfigComponent = () => {
   const { toast } = useToast();
   const [config, setConfig] = useState<DatabaseConfig | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     loadConfig();
@@ -54,13 +25,12 @@ const DatabaseConfigComponent = () => {
 
   const loadConfig = async () => {
     try {
-      // Em um ambiente real, isso seria uma chamada para API
-      // Por enquanto, vamos simular carregando do localStorage ou valores padrão
+      // Load from localStorage first (fallback)
       const savedConfig = localStorage.getItem('database-config');
       if (savedConfig) {
         setConfig(JSON.parse(savedConfig));
       } else {
-        // Valores padrão
+        // Default values
         setConfig({
           database: {
             host: "localhost",
@@ -107,40 +77,65 @@ const DatabaseConfigComponent = () => {
     if (!config) return;
 
     try {
-      // Em um ambiente real, isso seria uma chamada para API
-      localStorage.setItem('database-config', JSON.stringify(config));
-      toast({
-        title: "Configuration saved",
-        description: "Database configuration has been saved successfully"
-      });
+      setIsSaving(true);
+      
+      // Save to API
+      const result = await apiService.saveConfig(config);
+      
+      if (result.success) {
+        // Also save to localStorage as backup
+        localStorage.setItem('database-config', JSON.stringify(config));
+        
+        toast({
+          title: "Configuration saved",
+          description: result.message || "Database configuration has been saved successfully"
+        });
+      } else {
+        throw new Error(result.message || 'Failed to save configuration');
+      }
     } catch (error) {
+      console.error('Error saving config:', error);
       toast({
         title: "Error saving configuration",
-        description: "Failed to save database configuration",
+        description: error instanceof Error ? error.message : "Failed to save database configuration",
         variant: "destructive"
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const testConnection = async () => {
     if (!config) return;
 
-    setConnectionStatus('testing');
-    
-    // Simular teste de conexão
-    setTimeout(() => {
-      // Em um ambiente real, isso seria uma chamada real para testar a conexão
-      const isValid = config.database.host && config.database.username;
-      setConnectionStatus(isValid ? 'success' : 'error');
+    try {
+      setConnectionStatus('testing');
       
+      const result = await apiService.testConnection(config);
+      
+      if (result.success) {
+        setConnectionStatus('success');
+        toast({
+          title: "Connection successful",
+          description: result.message || "Successfully connected to the database"
+        });
+      } else {
+        setConnectionStatus('error');
+        toast({
+          title: "Connection failed",
+          description: result.message || "Please check your connection settings",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      setConnectionStatus('error');
+      console.error('Connection test failed:', error);
       toast({
-        title: isValid ? "Connection successful" : "Connection failed",
-        description: isValid 
-          ? "Successfully connected to the database" 
-          : "Please check your connection settings",
-        variant: isValid ? "default" : "destructive"
+        title: "Connection failed",
+        description: error instanceof Error ? error.message : "Please check your connection settings",
+        variant: "destructive"
       });
-    }, 2000);
+    }
   };
 
   const updateConfig = (section: keyof DatabaseConfig, key: string, value: any) => {
@@ -174,13 +169,20 @@ const DatabaseConfigComponent = () => {
           <p className="text-muted-foreground">Configure your MySQL database connection settings</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={testConnection} disabled={connectionStatus === 'testing'}>
+          <Button 
+            variant="outline" 
+            onClick={testConnection} 
+            disabled={connectionStatus === 'testing'}
+          >
             <TestTube className="h-4 w-4 mr-2" />
             {connectionStatus === 'testing' ? 'Testing...' : 'Test Connection'}
           </Button>
-          <Button onClick={saveConfig}>
+          <Button 
+            onClick={saveConfig}
+            disabled={isSaving}
+          >
             <Save className="h-4 w-4 mr-2" />
-            Save Configuration
+            {isSaving ? 'Saving...' : 'Save Configuration'}
           </Button>
         </div>
       </div>
