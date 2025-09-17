@@ -1,14 +1,16 @@
+"use client";
+
 import { useState } from "react";
-import { Play, Save, RotateCcw } from "lucide-react";
+import { Play, Save, RotateCcw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { apiService, QueryResult } from "@/services/api"; // Import apiService and QueryResult
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { apiService, QueryResult } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 const SqlEditor = () => {
   const { toast } = useToast();
-  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM users WHERE status = \"active\" LIMIT 10;");
+  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;"); // Simplified initial query
   const [queryResults, setQueryResults] = useState<QueryResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [queryHistory, setQueryHistory] = useState<Array<{ query: string; time: string; timestamp: string }>>([]);
@@ -61,99 +63,99 @@ const SqlEditor = () => {
   };
 
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-4 min-h-full flex flex-col">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">SQL Editor</h1>
-              <p className="text-muted-foreground">Write and execute SQL queries</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={saveQuery}>
-                <Save className="h-4 w-4 mr-2" />
-                Save
-              </Button>
-              <Button size="sm" onClick={executeQuery} disabled={isExecuting}>
-                <Play className="h-4 w-4 mr-2" />
-                {isExecuting ? 'Executing...' : 'Execute'}
-              </Button>
-            </div>
+    <div className="flex h-full">
+      <div className="flex-1 flex flex-col p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">SQL Editor</h1>
+            <p className="text-muted-foreground">Write and execute SQL queries</p>
           </div>
-
-          <div className="flex-1 flex flex-col min-h-[300px]">
-            <Textarea
-              value={sqlQuery}
-              onChange={(e) => setSqlQuery(e.target.value)}
-              className="flex-1 min-h-[300px] font-mono text-sm resize-none"
-              placeholder="SELECT * FROM your_table;"
-            />
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={saveQuery}>
+              <Save className="h-4 w-4 mr-2" />
+              Save
+            </Button>
+            <Button size="sm" onClick={executeQuery} disabled={isExecuting}>
+              <Play className="h-4 w-4 mr-2" />
+              {isExecuting ? 'Executing...' : 'Execute'}
+            </Button>
           </div>
+        </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Query Results</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {queryResults ? (
-                queryResults.success ? (
-                  <div className="space-y-2">
-                    <div className="text-sm text-green-600">
-                      Query executed successfully in {queryResults.executionTime}
-                    </div>
-                    {queryResults.data && queryResults.data.length > 0 && (
-                      <>
-                        <div className="text-sm text-muted-foreground">
-                          {queryResults.rowCount} rows returned
-                        </div>
-                        <div className="border rounded-lg overflow-hidden mt-4">
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead className="bg-muted">
-                                <tr>
+        {/* Query Editor Area */}
+        <div className="h-48"> {/* Fixed height for query editor */}
+          <Textarea
+            value={sqlQuery}
+            onChange={(e) => setSqlQuery(e.target.value)}
+            className="h-full font-mono text-sm resize-none" // Make textarea fill its parent
+            placeholder="SELECT * FROM your_table;"
+          />
+        </div>
+
+        {/* Query Results Card */}
+        <Card className="flex-1 flex flex-col min-h-0"> {/* Make card take remaining space, min-h-0 to allow shrinking */}
+          <CardHeader>
+            <CardTitle>Query Results</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto"> {/* Add flex-1 and overflow-y-auto here */}
+            {queryResults ? (
+              queryResults.success ? (
+                <div className="space-y-2">
+                  <div className="text-sm text-green-600">
+                    Query executed successfully in {queryResults.executionTime}
+                  </div>
+                  {queryResults.data && queryResults.data.length > 0 && (
+                    <>
+                      <div className="text-sm text-muted-foreground">
+                        {queryResults.rowCount} rows returned
+                      </div>
+                      <div className="border rounded-lg overflow-hidden mt-4">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead className="bg-muted">
+                              <tr>
+                                {queryResults.fields?.map((field) => (
+                                  <th key={field.name} className="p-2 text-left font-medium text-sm">
+                                    {field.name}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {queryResults.data.map((row, rowIndex) => (
+                                <tr key={rowIndex} className="border-t hover:bg-muted/50">
                                   {queryResults.fields?.map((field) => (
-                                    <th key={field.name} className="p-2 text-left font-medium text-sm">
-                                      {field.name}
-                                    </th>
+                                    <td key={field.name} className="p-2 max-w-xs truncate" title={String(row[field.name])}>
+                                      {String(row[field.name])}
+                                    </td>
                                   ))}
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {queryResults.data.map((row, rowIndex) => (
-                                  <tr key={rowIndex} className="border-t hover:bg-muted/50">
-                                    {queryResults.fields?.map((field) => (
-                                      <td key={field.name} className="p-2 max-w-xs truncate" title={String(row[field.name])}>
-                                        {String(row[field.name])}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
-                      </>
-                    )}
-                    {queryResults.affectedRows !== undefined && (
-                      <div className="text-sm text-muted-foreground">
-                        {queryResults.affectedRows} rows affected.
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2 text-red-500">
-                    <AlertCircle className="h-5 w-5 inline-block mr-2" />
-                    <span className="font-medium">Error:</span> {queryResults.error}
-                  </div>
-                )
-              ) : (
-                <div className="text-center text-muted-foreground py-8">
-                  Execute a query to see results
+                    </>
+                  )}
+                  {queryResults.affectedRows !== undefined && (
+                    <div className="text-sm text-muted-foreground">
+                      {queryResults.affectedRows} rows affected.
+                    </div>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              ) : (
+                <div className="space-y-2 text-red-500">
+                  <AlertCircle className="h-5 w-5 inline-block mr-2" />
+                  <span className="font-medium">Error:</span> {queryResults.error}
+                </div>
+              )
+            ) : (
+              <div className="text-center text-muted-foreground py-8">
+                Execute a query to see results
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <div className="w-80 border-l border-border overflow-y-auto">
