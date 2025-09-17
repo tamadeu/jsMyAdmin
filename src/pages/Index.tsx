@@ -12,9 +12,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const Index = () => {
-  const [activeView, setActiveView] = useState("dashboard");
+  const [activeView, setActiveView] = useState("query");
   const [sqlQuery, setSqlQuery] = useState("SELECT * FROM users WHERE status = \"active\" LIMIT 10;");
   const [selectedDatabase, setSelectedDatabase] = useState("ecommerce_prod");
   const [selectedTable, setSelectedTable] = useState("");
@@ -75,11 +76,11 @@ const Index = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100">
+    <div className="flex h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <div className="w-64 bg-slate-900 border-r border-slate-800">
+      <div className="w-64 bg-card border-r border-border">
         {/* Header */}
-        <div className="p-4 border-b border-slate-800">
+        <div className="p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Database className="h-6 w-6" />
             <h2 className="text-lg font-semibold">phpMyAdmin</h2>
@@ -87,12 +88,12 @@ const Index = () => {
         </div>
 
         {/* Search */}
-        <div className="p-4 border-b border-slate-800">
+        <div className="p-4 border-b border-border">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder="Search databases..." 
-              className="pl-10 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400"
+              className="pl-10"
             />
           </div>
         </div>
@@ -103,7 +104,7 @@ const Index = () => {
             <div className="space-y-2 mb-6">
               <Button 
                 variant={activeView === "dashboard" ? "secondary" : "ghost"} 
-                className="w-full justify-start text-slate-300 hover:text-slate-100"
+                className="w-full justify-start"
                 onClick={() => setActiveView("dashboard")}
               >
                 <Database className="h-4 w-4 mr-2" />
@@ -111,7 +112,7 @@ const Index = () => {
               </Button>
               <Button 
                 variant={activeView === "query" ? "secondary" : "ghost"} 
-                className="w-full justify-start text-slate-300 hover:text-slate-100"
+                className="w-full justify-start"
                 onClick={() => setActiveView("query")}
               >
                 <Search className="h-4 w-4 mr-2" />
@@ -119,29 +120,29 @@ const Index = () => {
               </Button>
             </div>
 
-            <div className="text-sm text-slate-400 mb-3">Databases</div>
+            <div className="text-sm text-muted-foreground mb-3">Databases</div>
             
             {/* Databases */}
-            <Accordion type="multiple" className="w-full">
+            <Accordion type="multiple" className="w-full" defaultValue={["ecommerce_prod"]}>
               {databases.map((db) => (
-                <AccordionItem key={db.name} value={db.name} className="border-slate-800">
-                  <AccordionTrigger className="hover:no-underline py-2 px-2 rounded-md hover:bg-slate-800 text-slate-300">
+                <AccordionItem key={db.name} value={db.name} className="border-none">
+                  <AccordionTrigger className="hover:no-underline py-2 px-2 rounded-md hover:bg-accent">
                     <div className="flex items-center gap-2 flex-1">
                       <Database className="h-4 w-4" />
                       <div className="flex-1 text-left">
                         <div className="text-sm font-medium">{db.name}</div>
-                        <div className="text-xs text-slate-500">{db.totalTables}</div>
+                        <div className="text-xs text-muted-foreground">{db.totalTables}</div>
                       </div>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-2">
                     <div className="ml-6 space-y-1">
-                      <div className="text-xs text-slate-500 mb-2">Overview</div>
+                      <div className="text-xs text-muted-foreground mb-2">Overview</div>
                       {db.tables.map((table) => (
                         <div 
                           key={table.name} 
-                          className={`p-2 rounded-md cursor-pointer transition-colors hover:bg-slate-800 ${
-                            selectedTable === table.name ? 'bg-slate-700' : ''
+                          className={`p-2 rounded-md cursor-pointer transition-colors hover:bg-accent ${
+                            selectedTable === table.name ? 'bg-accent' : ''
                           }`}
                           onClick={() => {
                             setSelectedTable(table.name);
@@ -151,9 +152,9 @@ const Index = () => {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <Table className="h-3 w-3" />
-                              <span className="text-sm text-slate-300">{table.name}</span>
+                              <span className="text-sm">{table.name}</span>
                             </div>
-                            <span className="text-xs text-slate-500">{table.rows.toLocaleString()}</span>
+                            <span className="text-xs text-muted-foreground">{table.rows.toLocaleString()}</span>
                           </div>
                         </div>
                       ))}
@@ -165,11 +166,14 @@ const Index = () => {
           </div>
         </ScrollArea>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <Settings className="h-4 w-4" />
-            <span>v5.2.1</span>
+        {/* Footer with Theme Toggle */}
+        <div className="p-4 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Settings className="h-4 w-4" />
+              <span>v5.2.1</span>
+            </div>
+            <ThemeToggle />
           </div>
         </div>
       </div>
@@ -177,7 +181,7 @@ const Index = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Top Header */}
-        <header className="border-b border-slate-800 px-6 py-4">
+        <header className="border-b border-border px-6 py-4 bg-card">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-semibold">
@@ -186,7 +190,7 @@ const Index = () => {
                 {activeView === "browse" && `Table: ${selectedTable}`}
               </h1>
               {activeView === "browse" && (
-                <div className="text-sm text-slate-400">
+                <div className="text-sm text-muted-foreground">
                   Databases / {selectedDatabase} / {selectedTable}
                 </div>
               )}
@@ -196,8 +200,8 @@ const Index = () => {
                 <Wifi className="h-4 w-4 text-green-500" />
                 <Badge variant="outline" className="text-green-500 border-green-500">Connected</Badge>
               </div>
-              <Bell className="h-4 w-4 text-slate-400" />
-              <div className="flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-md">
+              <Bell className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2 bg-accent px-3 py-1 rounded-md">
                 <User className="h-4 w-4" />
                 <span className="text-sm">AD</span>
               </div>
@@ -211,108 +215,108 @@ const Index = () => {
             <div className="p-6 space-y-6">
               {/* Stats Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-slate-300">Total Databases</CardTitle>
-                      <Database className="h-4 w-4 text-slate-400" />
+                      <CardTitle className="text-sm font-medium">Total Databases</CardTitle>
+                      <Database className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-slate-100">4</div>
-                    <p className="text-xs text-slate-500">+2 from last month</p>
+                    <div className="text-2xl font-bold">4</div>
+                    <p className="text-xs text-muted-foreground">+2 from last month</p>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-slate-300">Total Tables</CardTitle>
-                      <Table className="h-4 w-4 text-slate-400" />
+                      <CardTitle className="text-sm font-medium">Total Tables</CardTitle>
+                      <Table className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-slate-100">39</div>
-                    <p className="text-xs text-slate-500">+12 from last month</p>
+                    <div className="text-2xl font-bold">39</div>
+                    <p className="text-xs text-muted-foreground">+12 from last month</p>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-slate-300">Storage Used</CardTitle>
-                      <Server className="h-4 w-4 text-slate-400" />
+                      <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
+                      <Server className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-slate-100">10.2 GB</div>
+                    <div className="text-2xl font-bold">10.2 GB</div>
                     <Progress value={68} className="mt-2 h-2" />
-                    <p className="text-xs text-slate-500 mt-1">68% of 15 GB limit</p>
+                    <p className="text-xs text-muted-foreground mt-1">68% of 15 GB limit</p>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-medium text-slate-300">Active Connections</CardTitle>
-                      <Users className="h-4 w-4 text-slate-400" />
+                      <CardTitle className="text-sm font-medium">Active Connections</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-slate-100">3</div>
-                    <p className="text-xs text-slate-500">2 admin, 1 read-only</p>
+                    <div className="text-2xl font-bold">3</div>
+                    <p className="text-xs text-muted-foreground">2 admin, 1 read-only</p>
                   </CardContent>
                 </Card>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Databases */}
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <Database className="h-5 w-5" />
-                      <CardTitle className="text-slate-100">Databases</CardTitle>
+                      <CardTitle>Databases</CardTitle>
                     </div>
-                    <CardDescription className="text-slate-400">Manage your database instances</CardDescription>
+                    <CardDescription>Manage your database instances</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {databases.map((db) => (
-                      <div key={db.name} className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+                      <div key={db.name} className="flex items-center justify-between p-3 bg-accent rounded-lg">
                         <div className="flex items-center gap-3">
                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                           <div>
-                            <div className="font-medium text-slate-100">{db.name}</div>
-                            <div className="text-sm text-slate-400">{db.totalTables} tables • {db.totalSize}</div>
+                            <div className="font-medium">{db.name}</div>
+                            <div className="text-sm text-muted-foreground">{db.totalTables} tables • {db.totalSize}</div>
                           </div>
                         </div>
-                        <div className="text-sm text-slate-400">utf8mb4_unicode_ci</div>
+                        <div className="text-sm text-muted-foreground">utf8mb4_unicode_ci</div>
                       </div>
                     ))}
                   </CardContent>
                 </Card>
 
                 {/* Recent Activity */}
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Play className="h-5 w-5" />
-                        <CardTitle className="text-slate-100">Recent Query Activity</CardTitle>
+                        <CardTitle>Recent Query Activity</CardTitle>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => setActiveView("query")}>
                         Open SQL Editor
                       </Button>
                     </div>
-                    <CardDescription className="text-slate-400">Latest SQL operations</CardDescription>
+                    <CardDescription>Latest SQL operations</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {queryHistory.map((query, index) => (
-                      <div key={index} className="p-3 bg-slate-800 rounded-lg">
+                      <div key={index} className="p-3 bg-accent rounded-lg">
                         <div className="flex items-start gap-3">
                           <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
                           <div className="flex-1">
-                            <div className="text-sm text-slate-300 font-mono">{query.query}</div>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                            <div className="text-sm font-mono">{query.query}</div>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                               <span>{query.timestamp}</span>
                               <span>{query.time}</span>
                             </div>
@@ -323,36 +327,6 @@ const Index = () => {
                   </CardContent>
                 </Card>
               </div>
-
-              {/* System Status */}
-              <Card className="bg-slate-900 border-slate-800">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Server className="h-5 w-5" />
-                    <CardTitle className="text-slate-100">System Status</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <div className="text-sm text-slate-400 mb-1">MySQL Version</div>
-                      <div className="text-lg font-semibold text-slate-100">8.0.35</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-400 mb-1">CPU Usage</div>
-                      <div className="text-lg font-semibold text-slate-100">12%</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-400 mb-1">Memory Usage</div>
-                      <div className="text-lg font-semibold text-slate-100">2.1GB / 8GB</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-slate-400 mb-1">Uptime</div>
-                      <div className="text-lg font-semibold text-slate-100">15d 7h 23m</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           )}
 
@@ -362,8 +336,8 @@ const Index = () => {
                 <div className="space-y-4 h-full flex flex-col">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h2 className="text-lg font-semibold text-slate-100">SQL Editor</h2>
-                      <p className="text-sm text-slate-400">Write and execute SQL queries</p>
+                      <h2 className="text-lg font-semibold">SQL Editor</h2>
+                      <p className="text-sm text-muted-foreground">Write and execute SQL queries</p>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm">
@@ -381,17 +355,17 @@ const Index = () => {
                     <Textarea
                       value={sqlQuery}
                       onChange={(e) => setSqlQuery(e.target.value)}
-                      className="flex-1 min-h-[300px] font-mono text-sm bg-slate-900 border-slate-700 text-slate-100 resize-none"
+                      className="flex-1 min-h-[300px] font-mono text-sm resize-none"
                       placeholder="SELECT * FROM your_table;"
                     />
                   </div>
 
-                  <Card className="bg-slate-900 border-slate-800">
+                  <Card>
                     <CardHeader>
-                      <CardTitle className="text-slate-100">Query Results</CardTitle>
+                      <CardTitle>Query Results</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-center text-slate-400 py-8">
+                      <div className="text-center text-muted-foreground py-8">
                         Execute a query to see results
                       </div>
                     </CardContent>
@@ -399,25 +373,25 @@ const Index = () => {
                 </div>
               </div>
 
-              <div className="w-80 border-l border-slate-800 p-6">
+              <div className="w-80 border-l border-border p-6">
                 <div className="space-y-6">
                   <div>
                     <div className="flex items-center gap-2 mb-4">
                       <RotateCcw className="h-4 w-4" />
-                      <h3 className="font-semibold text-slate-100">Query History</h3>
+                      <h3 className="font-semibold">Query History</h3>
                     </div>
                     <div className="space-y-2">
                       {queryHistory.map((query, index) => (
-                        <div key={index} className="p-3 bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-700">
-                          <div className="text-sm text-slate-300 font-mono truncate">{query.query}</div>
-                          <div className="text-xs text-slate-500 mt-1">{query.time}</div>
+                        <div key={index} className="p-3 bg-accent rounded-lg cursor-pointer hover:bg-accent/80">
+                          <div className="text-sm font-mono truncate">{query.query}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{query.time}</div>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   <div>
-                    <h3 className="font-semibold text-slate-100 mb-4">Quick Actions</h3>
+                    <h3 className="font-semibold mb-4">Quick Actions</h3>
                     <div className="space-y-2">
                       <Button variant="outline" className="w-full justify-start">Show Tables</Button>
                       <Button variant="outline" className="w-full justify-start">Show Databases</Button>
@@ -434,59 +408,59 @@ const Index = () => {
             <div className="p-6 space-y-6">
               {/* Table Info Cards */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-slate-300">Engine</CardTitle>
+                    <CardTitle className="text-sm font-medium">Engine</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-lg font-semibold text-slate-100">InnoDB</div>
+                    <div className="text-lg font-semibold">InnoDB</div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-slate-300">Rows</CardTitle>
+                    <CardTitle className="text-sm font-medium">Rows</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-lg font-semibold text-slate-100">45,231</div>
+                    <div className="text-lg font-semibold">45,231</div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-slate-300">Size</CardTitle>
+                    <CardTitle className="text-sm font-medium">Size</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-lg font-semibold text-slate-100">12.4 MB</div>
+                    <div className="text-lg font-semibold">12.4 MB</div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-slate-300">Collation</CardTitle>
+                    <CardTitle className="text-sm font-medium">Collation</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-sm text-slate-100">utf8mb4_unicode_ci</div>
+                    <div className="text-sm">utf8mb4_unicode_ci</div>
                   </CardContent>
                 </Card>
 
-                <Card className="bg-slate-900 border-slate-800">
+                <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-slate-300">Modified</CardTitle>
+                    <CardTitle className="text-sm font-medium">Modified</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-sm text-slate-100">2024-01-15 14:30:22</div>
+                    <div className="text-sm">2024-01-15 14:30:22</div>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Browse Data */}
-              <Card className="bg-slate-900 border-slate-800">
+              <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-slate-100">Browse Data</CardTitle>
-                      <CardDescription className="text-slate-400">5 rows</CardDescription>
+                      <CardTitle>Browse Data</CardTitle>
+                      <CardDescription>5 rows</CardDescription>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm">
@@ -508,10 +482,10 @@ const Index = () => {
                   <div className="space-y-4">
                     <div className="flex items-center gap-4">
                       <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input 
                           placeholder="Search in table..." 
-                          className="pl-10 bg-slate-800 border-slate-700"
+                          className="pl-10"
                         />
                       </div>
                       <Button variant="outline" size="sm">
@@ -519,7 +493,7 @@ const Index = () => {
                         Filter
                       </Button>
                       <Select defaultValue="10">
-                        <SelectTrigger className="w-32 bg-slate-800 border-slate-700">
+                        <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -530,31 +504,31 @@ const Index = () => {
                       </Select>
                     </div>
 
-                    <div className="border border-slate-700 rounded-lg overflow-hidden">
+                    <div className="border rounded-lg overflow-hidden">
                       <table className="w-full">
-                        <thead className="bg-slate-800">
+                        <thead className="bg-muted">
                           <tr>
                             <th className="p-3 text-left">
                               <Checkbox />
                             </th>
-                            <th className="p-3 text-left text-slate-300">id</th>
-                            <th className="p-3 text-left text-slate-300">username</th>
-                            <th className="p-3 text-left text-slate-300">email</th>
-                            <th className="p-3 text-left text-slate-300">created_at</th>
-                            <th className="p-3 text-left text-slate-300">status</th>
-                            <th className="p-3 text-left text-slate-300">Actions</th>
+                            <th className="p-3 text-left">id</th>
+                            <th className="p-3 text-left">username</th>
+                            <th className="p-3 text-left">email</th>
+                            <th className="p-3 text-left">created_at</th>
+                            <th className="p-3 text-left">status</th>
+                            <th className="p-3 text-left">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {sampleUsers.map((user) => (
-                            <tr key={user.id} className="border-t border-slate-700 hover:bg-slate-800/50">
+                            <tr key={user.id} className="border-t hover:bg-muted/50">
                               <td className="p-3">
                                 <Checkbox />
                               </td>
-                              <td className="p-3 text-slate-300">{user.id}</td>
-                              <td className="p-3 text-slate-300">{user.username}</td>
-                              <td className="p-3 text-slate-300">{user.email}</td>
-                              <td className="p-3 text-slate-300">{user.created_at}</td>
+                              <td className="p-3">{user.id}</td>
+                              <td className="p-3">{user.username}</td>
+                              <td className="p-3">{user.email}</td>
+                              <td className="p-3">{user.created_at}</td>
                               <td className="p-3">
                                 <Badge 
                                   variant={user.status === "active" ? "default" : user.status === "inactive" ? "destructive" : "secondary"}
@@ -579,7 +553,7 @@ const Index = () => {
                       </table>
                     </div>
 
-                    <div className="flex items-center justify-between text-sm text-slate-400">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span>Showing 1 to 5 of 5 entries</span>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" disabled>Previous</Button>
