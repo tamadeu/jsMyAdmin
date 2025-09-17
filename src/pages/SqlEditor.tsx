@@ -1,40 +1,39 @@
 "use client";
 
-import { useState } from "react";
-import { Play, Save, RotateCcw, AlertCircle } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Play, Save, RotateCcw, AlertCircle, AlignLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiService, QueryResult } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { useTabs } from "@/context/TabContext"; // Import useTabs
+import { useTabs } from "@/context/TabContext";
+import { format } from "sql-formatter"; // Importar a função format
 
 const SqlEditor = () => {
   const { toast } = useToast();
-  const { addTab } = useTabs(); // Use addTab from context
-  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;"); // Simplified initial query
+  const { addTab } = useTabs();
+  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;");
   const [isExecuting, setIsExecuting] = useState(false);
   const [queryHistory, setQueryHistory] = useState<Array<{ query: string; time: string; timestamp: string }>>([]);
 
-  const executeQuery = async () => {
+  const executeQuery = useCallback(async () => {
     setIsExecuting(true);
     try {
       const result = await apiService.executeQuery(sqlQuery);
 
-      // Add to history
       setQueryHistory(prev => [
         { query: sqlQuery, time: result.executionTime, timestamp: new Date().toLocaleString() },
-        ...prev.slice(0, 4) // Keep last 5 queries
+        ...prev.slice(0, 4)
       ]);
 
       if (result.success) {
-        // Check if it's a SELECT query to open a new tab
         const isSelect = sqlQuery.trim().toLowerCase().startsWith('select');
         if (isSelect && result.data) {
           addTab({
             title: `Query Result (${new Date().toLocaleTimeString()})`,
             type: 'query-result',
-            queryResult: { ...result, originalQuery: sqlQuery }, // Pass originalQuery here
+            queryResult: { ...result, originalQuery: sqlQuery },
             closable: true,
           });
         } else {
@@ -60,7 +59,7 @@ const SqlEditor = () => {
     } finally {
       setIsExecuting(false);
     }
-  };
+  }, [sqlQuery, addTab, toast]);
 
   const saveQuery = () => {
     // TODO: Implement query saving
@@ -71,6 +70,35 @@ const SqlEditor = () => {
     });
   };
 
+  const formatQuery = useCallback(() => {
+    try {
+      const formatted = format(sqlQuery, {
+        language: 'mysql', // Assuming MySQL, adjust if needed
+        indent: '  ', // 2 spaces for indentation
+        linesBetweenQueries: 2,
+      });
+      setSqlQuery(formatted);
+      toast({
+        title: "Query formatted",
+        description: "SQL query has been formatted.",
+      });
+    } catch (error) {
+      console.error('Error formatting query:', error);
+      toast({
+        title: "Formatting failed",
+        description: error instanceof Error ? error.message : "Failed to format SQL query",
+        variant: "destructive"
+      });
+    }
+  }, [sqlQuery, toast]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault(); // Prevent new line in textarea
+      executeQuery();
+    }
+  }, [executeQuery]);
+
   return (
     <div className="flex h-full">
       <div className="flex-1 flex flex-col p-6 space-y-4">
@@ -80,6 +108,10 @@ const SqlEditor = () => {
             <p className="text-muted-foreground">Write and execute SQL queries</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={formatQuery}>
+              <AlignLeft className="h-4 w-4 mr-2" />
+              Format SQL
+            </Button>
             <Button variant="outline" size="sm" onClick={saveQuery}>
               <Save className="h-4 w-4 mr-2" />
               Save
@@ -92,11 +124,12 @@ const SqlEditor = () => {
         </div>
 
         {/* Query Editor Area */}
-        <div className="h-48"> {/* Fixed height for query editor */}
+        <div className="h-48">
           <Textarea
             value={sqlQuery}
             onChange={(e) => setSqlQuery(e.target.value)}
-            className="h-full font-mono text-sm resize-none" // Make textarea fill its parent
+            onKeyDown={handleKeyDown}
+            className="h-full font-mono text-sm resize-none"
             placeholder="SELECT * FROM your_table;"
           />
         </div>
