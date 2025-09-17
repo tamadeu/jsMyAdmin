@@ -149,6 +149,53 @@ class ApiService {
     return this.request(endpoint);
   }
 
+  async updateCell(
+    database: string,
+    table: string,
+    primaryKey: any,
+    columnName: string,
+    newValue: any
+  ): Promise<{ success: boolean; message: string; affectedRows: number }> {
+    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/cell`, {
+      method: 'PUT',
+      body: JSON.stringify({ primaryKey, columnName, newValue }),
+    });
+  }
+
+  async updateRow(
+    database: string,
+    table: string,
+    primaryKey: any,
+    data: Record<string, any>
+  ): Promise<{ success: boolean; message: string; affectedRows: number }> {
+    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`, {
+      method: 'PUT',
+      body: JSON.stringify({ primaryKey, data }),
+    });
+  }
+
+  async insertRow(
+    database: string,
+    table: string,
+    data: Record<string, any>
+  ): Promise<{ success: boolean; message: string; insertId: number; affectedRows: number }> {
+    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`, {
+      method: 'POST',
+      body: JSON.stringify({ data }),
+    });
+  }
+
+  async deleteRow(
+    database: string,
+    table: string,
+    primaryKey: any
+  ): Promise<{ success: boolean; message: string; affectedRows: number }> {
+    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`, {
+      method: 'DELETE',
+      body: JSON.stringify({ primaryKey }),
+    });
+  }
+
   async executeQuery(query: string, database?: string): Promise<QueryResult> {
     return this.request('/query', {
       method: 'POST',

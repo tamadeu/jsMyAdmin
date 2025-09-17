@@ -266,6 +266,214 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
   }
 });
 
+// Update a single cell
+app.put('/api/databases/:database/tables/:table/cell', async (req, res) => {
+  try {
+    if (!connectionPool) {
+      const config = await loadConfig();
+      if (!config || !await createConnectionPool(config)) {
+        return res.status(500).json({ error: 'Database connection not configured' });
+      }
+    }
+
+    const { database, table } = req.params;
+    const { primaryKey, columnName, newValue } = req.body;
+
+    if (!primaryKey || !columnName) {
+      return res.status(400).json({ error: 'Primary key and column name are required' });
+    }
+
+    const connection = await connectionPool.getConnection();
+    
+    try {
+      await connection.query(`USE \`${database}\``);
+      
+      // Get table structure to find primary key column
+      const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+      const pkColumn = columns.find(col => col.Key === 'PRI');
+      
+      if (!pkColumn) {
+        return res.status(400).json({ error: 'Table has no primary key' });
+      }
+
+      // Build UPDATE query
+      const updateQuery = `UPDATE \`${table}\` SET \`${columnName}\` = ? WHERE \`${pkColumn.Field}\` = ?`;
+      const [result] = await connection.execute(updateQuery, [newValue, primaryKey]);
+
+      res.json({
+        success: true,
+        message: `Cell updated successfully`,
+        affectedRows: result.affectedRows
+      });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error updating cell:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update entire row
+app.put('/api/databases/:database/tables/:table/row', async (req, res) => {
+  try {
+    if (!connectionPool) {
+      const config = await loadConfig();
+      if (!config || !await createConnectionPool(config)) {
+        return res.status(500).json({ error: 'Database connection not configured' });
+      }
+    }
+
+    const { database, table } = req.params;
+    const { primaryKey, data } = req.body;
+
+    if (!primaryKey || !data) {
+      return res.status(400).json({ error: 'Primary key and data are required' });
+    }
+
+    const connection = await connectionPool.getConnection();
+    
+    try {
+      await connection.query(`USE \`${database}\``);
+      
+      // Get table structure to find primary key column
+      const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+      const pkColumn = columns.find(col => col.Key === 'PRI');
+      
+      if (!pkColumn) {
+        return res.status(400).json({ error: 'Table has no primary key' });
+      }
+
+      // Build UPDATE query
+      const setClause = Object.keys(data)
+        .filter(key => key !== pkColumn.Field) // Don't update PK
+        .map(key => `\`${key}\` = ?`)
+        .join(', ');
+      
+      const values = Object.keys(data)
+        .filter(key => key !== pkColumn.Field)
+        .map(key => data[key]);
+      
+      const updateQuery = `UPDATE \`${table}\` SET ${setClause} WHERE \`${pkColumn.Field}\` = ?`;
+      const [result] = await connection.execute(updateQuery, [...values, primaryKey]);
+
+      res.json({
+        success: true,
+        message: `Row updated successfully`,
+        affectedRows: result.affectedRows
+      });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error updating row:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Insert new row (copy)
+app.post('/api/databases/:database/tables/:table/row', async (req, res) => {
+  try {
+    if (!connectionPool) {
+      const config = await loadConfig();
+      if (!config || !await createConnectionPool(config)) {
+        return res.status(500).json({ error: 'Database connection not configured' });
+      }
+    }
+
+    const { database, table } = req.params;
+    const { data } = req.body;
+
+    if (!data) {
+      return res.status(400).json({ error: 'Data is required' });
+    }
+
+    const connection = await connectionPool.getConnection();
+    
+    try {
+      await connection.query(`USE \`${database}\``);
+      
+      // Get table structure
+      const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+      const pkColumn = columns.find(col => col.Key === 'PRI');
+      
+      // Remove primary key from data if it's auto increment
+      const insertData = { ...data };
+      if (pkColumn && pkColumn.Extra.includes('auto_increment')) {
+        delete insertData[pkColumn.Field];
+      }
+
+      // Build INSERT query
+      const columnNames = Object.keys(insertData).map(key => `\`${key}\``).join(', ');
+      const placeholders = Object.keys(insertData).map(() => '?').join(', ');
+      const values = Object.values(insertData);
+      
+      const insertQuery = `INSERT INTO \`${table}\` (${columnNames}) VALUES (${placeholders})`;
+      const [result] = await connection.execute(insertQuery, values);
+
+      res.json({
+        success: true,
+        message: `Row inserted successfully`,
+        insertId: result.insertId,
+        affectedRows: result.affectedRows
+      });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error inserting row:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete row
+app.delete('/api/databases/:database/tables/:table/row', async (req, res) => {
+  try {
+    if (!connectionPool) {
+      const config = await loadConfig();
+      if (!config || !await createConnectionPool(config)) {
+        return res.status(500).json({ error: 'Database connection not configured' });
+      }
+    }
+
+    const { database, table } = req.params;
+    const { primaryKey } = req.body;
+
+    if (!primaryKey) {
+      return res.status(400).json({ error: 'Primary key is required' });
+    }
+
+    const connection = await connectionPool.getConnection();
+    
+    try {
+      await connection.query(`USE \`${database}\``);
+      
+      // Get table structure to find primary key column
+      const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+      const pkColumn = columns.find(col => col.Key === 'PRI');
+      
+      if (!pkColumn) {
+        return res.status(400).json({ error: 'Table has no primary key' });
+      }
+
+      // Build DELETE query
+      const deleteQuery = `DELETE FROM \`${table}\` WHERE \`${pkColumn.Field}\` = ?`;
+      const [result] = await connection.execute(deleteQuery, [primaryKey]);
+
+      res.json({
+        success: true,
+        message: `Row deleted successfully`,
+        affectedRows: result.affectedRows
+      });
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error deleting row:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Execute SQL query
 app.post('/api/query', async (req, res) => {
   try {

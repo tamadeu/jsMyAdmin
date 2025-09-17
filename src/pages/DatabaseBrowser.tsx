@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X, Copy } from "lucide-react";
+import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X, Copy, Save, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiService, TableData } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -59,6 +60,9 @@ const DatabaseBrowser = () => {
   const [queryTime, setQueryTime] = useState<string>("0.0000");
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
   const [editValue, setEditValue] = useState<string>("");
+  const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
 
   // Debounce the search input (wait 500ms after user stops typing)
   const debouncedSearchTerm = useDebounce(searchInput, 500);
@@ -66,10 +70,12 @@ const DatabaseBrowser = () => {
   // Debounce column filters (wait 500ms after user stops typing)
   const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
 
-  // Check if table has primary key
-  const hasPrimaryKey = useMemo(() => {
-    return tableData?.columns.some(col => col.key === 'PRI') || false;
+  // Check if table has primary key and get PK column
+  const primaryKeyColumn = useMemo(() => {
+    return tableData?.columns.find(col => col.key === 'PRI') || null;
   }, [tableData]);
+
+  const hasPrimaryKey = !!primaryKeyColumn;
 
   useEffect(() => {
     if (database && table) {
@@ -101,6 +107,7 @@ const DatabaseBrowser = () => {
       
       setQueryTime(((endTime - startTime) / 1000).toFixed(4));
       setTableData(data);
+      setSelectedRows(new Set()); // Clear selection when data changes
     } catch (error) {
       console.error('Error loading table data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load table data');
@@ -172,6 +179,13 @@ const DatabaseBrowser = () => {
     }
   };
 
+  // Get primary key value for a row
+  const getPrimaryKeyValue = (row: any) => {
+    if (!primaryKeyColumn) return null;
+    return row[primaryKeyColumn.name];
+  };
+
+  // Inline cell editing
   const handleCellDoubleClick = (rowIndex: number, columnName: string, currentValue: any) => {
     if (!hasPrimaryKey) return; // Only allow editing if table has PK
     
@@ -179,27 +193,172 @@ const DatabaseBrowser = () => {
     setEditValue(currentValue === null ? '' : String(currentValue));
   };
 
-  const handleEditSave = () => {
-    // TODO: Implement save logic here
-    toast({
-      title: "Edit functionality",
-      description: "Cell editing will be implemented in the next update",
-      variant: "default"
-    });
+  const handleCellEditSave = async () => {
+    if (!editingCell || !tableData || !database || !table || !primaryKeyColumn) return;
+
+    try {
+      const row = tableData.data[editingCell.rowIndex];
+      const primaryKey = getPrimaryKeyValue(row);
+
+      await apiService.updateCell(database, table, primaryKey, editingCell.columnName, editValue);
+      
+      toast({
+        title: "Cell updated",
+        description: "The cell has been updated successfully",
+      });
+
+      // Refresh data to show changes
+      await loadTableData();
+      
+    } catch (error) {
+      console.error('Error updating cell:', error);
+      toast({
+        title: "Error updating cell",
+        description: error instanceof Error ? error.message : "Failed to update cell",
+        variant: "destructive"
+      });
+    } finally {
+      setEditingCell(null);
+      setEditValue("");
+    }
+  };
+
+  const handleCellEditCancel = () => {
     setEditingCell(null);
     setEditValue("");
   };
 
-  const handleEditCancel = () => {
-    setEditingCell(null);
-    setEditValue("");
-  };
-
-  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+  const handleCellEditKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleEditSave();
+      handleCellEditSave();
     } else if (e.key === 'Escape') {
-      handleEditCancel();
+      handleCellEditCancel();
+    }
+  };
+
+  // Row editing
+  const handleEditRow = (rowIndex: number) => {
+    if (!tableData) return;
+    const row = tableData.data[rowIndex];
+    setEditingRow({ rowIndex, data: { ...row } });
+  };
+
+  const handleRowEditSave = async () => {
+    if (!editingRow || !tableData || !database || !table || !primaryKeyColumn) return;
+
+    try {
+      const originalRow = tableData.data[editingRow.rowIndex];
+      const primaryKey = getPrimaryKeyValue(originalRow);
+
+      await apiService.updateRow(database, table, primaryKey, editingRow.data);
+      
+      toast({
+        title: "Row updated",
+        description: "The row has been updated successfully",
+      });
+
+      // Refresh data to show changes
+      await loadTableData();
+      
+    } catch (error) {
+      console.error('Error updating row:', error);
+      toast({
+        title: "Error updating row",
+        description: error instanceof Error ? error.message : "Failed to update row",
+        variant: "destructive"
+      });
+    } finally {
+      setEditingRow(null);
+    }
+  };
+
+  const handleRowEditCancel = () => {
+    setEditingRow(null);
+  };
+
+  // Copy row
+  const handleCopyRow = async (rowIndex: number) => {
+    if (!tableData || !database || !table) return;
+
+    try {
+      const row = tableData.data[rowIndex];
+      const copyData = { ...row };
+      
+      // Remove primary key if it's auto increment
+      if (primaryKeyColumn && primaryKeyColumn.extra.includes('auto_increment')) {
+        delete copyData[primaryKeyColumn.name];
+      }
+
+      await apiService.insertRow(database, table, copyData);
+      
+      toast({
+        title: "Row copied",
+        description: "The row has been copied successfully",
+      });
+
+      // Refresh data to show new row
+      await loadTableData();
+      
+    } catch (error) {
+      console.error('Error copying row:', error);
+      toast({
+        title: "Error copying row",
+        description: error instanceof Error ? error.message : "Failed to copy row",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Delete row
+  const handleDeleteRow = (rowIndex: number) => {
+    if (!tableData) return;
+    const row = tableData.data[rowIndex];
+    const primaryKey = getPrimaryKeyValue(row);
+    setDeleteConfirm({ rowIndex, primaryKey });
+  };
+
+  const confirmDeleteRow = async () => {
+    if (!deleteConfirm || !database || !table) return;
+
+    try {
+      await apiService.deleteRow(database, table, deleteConfirm.primaryKey);
+      
+      toast({
+        title: "Row deleted",
+        description: "The row has been deleted successfully",
+      });
+
+      // Refresh data to show changes
+      await loadTableData();
+      
+    } catch (error) {
+      console.error('Error deleting row:', error);
+      toast({
+        title: "Error deleting row",
+        description: error instanceof Error ? error.message : "Failed to delete row",
+        variant: "destructive"
+      });
+    } finally {
+      setDeleteConfirm(null);
+    }
+  };
+
+  // Row selection
+  const handleRowSelect = (rowIndex: number, checked: boolean) => {
+    const newSelection = new Set(selectedRows);
+    if (checked) {
+      newSelection.add(rowIndex);
+    } else {
+      newSelection.delete(rowIndex);
+    }
+    setSelectedRows(newSelection);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked && tableData) {
+      setSelectedRows(new Set(Array.from({ length: tableData.data.length }, (_, i) => i)));
+    } else {
+      setSelectedRows(new Set());
     }
   };
 
@@ -208,13 +367,6 @@ const DatabaseBrowser = () => {
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
-  };
-
-  const getColumnType = (type: string) => {
-    if (type.includes('int')) return 'number';
-    if (type.includes('varchar') || type.includes('text')) return 'text';
-    if (type.includes('date') || type.includes('time')) return 'date';
-    return 'text';
   };
 
   // Generate actual SQL query that was executed
@@ -399,9 +551,15 @@ const DatabaseBrowser = () => {
                                 <span className="text-sm font-medium">Actions</span>
                               </th>
                             )}
-                            <th className="p-2 text-left">
-                              <Checkbox />
-                            </th>
+                            {/* Checkbox column - only show if table has PK */}
+                            {hasPrimaryKey && (
+                              <th className="p-2 text-left w-12">
+                                <Checkbox 
+                                  checked={selectedRows.size === tableData.data.length && tableData.data.length > 0}
+                                  onCheckedChange={handleSelectAll}
+                                />
+                              </th>
+                            )}
                             {tableData.columns.map((column) => (
                               <th key={column.name} className="p-2 text-left min-w-[150px]">
                                 <div className="flex flex-col space-y-2">
@@ -447,7 +605,8 @@ const DatabaseBrowser = () => {
                                       variant="ghost" 
                                       size="sm" 
                                       className="h-6 w-6 p-0"
-                                      title="Edit"
+                                      title="Edit Row"
+                                      onClick={() => handleEditRow(rowIndex)}
                                     >
                                       <Edit className="h-3 w-3 text-blue-600" />
                                     </Button>
@@ -455,7 +614,8 @@ const DatabaseBrowser = () => {
                                       variant="ghost" 
                                       size="sm" 
                                       className="h-6 w-6 p-0"
-                                      title="Copy"
+                                      title="Copy Row"
+                                      onClick={() => handleCopyRow(rowIndex)}
                                     >
                                       <Copy className="h-3 w-3 text-green-600" />
                                     </Button>
@@ -463,16 +623,23 @@ const DatabaseBrowser = () => {
                                       variant="ghost" 
                                       size="sm" 
                                       className="h-6 w-6 p-0"
-                                      title="Delete"
+                                      title="Delete Row"
+                                      onClick={() => handleDeleteRow(rowIndex)}
                                     >
                                       <Trash2 className="h-3 w-3 text-red-600" />
                                     </Button>
                                   </div>
                                 </td>
                               )}
-                              <td className="p-2">
-                                <Checkbox />
-                              </td>
+                              {/* Checkbox column - only show if table has PK */}
+                              {hasPrimaryKey && (
+                                <td className="p-2">
+                                  <Checkbox 
+                                    checked={selectedRows.has(rowIndex)}
+                                    onCheckedChange={(checked) => handleRowSelect(rowIndex, checked as boolean)}
+                                  />
+                                </td>
+                              )}
                               {tableData.columns.map((column) => (
                                 <td 
                                   key={column.name} 
@@ -484,8 +651,8 @@ const DatabaseBrowser = () => {
                                     <Input
                                       value={editValue}
                                       onChange={(e) => setEditValue(e.target.value)}
-                                      onKeyDown={handleEditKeyDown}
-                                      onBlur={handleEditCancel}
+                                      onKeyDown={handleCellEditKeyDown}
+                                      onBlur={handleCellEditCancel}
                                       className="h-6 text-xs p-1"
                                       autoFocus
                                     />
@@ -507,6 +674,7 @@ const DatabaseBrowser = () => {
                     <span>
                       Showing {startRow + 1} to {endRow + 1} of {tableData.total.toLocaleString()} entries
                       {hasAnyFilters && ` (server filtered)`}
+                      {selectedRows.size > 0 && ` • ${selectedRows.size} selected`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
@@ -542,6 +710,73 @@ const DatabaseBrowser = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Row Edit Dialog */}
+        {editingRow && tableData && (
+          <Dialog open={!!editingRow} onOpenChange={() => setEditingRow(null)}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Row</DialogTitle>
+                <DialogDescription>
+                  Make changes to the row data. Click save when you're done.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                {tableData.columns.map((column) => (
+                  <div key={column.name} className="grid grid-cols-4 items-center gap-4">
+                    <label className="text-right font-medium">
+                      {column.name}
+                      {column.key === 'PRI' && <span className="text-xs text-muted-foreground ml-1">(PK)</span>}
+                    </label>
+                    <Input
+                      className="col-span-3"
+                      value={editingRow.data[column.name] || ''}
+                      onChange={(e) => setEditingRow({
+                        ...editingRow,
+                        data: { ...editingRow.data, [column.name]: e.target.value }
+                      })}
+                      disabled={column.key === 'PRI'} // Disable PK editing
+                      placeholder={column.null ? 'NULL' : 'Required'}
+                    />
+                  </div>
+                ))}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleRowEditCancel}>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={handleRowEditSave}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        {deleteConfirm && (
+          <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirm Delete</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete this row? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={confirmDeleteRow}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Row
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     </div>
   );
