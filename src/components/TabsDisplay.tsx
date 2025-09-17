@@ -62,7 +62,7 @@ const TabsDisplay = () => {
       </TabsList>
       <div className="flex-1 overflow-hidden">
         {tabs.map((tab) => (
-          <TabsContent key={tab.id} value={tab.id} className="h-full mt-0">
+          <TabsContent key={tab.id} value={tab.id} className="h-full mt-0 overflow-y-auto">
             {renderTabContent(tab)}
           </TabsContent>
         ))}

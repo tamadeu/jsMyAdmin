@@ -64,7 +64,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [selectedRows, setSelectedRows] = new Set<number>();
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
 
   // Debounce the search input (wait 500ms after user stops typing)
@@ -441,7 +441,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const hasAnyFilters = hasActiveFilters || hasServerSearch;
 
   return (
-    <div className="overflow-y-auto h-full">
+    <div className="h-full"> {/* Removed overflow-y-auto */}
       <div className="p-6 space-y-6">
         {/* Query Information */}
         <Card>
