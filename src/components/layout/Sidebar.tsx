@@ -113,7 +113,13 @@ const Sidebar = () => {
         })
       );
 
-      setDatabases(databasesWithTablesAndViews);
+      setDatabases(prev => {
+        // Deep compare to avoid unnecessary state updates
+        if (JSON.stringify(prev) === JSON.stringify(databasesWithTablesAndViews)) {
+          return prev;
+        }
+        return databasesWithTablesAndViews;
+      });
       
     } catch (error) {
       console.error('Error loading databases:', error);
@@ -135,17 +141,25 @@ const Sidebar = () => {
       if (database && database.tables.length === 0 && database.views.length === 0) {
         try {
           const tablesData = await apiService.getTables(databaseName);
-          setDatabases(prev => prev.map(db => 
-            db.name === databaseName 
-              ? { 
-                  ...db, 
-                  tables: tablesData.tables,
-                  views: tablesData.views,
-                  totalTables: tablesData.totalTables,
-                  totalViews: tablesData.totalViews
-                }
-              : db
-          ));
+          // Only update if new data is actually different
+          setDatabases(prev => {
+            const updated = prev.map(db => 
+              db.name === databaseName 
+                ? { 
+                    ...db, 
+                    tables: tablesData.tables,
+                    views: tablesData.views,
+                    totalTables: tablesData.totalTables,
+                    totalViews: tablesData.totalViews
+                  }
+                : db
+            );
+            // Deep compare to avoid unnecessary state updates
+            if (JSON.stringify(prev) === JSON.stringify(updated)) { 
+                return prev;
+            }
+            return updated;
+          });
         } catch (error) {
           console.error(`Error loading tables for ${databaseName}:`, error);
           toast({
