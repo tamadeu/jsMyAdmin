@@ -37,7 +37,7 @@ const DatabaseBrowser = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(25);
   const [offset, setOffset] = useState(0);
   const [queryTime, setQueryTime] = useState<string>("0.0000");
 
@@ -175,18 +175,27 @@ const DatabaseBrowser = () => {
     return 'text';
   };
 
-  // Generate SQL query string
+  // Generate actual SQL query that was executed
   const generateSQLQuery = () => {
     let query = `SELECT * FROM \`${table}\``;
+    
     if (debouncedSearchTerm) {
-      query += ` WHERE /* search filter applied */`;
+      // Show that search filter was applied (this is what actually happens on the server)
+      if (tableData?.columns) {
+        const concatColumns = tableData.columns.map(col => `COALESCE(\`${col.name}\`, '')`).join(', ');
+        query += ` WHERE CONCAT(${concatColumns}) LIKE '%${debouncedSearchTerm}%'`;
+      } else {
+        query += ` WHERE /* search filter applied */`;
+      }
     }
+    
     if (limit) {
       query += ` LIMIT ${limit}`;
     }
     if (offset > 0) {
       query += ` OFFSET ${offset}`;
     }
+    
     return query;
   };
 
