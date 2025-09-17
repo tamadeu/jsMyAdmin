@@ -64,7 +64,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
-  const [selectedRows, setSelectedRows] = new Set<number>();
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set()); // Corrigido aqui
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
 
   // Debounce the search input (wait 500ms after user stops typing)
