@@ -31,7 +31,6 @@ const DatabaseBrowser = () => {
   const { database, table } = useParams();
   const { toast } = useToast();
   const [searchInput, setSearchInput] = useState(""); // Input value (immediate)
-  const [liveSearchTerm, setLiveSearchTerm] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [tableInfo, setTableInfo] = useState<any>(null);
@@ -101,10 +100,6 @@ const DatabaseBrowser = () => {
     setOffset(0); // Reset to first page when searching
   };
 
-  const handleLiveSearch = (value: string) => {
-    setLiveSearchTerm(value);
-  };
-
   const handleColumnFilter = (columnName: string, value: string) => {
     setColumnFilters(prev => ({
       ...prev,
@@ -122,7 +117,6 @@ const DatabaseBrowser = () => {
 
   const clearAllFilters = () => {
     setColumnFilters({});
-    setLiveSearchTerm("");
     setSearchInput("");
   };
 
@@ -143,22 +137,11 @@ const DatabaseBrowser = () => {
     }
   };
 
-  // Filter data based on live search and column filters
+  // Filter data based on column filters only
   const filteredData = useMemo(() => {
     if (!tableData?.data) return [];
 
     let filtered = tableData.data;
-
-    // Apply live search (searches in visible data only)
-    if (liveSearchTerm) {
-      filtered = filtered.filter(row => {
-        return tableData.columns.some(column => {
-          const value = row[column.name];
-          if (value === null || value === undefined) return false;
-          return String(value).toLowerCase().includes(liveSearchTerm.toLowerCase());
-        });
-      });
-    }
 
     // Apply column filters
     Object.entries(columnFilters).forEach(([columnName, filterValue]) => {
@@ -172,7 +155,7 @@ const DatabaseBrowser = () => {
     });
 
     return filtered;
-  }, [tableData, liveSearchTerm, columnFilters]);
+  }, [tableData, columnFilters]);
 
   const formatCellValue = (value: any) => {
     if (value === null) return <span className="text-muted-foreground italic">NULL</span>;
@@ -217,7 +200,7 @@ const DatabaseBrowser = () => {
   const totalPages = tableData ? Math.ceil(tableData.total / limit) : 1;
   const startRow = offset + 1;
   const endRow = Math.min(offset + limit, tableData?.total || 0);
-  const hasActiveFilters = Object.keys(columnFilters).length > 0 || liveSearchTerm;
+  const hasActiveFilters = Object.keys(columnFilters).length > 0;
   const hasServerSearch = debouncedSearchTerm.length > 0;
 
   return (
@@ -317,19 +300,10 @@ const DatabaseBrowser = () => {
                     <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                   )}
                   <Input 
-                    placeholder="Search in database (server-side)..." 
+                    placeholder="Search in database..." 
                     className="pl-10 pr-10"
                     value={searchInput}
                     onChange={(e) => handleSearchInputChange(e.target.value)}
-                  />
-                </div>
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Live search in visible data..." 
-                    className="pl-10"
-                    value={liveSearchTerm}
-                    onChange={(e) => handleLiveSearch(e.target.value)}
                   />
                 </div>
                 {(hasActiveFilters || hasServerSearch) && (
@@ -365,7 +339,7 @@ const DatabaseBrowser = () => {
                   )}
                   {hasActiveFilters && (
                     <Badge variant="outline">
-                      {Object.keys(columnFilters).length + (liveSearchTerm ? 1 : 0)} local filters
+                      {Object.keys(columnFilters).length} column filters
                     </Badge>
                   )}
                 </div>
@@ -450,7 +424,7 @@ const DatabaseBrowser = () => {
                     <span>
                       Showing {startRow} to {endRow} of {tableData.total.toLocaleString()} entries
                       {hasServerSearch && ` (database filtered)`}
-                      {hasActiveFilters && ` • ${filteredData.length} visible after local filters`}
+                      {hasActiveFilters && ` • ${filteredData.length} visible after column filters`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
