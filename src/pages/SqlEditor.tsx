@@ -97,63 +97,65 @@ const SqlEditor = () => {
           <CardHeader>
             <CardTitle>Query Results</CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto"> {/* Add flex-1 and overflow-y-auto here */}
-            {queryResults ? (
-              queryResults.success ? (
-                <div className="space-y-2">
-                  <div className="text-sm text-green-600">
-                    Query executed successfully in {queryResults.executionTime}
-                  </div>
-                  {queryResults.data && queryResults.data.length > 0 && (
-                    <>
-                      <div className="text-sm text-muted-foreground">
-                        {queryResults.rowCount} rows returned
-                      </div>
-                      <div className="border rounded-lg overflow-hidden mt-4">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs">
-                            <thead className="bg-muted">
-                              <tr>
-                                {queryResults.fields?.map((field) => (
-                                  <th key={field.name} className="p-2 text-left font-medium text-sm">
-                                    {field.name}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {queryResults.data.map((row, rowIndex) => (
-                                <tr key={rowIndex} className="border-t hover:bg-muted/50">
+          <CardContent className="flex-1 flex flex-col p-0"> {/* Removed overflow-y-auto and padding from CardContent */}
+            <div className="flex-1 overflow-y-auto p-6"> {/* New div for scrollable content with padding */}
+              {queryResults ? (
+                queryResults.success ? (
+                  <div className="space-y-2">
+                    <div className="text-sm text-green-600">
+                      Query executed successfully in {queryResults.executionTime}
+                    </div>
+                    {queryResults.data && queryResults.data.length > 0 && (
+                      <>
+                        <div className="text-sm text-muted-foreground">
+                          {queryResults.rowCount} rows returned
+                        </div>
+                        <div className="border rounded-lg mt-4"> {/* Removed overflow-hidden here */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead className="bg-muted">
+                                <tr>
                                   {queryResults.fields?.map((field) => (
-                                    <td key={field.name} className="p-2 max-w-xs truncate" title={String(row[field.name])}>
-                                      {String(row[field.name])}
-                                    </td>
+                                    <th key={field.name} className="p-2 text-left font-medium text-sm">
+                                      {field.name}
+                                    </th>
                                   ))}
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {queryResults.data.map((row, rowIndex) => (
+                                  <tr key={rowIndex} className="border-t hover:bg-muted/50">
+                                    {queryResults.fields?.map((field) => (
+                                      <td key={field.name} className="p-2 max-w-xs truncate" title={String(row[field.name])}>
+                                        {String(row[field.name])}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
+                      </>
+                    )}
+                    {queryResults.affectedRows !== undefined && (
+                      <div className="text-sm text-muted-foreground">
+                        {queryResults.affectedRows} rows affected.
                       </div>
-                    </>
-                  )}
-                  {queryResults.affectedRows !== undefined && (
-                    <div className="text-sm text-muted-foreground">
-                      {queryResults.affectedRows} rows affected.
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-red-500">
+                    <AlertCircle className="h-5 w-5 inline-block mr-2" />
+                    <span className="font-medium">Error:</span> {queryResults.error}
+                  </div>
+                )
               ) : (
-                <div className="space-y-2 text-red-500">
-                  <AlertCircle className="h-5 w-5 inline-block mr-2" />
-                  <span className="font-medium">Error:</span> {queryResults.error}
+                <div className="text-center text-muted-foreground py-8">
+                  Execute a query to see results
                 </div>
-              )
-            ) : (
-              <div className="text-center text-muted-foreground py-8">
-                Execute a query to see results
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
