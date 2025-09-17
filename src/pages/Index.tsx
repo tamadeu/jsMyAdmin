@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { ThemeToggle } from "@/components/theme-toggle";
+import DatabaseConfigComponent from "@/components/database-config";
 
 const Index = () => {
   const [activeView, setActiveView] = useState("query");
@@ -118,6 +119,14 @@ const Index = () => {
                 <Search className="h-4 w-4 mr-2" />
                 SQL Query
               </Button>
+              <Button 
+                variant={activeView === "config" ? "secondary" : "ghost"} 
+                className="w-full justify-start"
+                onClick={() => setActiveView("config")}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Configuration
+              </Button>
             </div>
 
             <div className="text-sm text-muted-foreground mb-3">Databases</div>
@@ -188,6 +197,7 @@ const Index = () => {
                 {activeView === "dashboard" && "Database Dashboard"}
                 {activeView === "query" && "SQL Query Editor"}
                 {activeView === "browse" && `Table: ${selectedTable}`}
+                {activeView === "config" && "Database Configuration"}
               </h1>
               {activeView === "browse" && (
                 <div className="text-sm text-muted-foreground">
@@ -211,6 +221,12 @@ const Index = () => {
 
         {/* Content */}
         <div className="flex-1 overflow-hidden">
+          {activeView === "config" && (
+            <div className="p-6">
+              <DatabaseConfigComponent />
+            </div>
+          )}
+
           {activeView === "dashboard" && (
             <div className="p-6 space-y-6">
               {/* Stats Cards */}

@@ -1,0 +1,30 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 3306,
+    "username": "root",
+    "password": "",
+    "defaultDatabase": "mysql",
+    "charset": "utf8mb4",
+    "collation": "utf8mb4_unicode_ci",
+    "connectionTimeout": 10000,
+    "maxConnections": 10,
+    "ssl": false,
+    "sslCertificate": "",
+    "sslKey": "",
+    "sslCA": ""
+  },
+  "application": {
+    "theme": "dark",
+    "language": "en",
+    "queryTimeout": 30000,
+    "maxQueryResults": 1000,
+    "autoRefresh": false,
+    "refreshInterval": 30000
+  },
+  "security": {
+    "allowMultipleStatements": false,
+    "allowLocalInfile": false,
+    "requireSSL": false
+  }
+}
