@@ -191,15 +191,15 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
           <CardContent className="pt-6">
             <div className="space-y-2 text-sm">
               <div>
-                Mostrando registros {startRow + 1} - {endRow + 1} ({filteredData.length.toLocaleString()} no total,{' '}
-                {hasAnyFilters && 'filtrado no cliente, '}
+                Mostrando registros {startRow + 1} - {endRow + 1} ({queryResult.rowCount?.toLocaleString() || 0} no total,{' '}
+                {hasAnyFilters && `filtrado no cliente (${filteredData.length.toLocaleString()} resultados), `}
                 Consulta levou {queryResult.executionTime} segundos.)
               </div>
-              <div className="font-mono text-xs bg-muted p-2 rounded">
-                {/* Assuming the original query string can be passed here if needed */}
-                {/* For now, just a placeholder or the query that generated this result */}
-                {queryResult.message || "SQL Query Executed"} 
-              </div>
+              {queryResult.originalQuery && (
+                <div className="font-mono text-xs bg-muted p-2 rounded">
+                  {queryResult.originalQuery}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -211,7 +211,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
               <div>
                 <CardTitle>Browse Data</CardTitle>
                 <CardDescription>
-                  {filteredData.length.toLocaleString()} total rows
+                  {queryResult.rowCount?.toLocaleString() || 0} total rows
                   {hasAnyFilters && ` • Client filtered`}
                 </CardDescription>
               </div>
@@ -347,8 +347,8 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
 
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                      Showing {startRow + 1} to {endRow + 1} of {filteredData.length.toLocaleString()} entries
-                      {hasAnyFilters && ` (client filtered)`}
+                      Mostrando {startRow + 1} a {endRow + 1} de {filteredData.length.toLocaleString()} entradas
+                      {hasAnyFilters && ` (filtrado no cliente)`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
@@ -357,10 +357,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
                         onClick={handlePrevPage}
                         disabled={offset === 0}
                       >
-                        Previous
+                        Anterior
                       </Button>
                       <span className="flex items-center px-3">
-                        Page {currentPage} of {totalPages}
+                        Página {currentPage} de {totalPages}
                       </span>
                       <Button 
                         variant="outline" 
@@ -368,7 +368,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
                         onClick={handleNextPage}
                         disabled={offset + limit >= filteredData.length}
                       >
-                        Next
+                        Próximo
                       </Button>
                     </div>
                   </div>
@@ -377,7 +377,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
                 <div className="text-center py-8">
                   <TableIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">
-                    {hasAnyFilters ? 'No data found matching your filters' : 'No data in this query result'}
+                    {hasAnyFilters ? 'Nenhum dado encontrado correspondente aos seus filtros' : 'Nenhum dado neste resultado de query'}
                   </p>
                 </div>
               )}

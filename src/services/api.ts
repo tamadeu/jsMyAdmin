@@ -41,6 +41,7 @@ export interface QueryResult {
   affectedRows?: number;
   executionTime: string;
   error?: string;
+  originalQuery?: string; // Adicionado aqui
 }
 
 export interface DatabaseConfig {
@@ -275,7 +276,8 @@ class ApiService {
       }),
     });
 
-    return response.json();
+    const result = await response.json();
+    return { ...result, originalQuery: query }; // Adiciona a query original ao resultado
   }
 
   async getServerStatus(): Promise<{

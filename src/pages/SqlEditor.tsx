@@ -34,7 +34,7 @@ const SqlEditor = () => {
           addTab({
             title: `Query Result (${new Date().toLocaleTimeString()})`,
             type: 'query-result',
-            queryResult: result,
+            queryResult: { ...result, originalQuery: sqlQuery }, // Pass originalQuery here
             closable: true,
           });
         } else {
