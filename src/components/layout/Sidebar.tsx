@@ -176,8 +176,8 @@ const Sidebar = () => {
   );
 
   return (
-    <div className="w-64 bg-card border-r border-border">
-      {/* Header */}
+    <div className="w-64 bg-card border-r border-border flex flex-col h-screen">
+      {/* Header (Fixed) */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Database className="h-6 w-6" />
@@ -185,7 +185,7 @@ const Sidebar = () => {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Search (Fixed) */}
       <div className="p-4 border-b border-border">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -198,36 +198,39 @@ const Sidebar = () => {
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-200px)]">
-        <div className="p-4">
-          {/* Navigation */}
-          <div className="space-y-2 mb-6">
-            <Button 
-              variant={isActive("/") ? "secondary" : "ghost"} 
-              className="w-full justify-start"
-              onClick={() => navigate("/")}
-            >
-              <Database className="h-4 w-4 mr-2" />
-              Dashboard
-            </Button>
-            <Button 
-              variant={isActive("/sql") ? "secondary" : "ghost"} 
-              className="w-full justify-start"
-              onClick={() => navigate("/sql")}
-            >
-              <Play className="h-4 w-4 mr-2" />
-              SQL Editor
-            </Button>
-            <Button 
-              variant={isActive("/config") ? "secondary" : "ghost"} 
-              className="w-full justify-start"
-              onClick={() => navigate("/config")}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Configuration
-            </Button>
-          </div>
+      {/* Navigation (Fixed) */}
+      <div className="p-4 border-b border-border">
+        <div className="space-y-2">
+          <Button 
+            variant={isActive("/") ? "secondary" : "ghost"} 
+            className="w-full justify-start"
+            onClick={() => navigate("/")}
+          >
+            <Database className="h-4 w-4 mr-2" />
+            Dashboard
+          </Button>
+          <Button 
+            variant={isActive("/sql") ? "secondary" : "ghost"} 
+            className="w-full justify-start"
+            onClick={() => navigate("/sql")}
+          >
+            <Play className="h-4 w-4 mr-2" />
+            SQL Editor
+          </Button>
+          <Button 
+            variant={isActive("/config") ? "secondary" : "ghost"} 
+            className="w-full justify-start"
+            onClick={() => navigate("/config")}
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Configuration
+          </Button>
+        </div>
+      </div>
 
+      {/* Scrollable Content */}
+      <ScrollArea className="flex-1">
+        <div className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm text-muted-foreground">Databases</div>
             <Button 
@@ -375,7 +378,7 @@ const Sidebar = () => {
                       {/* Empty state when no tables or views */}
                       {db.totalTables === 0 && db.totalViews === 0 && (
                         <div className="text-xs text-muted-foreground p-2">
-          No tables or views found
+                          No tables or views found
                         </div>
                       )}
                     </div>
@@ -394,7 +397,7 @@ const Sidebar = () => {
         </div>
       </ScrollArea>
 
-      {/* Footer with Theme Toggle */}
+      {/* Footer with Theme Toggle (Fixed) */}
       <div className="p-4 border-t border-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
