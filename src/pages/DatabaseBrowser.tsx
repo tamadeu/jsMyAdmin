@@ -714,7 +714,7 @@ const DatabaseBrowser = () => {
         {/* Row Edit Dialog */}
         {editingRow && tableData && (
           <Dialog open={!!editingRow} onOpenChange={() => setEditingRow(null)}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Row</DialogTitle>
                 <DialogDescription>
@@ -723,21 +723,29 @@ const DatabaseBrowser = () => {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 {tableData.columns.map((column) => (
-                  <div key={column.name} className="grid grid-cols-4 items-center gap-4">
-                    <label className="text-right font-medium">
-                      {column.name}
-                      {column.key === 'PRI' && <span className="text-xs text-muted-foreground ml-1">(PK)</span>}
+                  <div key={column.name} className="grid grid-cols-12 items-center gap-4">
+                    <label className="col-span-4 text-right font-medium text-sm break-words">
+                      <div className="flex flex-col items-end">
+                        <span className="font-medium">{column.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {column.type}
+                          {column.key === 'PRI' && ' (PK)'}
+                          {!column.null && ' NOT NULL'}
+                        </span>
+                      </div>
                     </label>
-                    <Input
-                      className="col-span-3"
-                      value={editingRow.data[column.name] || ''}
-                      onChange={(e) => setEditingRow({
-                        ...editingRow,
-                        data: { ...editingRow.data, [column.name]: e.target.value }
-                      })}
-                      disabled={column.key === 'PRI'} // Disable PK editing
-                      placeholder={column.null ? 'NULL' : 'Required'}
-                    />
+                    <div className="col-span-8">
+                      <Input
+                        value={editingRow.data[column.name] || ''}
+                        onChange={(e) => setEditingRow({
+                          ...editingRow,
+                          data: { ...editingRow.data, [column.name]: e.target.value }
+                        })}
+                        disabled={column.key === 'PRI'} // Disable PK editing
+                        placeholder={column.null ? 'NULL' : 'Required'}
+                        className="w-full"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
