@@ -15,26 +15,35 @@ const SqlEditor = () => {
   const { addTab, activeTabId, getTabById, updateTabContent } = useTabs();
   
   const activeTab = getTabById(activeTabId);
-  const initialSqlQuery = activeTab?.type === 'sql-editor' && activeTab.sqlQueryContent 
-    ? activeTab.sqlQueryContent 
-    : "SELECT * FROM your_table;";
 
-  const [sqlQuery, setSqlQuery] = useState(initialSqlQuery);
+  // Initialize with a default query. The useEffect below will handle loading the actual tab content.
+  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;"); 
   const [isExecuting, setIsExecuting] = useState(false);
   const [queryHistory, setQueryHistory] = useState<Array<{ query: string; time: string; timestamp: string }>>([]);
 
-  // Update sqlQuery state if the active tab changes to a different SQL editor tab
-  // or if the initialSqlQuery changes (e.g., after loading from localStorage)
+  // Effect to load content into the editor when the active tab changes
   useEffect(() => {
-    if (activeTab?.type === 'sql-editor' && activeTab.sqlQueryContent !== sqlQuery) {
-      setSqlQuery(activeTab.sqlQueryContent || "SELECT * FROM your_table;");
+    if (activeTab?.type === 'sql-editor') {
+      const tabContent = activeTab.sqlQueryContent || "SELECT * FROM your_table;";
+      // Only update local state if it's different from the tab's content
+      // This prevents unnecessary updates and potential loops
+      if (sqlQuery !== tabContent) {
+        setSqlQuery(tabContent);
+      }
+    } else {
+      // If no SQL editor tab is active, or tab type changes, reset to default
+      setSqlQuery("SELECT * FROM your_table;");
     }
-  }, [activeTab, sqlQuery]);
+  }, [activeTabId, activeTab]); // Depend only on activeTabId and activeTab object
 
-  // Save sqlQueryContent to the active tab whenever sqlQuery changes
+  // Effect to save content from the editor's local state to the tab context
   useEffect(() => {
-    if (activeTabId && activeTab?.type === 'sql-editor' && sqlQuery !== activeTab.sqlQueryContent) {
-      updateTabContent(activeTabId, { sqlQueryContent: sqlQuery });
+    if (activeTabId && activeTab?.type === 'sql-editor') {
+      // Only update the tab context if the local sqlQuery is different from the tab's content
+      // This is the crucial check to prevent the loop
+      if (sqlQuery !== (activeTab.sqlQueryContent || "SELECT * FROM your_table;")) {
+        updateTabContent(activeTabId, { sqlQueryContent: sqlQuery });
+      }
     }
   }, [sqlQuery, activeTabId, activeTab?.type, activeTab?.sqlQueryContent, updateTabContent]);
 
