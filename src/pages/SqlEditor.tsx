@@ -3,34 +3,61 @@ import { Play, Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { apiService, QueryResult } from "@/services/api"; // Import apiService and QueryResult
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 const SqlEditor = () => {
+  const { toast } = useToast();
   const [sqlQuery, setSqlQuery] = useState("SELECT * FROM users WHERE status = \"active\" LIMIT 10;");
-  const [queryResults, setQueryResults] = useState(null);
+  const [queryResults, setQueryResults] = useState<QueryResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
-
-  const queryHistory = [
-    { query: "SELECT * FROM users WHERE status = \"active\" ORDER BY created_at...", time: "0.045s", timestamp: "2024-01-15 14:30:22" },
-    { query: "UPDATE products SET stock = stock - 1 WHERE id = 123", time: "0.012s", timestamp: "2024-01-15 14:25:15" },
-    { query: "SELECT COUNT(*) as total_orders FROM orders WHERE DATE(created_...", time: "0.089s", timestamp: "2024-01-15 14:20:08" }
-  ];
+  const [queryHistory, setQueryHistory] = useState<Array<{ query: string; time: string; timestamp: string }>>([]);
 
   const executeQuery = async () => {
     setIsExecuting(true);
-    // TODO: Implement actual query execution
-    setTimeout(() => {
-      setIsExecuting(false);
-      setQueryResults({
-        success: true,
-        rowCount: 5,
-        executionTime: "0.045s"
+    setQueryResults(null); // Clear previous results
+    try {
+      const result = await apiService.executeQuery(sqlQuery);
+      setQueryResults(result);
+
+      // Add to history
+      setQueryHistory(prev => [
+        { query: sqlQuery, time: result.executionTime, timestamp: new Date().toLocaleString() },
+        ...prev.slice(0, 4) // Keep last 5 queries
+      ]);
+
+      if (result.success) {
+        toast({
+          title: "Query executed",
+          description: result.message || "SQL query executed successfully.",
+        });
+      } else {
+        toast({
+          title: "Query failed",
+          description: result.error || "An error occurred during query execution.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error executing query:', error);
+      setQueryResults({ success: false, error: error instanceof Error ? error.message : "Unknown error", executionTime: "N/A" });
+      toast({
+        title: "Query failed",
+        description: error instanceof Error ? error.message : "Failed to execute SQL query",
+        variant: "destructive"
       });
-    }, 1000);
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const saveQuery = () => {
     // TODO: Implement query saving
-    console.log("Saving query:", sqlQuery);
+    toast({
+      title: "Feature not implemented",
+      description: "Saving queries is not yet available.",
+      variant: "default"
+    });
   };
 
   return (
@@ -54,7 +81,7 @@ const SqlEditor = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col min-h-[400px]">
+          <div className="flex-1 flex flex-col min-h-[300px]">
             <Textarea
               value={sqlQuery}
               onChange={(e) => setSqlQuery(e.target.value)}
@@ -69,14 +96,56 @@ const SqlEditor = () => {
             </CardHeader>
             <CardContent>
               {queryResults ? (
-                <div className="space-y-2">
-                  <div className="text-sm text-green-600">
-                    Query executed successfully in {queryResults.executionTime}
+                queryResults.success ? (
+                  <div className="space-y-2">
+                    <div className="text-sm text-green-600">
+                      Query executed successfully in {queryResults.executionTime}
+                    </div>
+                    {queryResults.data && queryResults.data.length > 0 && (
+                      <>
+                        <div className="text-sm text-muted-foreground">
+                          {queryResults.rowCount} rows returned
+                        </div>
+                        <div className="border rounded-lg overflow-hidden mt-4">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead className="bg-muted">
+                                <tr>
+                                  {queryResults.fields?.map((field) => (
+                                    <th key={field.name} className="p-2 text-left font-medium text-sm">
+                                      {field.name}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {queryResults.data.map((row, rowIndex) => (
+                                  <tr key={rowIndex} className="border-t hover:bg-muted/50">
+                                    {queryResults.fields?.map((field) => (
+                                      <td key={field.name} className="p-2 max-w-xs truncate" title={String(row[field.name])}>
+                                        {String(row[field.name])}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {queryResults.affectedRows !== undefined && (
+                      <div className="text-sm text-muted-foreground">
+                        {queryResults.affectedRows} rows affected.
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {queryResults.rowCount} rows returned
+                ) : (
+                  <div className="space-y-2 text-red-500">
+                    <AlertCircle className="h-5 w-5 inline-block mr-2" />
+                    <span className="font-medium">Error:</span> {queryResults.error}
                   </div>
-                </div>
+                )
               ) : (
                 <div className="text-center text-muted-foreground py-8">
                   Execute a query to see results

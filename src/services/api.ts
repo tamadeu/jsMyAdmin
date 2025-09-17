@@ -43,10 +43,41 @@ export interface QueryResult {
   error?: string;
 }
 
+export interface DatabaseConfig {
+  database: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    defaultDatabase: string;
+    charset: string;
+    collation: string;
+    connectionTimeout: number;
+    maxConnections: number;
+    ssl: boolean;
+    sslCertificate: string;
+    sslKey: string;
+    sslCA: string;
+  };
+  application: {
+    theme: string;
+    language: string;
+    queryTimeout: number;
+    maxQueryResults: number;
+    autoRefresh: boolean;
+    refreshInterval: number;
+  };
+  security: {
+    allowMultipleStatements: boolean;
+    allowLocalInfile: boolean;
+    requireSSL: boolean;
+  };
+}
+
 class ApiService {
   private baseUrl = 'http://localhost:3001/api';
 
-  async testConnection(config: any): Promise<{ success: boolean; message: string }> {
+  async testConnection(config: DatabaseConfig): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${this.baseUrl}/test-connection`, {
       method: 'POST',
       headers: {
@@ -58,7 +89,7 @@ class ApiService {
     return response.json();
   }
 
-  async saveConfig(config: any): Promise<{ success: boolean; message: string }> {
+  async saveConfig(config: DatabaseConfig): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${this.baseUrl}/save-config`, {
       method: 'POST',
       headers: {

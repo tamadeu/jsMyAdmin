@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useParams } from "react-router-dom";
 import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X, Copy, Save, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,8 +44,12 @@ const useDebounceObject = (value: Record<string, string>, delay: number) => {
   return debouncedValue;
 };
 
-const DatabaseBrowser = () => {
-  const { database, table } = useParams();
+interface DatabaseBrowserProps {
+  database: string;
+  table: string;
+}
+
+const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const { toast } = useToast();
   const [searchInput, setSearchInput] = useState(""); // Input value (immediate)
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -127,7 +130,7 @@ const DatabaseBrowser = () => {
 
     try {
       const tables = await apiService.getTables(database);
-      const info = tables.find(t => t.name === table);
+      const info = tables.tables.find(t => t.name === table) || tables.views.find(v => v.name === table);
       setTableInfo(info);
     } catch (error) {
       console.error('Error loading table info:', error);

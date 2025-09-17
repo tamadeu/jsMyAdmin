@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ThemeToggle } from "@/components/theme-toggle";
 import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useTabs, AppTab } from "@/context/TabContext"; // Import useTabs and AppTab
 
 interface DatabaseInfo {
   name: string;
@@ -18,9 +19,9 @@ interface DatabaseInfo {
 }
 
 const Sidebar = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { tabs, activeTabId, addTab, setActiveTab, getTabById } = useTabs(); // Use tab context
   const [searchTerm, setSearchTerm] = useState("");
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,37 +29,18 @@ const Sidebar = () => {
   const [expandedDatabases, setExpandedDatabases] = useState<string[]>([]);
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
-  const isActive = (path: string) => location.pathname === path;
+  // Determine if a sidebar item corresponds to the active tab
+  const isSidebarItemActive = (type: AppTab['type'], params?: AppTab['params']) => {
+    const activeTab = getTabById(activeTabId);
+    if (!activeTab) return false;
 
-  // Get current database from URL
-  const getCurrentDatabase = () => {
-    const pathParts = location.pathname.split('/');
-    if (pathParts[1] === 'database' && pathParts[2]) {
-      return pathParts[2];
+    if (activeTab.type === type) {
+      if (type === 'table') {
+        return activeTab.params?.database === params?.database && activeTab.params?.table === params?.table;
+      }
+      return true; // For dashboard, sql-editor, config, just type match is enough
     }
-    return null;
-  };
-
-  // Get current table/view from URL
-  const getCurrentTable = () => {
-    const pathParts = location.pathname.split('/');
-    if (pathParts[1] === 'database' && pathParts[2] && pathParts[3] === 'table' && pathParts[4]) {
-      return pathParts[4];
-    }
-    return null;
-  };
-
-  // Check if current table is a view
-  const isCurrentTableAView = () => {
-    const currentDb = getCurrentDatabase();
-    const currentTable = getCurrentTable();
-    
-    if (!currentDb || !currentTable) return false;
-    
-    const database = databases.find(db => db.name === currentDb);
-    if (!database) return false;
-    
-    return database.views.some(view => view.name === currentTable);
+    return false;
   };
 
   // Load databases on component mount
@@ -66,33 +48,24 @@ const Sidebar = () => {
     loadDatabases();
   }, []);
 
-  // Update expanded databases based on current route
+  // Update expanded databases based on current active tab
   useEffect(() => {
-    const currentDb = getCurrentDatabase();
-    const currentTable = getCurrentTable();
-    
-    if (currentDb) {
-      // Only expand the database that the user is currently viewing
-      setExpandedDatabases([currentDb]);
-      
-      // Determine which section to expand based on current table/view
-      if (currentTable) {
-        const isView = isCurrentTableAView();
-        if (isView) {
-          setExpandedSections([`${currentDb}-views`]);
-        } else {
-          setExpandedSections([`${currentDb}-tables`]);
+    const activeTab = getTabById(activeTabId);
+    if (activeTab && activeTab.type === 'table' && activeTab.params?.database) {
+      setExpandedDatabases([activeTab.params.database]);
+      if (activeTab.params.table) {
+        // Determine which section (tables/views) to expand
+        const db = databases.find(d => d.name === activeTab.params?.database);
+        if (db) {
+          const isView = db.views.some(view => view.name === activeTab.params?.table);
+          setExpandedSections([`${activeTab.params.database}-${isView ? 'views' : 'tables'}`]);
         }
-      } else {
-        // Default to tables section when just viewing a database
-        setExpandedSections([`${currentDb}-tables`]);
       }
     } else {
-      // If not viewing any specific database, don't expand any
       setExpandedDatabases([]);
       setExpandedSections([]);
     }
-  }, [location.pathname, databases]); // Add databases to dependency array
+  }, [activeTabId, databases, getTabById]);
 
   const loadDatabases = async () => {
     try {
@@ -142,8 +115,8 @@ const Sidebar = () => {
   };
 
   const handleDatabaseToggle = async (databaseName: string) => {
+    // If the database is not currently expanded, try to load its tables/views
     if (!expandedDatabases.includes(databaseName)) {
-      // Load tables for this database if not already loaded
       const database = databases.find(db => db.name === databaseName);
       if (database && database.tables.length === 0 && database.views.length === 0) {
         try {
@@ -169,6 +142,12 @@ const Sidebar = () => {
         }
       }
     }
+    // Toggle the expanded state
+    setExpandedDatabases(prev => 
+      prev.includes(databaseName) 
+        ? prev.filter(name => name !== databaseName) 
+        : [...prev, databaseName]
+    );
   };
 
   const filteredDatabases = databases.filter(db => 
@@ -202,25 +181,25 @@ const Sidebar = () => {
       <div className="p-4 border-b border-border">
         <div className="space-y-2">
           <Button 
-            variant={isActive("/") ? "secondary" : "ghost"} 
+            variant={isSidebarItemActive("dashboard") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => navigate("/")}
+            onClick={() => addTab({ title: "Dashboard", type: "dashboard", closable: false })}
           >
             <Database className="h-4 w-4 mr-2" />
             Dashboard
           </Button>
           <Button 
-            variant={isActive("/sql") ? "secondary" : "ghost"} 
+            variant={isSidebarItemActive("sql-editor") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => navigate("/sql")}
+            onClick={() => addTab({ title: "SQL Editor", type: "sql-editor", closable: true })}
           >
             <Play className="h-4 w-4 mr-2" />
             SQL Editor
           </Button>
           <Button 
-            variant={isActive("/config") ? "secondary" : "ghost"} 
+            variant={isSidebarItemActive("config") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => navigate("/config")}
+            onClick={() => addTab({ title: "Configuration", type: "config", closable: true })}
           >
             <Settings className="h-4 w-4 mr-2" />
             Configuration
@@ -325,8 +304,17 @@ const Sidebar = () => {
                                   db.tables.map((table) => (
                                     <div 
                                       key={table.name} 
-                                      className="p-2 rounded-md cursor-pointer transition-colors hover:bg-accent"
-                                      onClick={() => navigate(`/database/${db.name}/table/${table.name}`)}
+                                      className={`p-2 rounded-md cursor-pointer transition-colors ${
+                                        isSidebarItemActive("table", { database: db.name, table: table.name }) 
+                                          ? "bg-secondary hover:bg-secondary/80" 
+                                          : "hover:bg-accent"
+                                      }`}
+                                      onClick={() => addTab({ 
+                                        title: table.name, 
+                                        type: "table", 
+                                        params: { database: db.name, table: table.name },
+                                        closable: true
+                                      })}
                                     >
                                       <div className="flex items-center gap-2">
                                         <Table className="h-3 w-3" />
@@ -359,8 +347,17 @@ const Sidebar = () => {
                                   db.views.map((view) => (
                                     <div 
                                       key={view.name} 
-                                      className="p-2 rounded-md cursor-pointer transition-colors hover:bg-accent"
-                                      onClick={() => navigate(`/database/${db.name}/table/${view.name}`)}
+                                      className={`p-2 rounded-md cursor-pointer transition-colors ${
+                                        isSidebarItemActive("table", { database: db.name, table: view.name }) 
+                                          ? "bg-secondary hover:bg-secondary/80" 
+                                          : "hover:bg-accent"
+                                      }`}
+                                      onClick={() => addTab({ 
+                                        title: view.name, 
+                                        type: "table", 
+                                        params: { database: db.name, table: view.name },
+                                        closable: true
+                                      })}
                                     >
                                       <div className="flex items-center gap-2">
                                         <Eye className="h-3 w-3" />
