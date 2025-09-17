@@ -202,15 +202,26 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
       let rows, countResult;
       
       if (search && search.trim()) {
-        // With search - use prepared statements
-        const searchColumns = columns.map(col => `\`${col.Field}\` LIKE ?`).join(' OR ');
-        const searchParams = columns.map(() => `%${search}%`);
+        // With search - use a simpler approach with CONCAT and LIKE
+        // This avoids the issue with too many parameters
+        const searchTerm = mysql.escape(`%${search}%`);
         
-        const dataQuery = `SELECT * FROM \`${table}\` WHERE ${searchColumns} LIMIT ? OFFSET ?`;
-        const countQuery = `SELECT COUNT(*) as total FROM \`${table}\` WHERE ${searchColumns}`;
+        // Create a CONCAT of all columns for searching
+        const concatColumns = columns.map(col => `COALESCE(\`${col.Field}\`, '')`).join(', ');
         
-        [rows] = await connection.execute(dataQuery, [...searchParams, parseInt(limit), parseInt(offset)]);
-        [countResult] = await connection.execute(countQuery, searchParams);
+        const dataQuery = `
+          SELECT * FROM \`${table}\` 
+          WHERE CONCAT(${concatColumns}) LIKE ${searchTerm}
+          LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
+        `;
+        
+        const countQuery = `
+          SELECT COUNT(*) as total FROM \`${table}\` 
+          WHERE CONCAT(${concatColumns}) LIKE ${searchTerm}
+        `;
+        
+        [rows] = await connection.query(dataQuery);
+        [countResult] = await connection.query(countQuery);
       } else {
         // Without search - use simple query
         const dataQuery = `SELECT * FROM \`${table}\` LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
