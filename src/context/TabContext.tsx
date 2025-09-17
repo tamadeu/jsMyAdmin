@@ -2,19 +2,35 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { QueryResult } from "@/services/api"; // Import QueryResult
+import { QueryResult } from "@/services/api";
 
-// Define the structure of a single tab
+const LOCAL_STORAGE_TABS_KEY = 'phpmyadmin-open-tabs';
+const LOCAL_STORAGE_ACTIVE_TAB_KEY = 'phpmyadmin-active-tab';
+
 export interface AppTab {
   id: string;
   title: string;
-  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result'; // Added 'query-result'
+  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result';
   params?: { database?: string; table?: string; };
-  queryResult?: QueryResult; // Added queryResult property
   closable: boolean;
+  // Runtime properties (not directly persisted for all types, or re-fetched)
+  queryResult?: QueryResult; // Full result for 'query-result' when active
+  sqlQueryContent?: string; // For 'sql-editor' to save its content
+  // Persisted property for query-result tabs to re-execute
+  originalQuery?: string; // The SQL query string for 'query-result' tabs
 }
 
-// Define the shape of the context value
+// How tabs are stored in localStorage (simplified for persistence)
+interface PersistedTab {
+  id: string;
+  title: string;
+  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result';
+  params?: { database?: string; table?: string; };
+  closable: boolean;
+  sqlQueryContent?: string; // For 'sql-editor'
+  originalQuery?: string; // For 'query-result'
+}
+
 interface TabContextType {
   tabs: AppTab[];
   activeTabId: string;
@@ -22,6 +38,7 @@ interface TabContextType {
   removeTab: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   getTabById: (tabId: string) => AppTab | undefined;
+  updateTabContent: (tabId: string, content: { sqlQueryContent?: string }) => void;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -34,9 +51,75 @@ export function TabProvider({ children }: TabProviderProps) {
   const [tabs, setTabs] = useState<AppTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
 
-  // Initialize with a Dashboard tab if no tabs exist
+  // Function to save current tabs to localStorage
+  const saveTabsToLocalStorage = useCallback((currentTabs: AppTab[]) => {
+    const persistedTabs: PersistedTab[] = currentTabs.map(tab => {
+      const pTab: PersistedTab = {
+        id: tab.id,
+        title: tab.title,
+        type: tab.type,
+        params: tab.params,
+        closable: tab.closable,
+      };
+      if (tab.type === 'sql-editor' && tab.sqlQueryContent !== undefined) {
+        pTab.sqlQueryContent = tab.sqlQueryContent;
+      }
+      if (tab.type === 'query-result' && tab.originalQuery) {
+        pTab.originalQuery = tab.originalQuery;
+      }
+      return pTab;
+    });
+    localStorage.setItem(LOCAL_STORAGE_TABS_KEY, JSON.stringify(persistedTabs));
+  }, []);
+
+  // Load tabs from localStorage on initial mount
   React.useEffect(() => {
-    if (tabs.length === 0) {
+    try {
+      const savedTabsJson = localStorage.getItem(LOCAL_STORAGE_TABS_KEY);
+      const savedActiveTabId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_TAB_KEY);
+
+      if (savedTabsJson) {
+        const loadedTabs: PersistedTab[] = JSON.parse(savedTabsJson);
+        const hydratedTabs: AppTab[] = loadedTabs.map(pTab => {
+          const appTab: AppTab = { ...pTab };
+          // For query-result tabs, we only store originalQuery, not the full result data
+          // The QueryResultTable component will be responsible for re-executing the query
+          if (appTab.type === 'query-result' && appTab.originalQuery) {
+            // We don't set queryResult here, it will be fetched by QueryResultTable
+            // But we keep originalQuery for it to use.
+          }
+          return appTab;
+        });
+        setTabs(hydratedTabs);
+        if (savedActiveTabId && hydratedTabs.some(tab => tab.id === savedActiveTabId)) {
+          setActiveTabId(savedActiveTabId);
+        } else if (hydratedTabs.length > 0) {
+          setActiveTabId(hydratedTabs[0].id);
+        } else {
+          // Fallback to default dashboard if no valid tabs or active tab
+          const dashboardTab: AppTab = {
+            id: uuidv4(),
+            title: 'Dashboard',
+            type: 'dashboard',
+            closable: false,
+          };
+          setTabs([dashboardTab]);
+          setActiveTabId(dashboardTab.id);
+        }
+      } else {
+        // No saved tabs, initialize with a default Dashboard tab
+        const dashboardTab: AppTab = {
+          id: uuidv4(),
+          title: 'Dashboard',
+          type: 'dashboard',
+          closable: false,
+        };
+        setTabs([dashboardTab]);
+        setActiveTabId(dashboardTab.id);
+      }
+    } catch (error) {
+      console.error("Failed to load tabs from localStorage:", error);
+      // Fallback to default dashboard on error
       const dashboardTab: AppTab = {
         id: uuidv4(),
         title: 'Dashboard',
@@ -46,15 +129,22 @@ export function TabProvider({ children }: TabProviderProps) {
       setTabs([dashboardTab]);
       setActiveTabId(dashboardTab.id);
     }
-  }, [tabs.length]);
+  }, [saveTabsToLocalStorage]); // Run only once on mount
+
+  // Save activeTabId to localStorage whenever it changes
+  React.useEffect(() => {
+    if (activeTabId) {
+      localStorage.setItem(LOCAL_STORAGE_ACTIVE_TAB_KEY, activeTabId);
+    }
+  }, [activeTabId]);
 
   const addTab = useCallback((newTab: Omit<AppTab, 'id'>) => {
     setTabs(prevTabs => {
       // Check if a tab of the same type and params already exists
       // For 'query-result' tabs, we always want a new one, so skip this check
       if (newTab.type !== 'query-result') {
-        const existingTab = prevTabs.find(tab => 
-          tab.type === newTab.type && 
+        const existingTab = prevTabs.find(tab =>
+          tab.type === newTab.type &&
           JSON.stringify(tab.params) === JSON.stringify(newTab.params)
         );
 
@@ -63,13 +153,22 @@ export function TabProvider({ children }: TabProviderProps) {
           return prevTabs;
         }
       }
-      
+
       const id = uuidv4();
-      const tabToAdd = { ...newTab, id };
+      const tabToAdd: AppTab = { ...newTab, id };
+
+      // Special handling for query-result tabs: store originalQuery for persistence
+      if (tabToAdd.type === 'query-result' && tabToAdd.queryResult?.originalQuery) {
+        tabToAdd.originalQuery = tabToAdd.queryResult.originalQuery;
+        // We keep the full queryResult for immediate display, but it won't be persisted
+      }
+
+      const updatedTabs = [...prevTabs, tabToAdd];
+      saveTabsToLocalStorage(updatedTabs); // Save to localStorage
       setActiveTabId(id);
-      return [...prevTabs, tabToAdd];
+      return updatedTabs;
     });
-  }, []);
+  }, [saveTabsToLocalStorage]);
 
   const removeTab = useCallback((tabId: string) => {
     setTabs(prevTabs => {
@@ -92,14 +191,26 @@ export function TabProvider({ children }: TabProviderProps) {
             type: 'dashboard',
             closable: false,
           };
-          setTabs([dashboardTab]);
+          const updatedTabs = [dashboardTab];
+          saveTabsToLocalStorage(updatedTabs); // Save to localStorage
           setActiveTabId(dashboardTab.id);
-          return [dashboardTab]; // Return the new dashboard tab immediately
+          return updatedTabs;
         }
       }
+      saveTabsToLocalStorage(newTabs); // Save to localStorage
       return newTabs;
     });
-  }, [activeTabId]);
+  }, [activeTabId, saveTabsToLocalStorage]);
+
+  const updateTabContent = useCallback((tabId: string, content: { sqlQueryContent?: string }) => {
+    setTabs(prevTabs => {
+      const updatedTabs = prevTabs.map(tab =>
+        tab.id === tabId ? { ...tab, ...content } : tab
+      );
+      saveTabsToLocalStorage(updatedTabs); // Save to localStorage
+      return updatedTabs;
+    });
+  }, [saveTabsToLocalStorage]);
 
   const getTabById = useCallback((tabId: string) => {
     return tabs.find(tab => tab.id === tabId);
@@ -112,7 +223,8 @@ export function TabProvider({ children }: TabProviderProps) {
     removeTab,
     setActiveTab: setActiveTabId,
     getTabById,
-  }), [tabs, activeTabId, addTab, removeTab, setActiveTabId, getTabById]);
+    updateTabContent,
+  }), [tabs, activeTabId, addTab, removeTab, setActiveTabId, getTabById, updateTabContent]);
 
   return (
     <TabContext.Provider value={value}>

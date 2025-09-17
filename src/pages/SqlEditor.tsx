@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Play, Save, RotateCcw, AlertCircle, AlignLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,14 +8,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiService, QueryResult } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
-import { format } from "sql-formatter"; // Importar a função format
+import { format } from "sql-formatter";
 
 const SqlEditor = () => {
   const { toast } = useToast();
-  const { addTab } = useTabs();
-  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;");
+  const { addTab, activeTabId, getTabById, updateTabContent } = useTabs();
+  
+  const activeTab = getTabById(activeTabId);
+  const initialSqlQuery = activeTab?.type === 'sql-editor' && activeTab.sqlQueryContent 
+    ? activeTab.sqlQueryContent 
+    : "SELECT * FROM your_table;";
+
+  const [sqlQuery, setSqlQuery] = useState(initialSqlQuery);
   const [isExecuting, setIsExecuting] = useState(false);
   const [queryHistory, setQueryHistory] = useState<Array<{ query: string; time: string; timestamp: string }>>([]);
+
+  // Update sqlQuery state if the active tab changes to a different SQL editor tab
+  // or if the initialSqlQuery changes (e.g., after loading from localStorage)
+  useEffect(() => {
+    if (activeTab?.type === 'sql-editor' && activeTab.sqlQueryContent !== sqlQuery) {
+      setSqlQuery(activeTab.sqlQueryContent || "SELECT * FROM your_table;");
+    }
+  }, [activeTab, sqlQuery]);
+
+  // Save sqlQueryContent to the active tab whenever sqlQuery changes
+  useEffect(() => {
+    if (activeTabId && activeTab?.type === 'sql-editor' && sqlQuery !== activeTab.sqlQueryContent) {
+      updateTabContent(activeTabId, { sqlQueryContent: sqlQuery });
+    }
+  }, [sqlQuery, activeTabId, activeTab?.type, activeTab?.sqlQueryContent, updateTabContent]);
 
   const executeQuery = useCallback(async () => {
     setIsExecuting(true);

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { QueryResult } from "@/services/api";
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { QueryResult, apiService } from "@/services/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -45,34 +46,67 @@ const useDebounceObject = (value: Record<string, string>, delay: number) => {
 };
 
 interface QueryResultTableProps {
-  queryResult: QueryResult;
+  queryResult: QueryResult; // This might only contain originalQuery if loaded from localStorage
+  database?: string; // Optional database context for re-executing query
 }
 
-const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableProps) => {
-  const [queryResult, setQueryResult] = useState<QueryResult>(initialQueryResult);
+const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryResultTableProps) => {
+  const { toast } = useToast();
+  const [currentQueryResult, setCurrentQueryResult] = useState<QueryResult>(initialQueryResult);
   const [searchInput, setSearchInput] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [limit, setLimit] = useState(25);
   const [offset, setOffset] = useState(0);
-  const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false); // For re-executing query
+  const [isSearching, setIsSearching] = useState(false); // For client-side filtering
 
   // Debounce the search input and column filters
   const debouncedSearchTerm = useDebounce(searchInput, 300);
   const debouncedColumnFilters = useDebounceObject(columnFilters, 300);
 
-  // Reset offset when queryResult changes
+  // Function to re-execute the query
+  const reExecuteQuery = useCallback(async (query: string) => {
+    if (!query) return;
+    setIsLoadingData(true);
+    try {
+      const result = await apiService.executeQuery(query, database);
+      setCurrentQueryResult(result);
+      if (!result.success) {
+        toast({
+          title: "Query re-execution failed",
+          description: result.error || "An error occurred while re-executing the query.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error re-executing query:', error);
+      toast({
+        title: "Query re-execution failed",
+        description: error instanceof Error ? error.message : "Failed to re-execute SQL query",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [database, toast]);
+
+  // Effect to load data if only originalQuery is present (e.g., from localStorage)
   useEffect(() => {
+    if (initialQueryResult.originalQuery && !initialQueryResult.data) {
+      reExecuteQuery(initialQueryResult.originalQuery);
+    } else {
+      setCurrentQueryResult(initialQueryResult); // Use the provided full result
+    }
     setOffset(0);
     setSearchInput("");
     setColumnFilters({});
-    setQueryResult(initialQueryResult); // Update queryResult if initialQueryResult changes
-  }, [initialQueryResult]);
+  }, [initialQueryResult, reExecuteQuery]);
 
   // Client-side filtering and searching
   const filteredData = useMemo(() => {
-    if (!queryResult.data) return [];
+    if (!currentQueryResult.data) return [];
 
-    let data = queryResult.data;
+    let data = currentQueryResult.data;
 
     // Global search
     if (debouncedSearchTerm) {
@@ -95,7 +129,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
     });
 
     return data;
-  }, [queryResult.data, debouncedSearchTerm, debouncedColumnFilters]);
+  }, [currentQueryResult.data, debouncedSearchTerm, debouncedColumnFilters]);
 
   // Client-side pagination
   const paginatedData = useMemo(() => {
@@ -154,22 +188,43 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
     return String(value);
   };
 
-  if (!queryResult.success) {
+  if (isLoadingData) {
     return (
-      <div className="space-y-2 text-red-500 p-6">
-        <AlertCircle className="h-5 w-5 inline-block mr-2" />
-        <span className="font-medium">Error:</span> {queryResult.error}
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading query results...</p>
+        </div>
       </div>
     );
   }
 
-  if (!queryResult.data || queryResult.data.length === 0) {
+  if (!currentQueryResult.success) {
+    return (
+      <div className="space-y-2 text-red-500 p-6">
+        <AlertCircle className="h-5 w-5 inline-block mr-2" />
+        <span className="font-medium">Error:</span> {currentQueryResult.error}
+        {currentQueryResult.originalQuery && (
+          <div className="font-mono text-xs bg-muted p-2 rounded mt-2">
+            {currentQueryResult.originalQuery}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!currentQueryResult.data || currentQueryResult.data.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8 p-6">
         <TableIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
         <p>No data returned for this query.</p>
-        {queryResult.affectedRows !== undefined && (
-          <p className="text-sm mt-2">{queryResult.affectedRows} rows affected.</p>
+        {currentQueryResult.affectedRows !== undefined && (
+          <p className="text-sm mt-2">{currentQueryResult.affectedRows} rows affected.</p>
+        )}
+        {currentQueryResult.originalQuery && (
+          <div className="font-mono text-xs bg-muted p-2 rounded mt-2">
+            {currentQueryResult.originalQuery}
+          </div>
         )}
       </div>
     );
@@ -191,13 +246,13 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
           <CardContent className="pt-6">
             <div className="space-y-2 text-sm">
               <div>
-                Mostrando registros {startRow + 1} - {endRow + 1} ({queryResult.rowCount?.toLocaleString() || 0} no total,{' '}
+                Mostrando registros {startRow + 1} - {endRow + 1} ({currentQueryResult.rowCount?.toLocaleString() || 0} no total,{' '}
                 {hasAnyFilters && `filtrado no cliente (${filteredData.length.toLocaleString()} resultados), `}
-                Consulta levou {queryResult.executionTime} segundos.)
+                Consulta levou {currentQueryResult.executionTime} segundos.)
               </div>
-              {queryResult.originalQuery && (
+              {currentQueryResult.originalQuery && (
                 <div className="font-mono text-xs bg-muted p-2 rounded">
-                  {queryResult.originalQuery}
+                  {currentQueryResult.originalQuery}
                 </div>
               )}
             </div>
@@ -211,7 +266,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
               <div>
                 <CardTitle>Browse Data</CardTitle>
                 <CardDescription>
-                  {queryResult.rowCount?.toLocaleString() || 0} total rows
+                  {currentQueryResult.rowCount?.toLocaleString() || 0} total rows
                   {hasAnyFilters && ` • Client filtered`}
                 </CardDescription>
               </div>
@@ -219,7 +274,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => setQueryResult(initialQueryResult)} // Reset to initial results
+                  onClick={() => currentQueryResult.originalQuery ? reExecuteQuery(currentQueryResult.originalQuery) : setCurrentQueryResult(initialQueryResult)}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Refresh
@@ -292,7 +347,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
                       <table className="text-xs">
                         <thead className="bg-muted">
                           <tr>
-                            {queryResult.fields?.map((column) => (
+                            {currentQueryResult.fields?.map((column) => (
                               <th key={column.name} className="p-2 text-left min-w-[150px]">
                                 <div className="flex flex-col space-y-2">
                                   <div className="flex flex-col">
@@ -327,7 +382,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult }: QueryResultTableP
                         <tbody>
                           {paginatedData.map((row, rowIndex) => (
                             <tr key={rowIndex} className="border-t hover:bg-muted/50">
-                              {queryResult.fields?.map((column) => (
+                              {currentQueryResult.fields?.map((column) => (
                                 <td 
                                   key={column.name} 
                                   className="p-2 min-w-[150px]"
