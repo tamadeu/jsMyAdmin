@@ -18,7 +18,7 @@ interface TabContextType {
   activeTabId: string;
   addTab: (tab: Omit<AppTab, 'id'>) => void;
   removeTab: (tabId: string) => void;
-  setActiveTabId: (tabId: string) => void; // Corrected here
+  setActiveTab: (tabId: string) => void; // Corrected here
   getTabById: (tabId: string) => AppTab | undefined;
 }
 
@@ -105,9 +105,9 @@ export function TabProvider({ children }: TabProviderProps) {
     activeTabId,
     addTab,
     removeTab,
-    setActiveTabId, // Corrected here
+    setActiveTab: setActiveTabId, // Corrected here: mapping setActiveTab to setActiveTabId
     getTabById,
-  }), [tabs, activeTabId, addTab, removeTab, setActiveTabId, getTabById]); // Corrected here
+  }), [tabs, activeTabId, addTab, removeTab, setActiveTabId, getTabById]);
 
   return (
     <TabContext.Provider value={value}>
