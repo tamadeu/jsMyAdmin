@@ -126,12 +126,22 @@ class ApiService {
       limit?: number;
       offset?: number;
       search?: string;
+      columnFilters?: Record<string, string>;
     } = {}
   ): Promise<TableData> {
     const params = new URLSearchParams();
     if (options.limit) params.append('limit', options.limit.toString());
     if (options.offset) params.append('offset', options.offset.toString());
     if (options.search) params.append('search', options.search);
+    
+    // Add column filters as separate parameters
+    if (options.columnFilters) {
+      Object.entries(options.columnFilters).forEach(([column, value]) => {
+        if (value) {
+          params.append(`filter_${column}`, value);
+        }
+      });
+    }
 
     const queryString = params.toString();
     const endpoint = `/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/data${queryString ? `?${queryString}` : ''}`;

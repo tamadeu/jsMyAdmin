@@ -27,6 +27,23 @@ const useDebounce = (value: string, delay: number) => {
   return debouncedValue;
 };
 
+// Custom hook for debouncing object values
+const useDebounceObject = (value: Record<string, string>, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [JSON.stringify(value), delay]);
+
+  return debouncedValue;
+};
+
 const DatabaseBrowser = () => {
   const { database, table } = useParams();
   const { toast } = useToast();
@@ -43,13 +60,16 @@ const DatabaseBrowser = () => {
 
   // Debounce the search input (wait 500ms after user stops typing)
   const debouncedSearchTerm = useDebounce(searchInput, 500);
+  
+  // Debounce column filters (wait 500ms after user stops typing)
+  const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
 
   useEffect(() => {
     if (database && table) {
       loadTableData();
       loadTableInfo();
     }
-  }, [database, table, limit, offset, debouncedSearchTerm]);
+  }, [database, table, limit, offset, debouncedSearchTerm, debouncedColumnFilters]);
 
   const loadTableData = async () => {
     if (!database || !table) return;
@@ -67,7 +87,8 @@ const DatabaseBrowser = () => {
       const data = await apiService.getTableData(database, table, {
         limit,
         offset,
-        search: debouncedSearchTerm
+        search: debouncedSearchTerm,
+        columnFilters: debouncedColumnFilters
       });
       const endTime = Date.now();
       
@@ -109,6 +130,7 @@ const DatabaseBrowser = () => {
       ...prev,
       [columnName]: value
     }));
+    setOffset(0); // Reset to first page when filtering
   };
 
   const clearColumnFilter = (columnName: string) => {
@@ -117,11 +139,13 @@ const DatabaseBrowser = () => {
       delete newFilters[columnName];
       return newFilters;
     });
+    setOffset(0);
   };
 
   const clearAllFilters = () => {
     setColumnFilters({});
     setSearchInput("");
+    setOffset(0);
   };
 
   const handleLimitChange = (value: string) => {
@@ -141,26 +165,6 @@ const DatabaseBrowser = () => {
     }
   };
 
-  // Filter data based on column filters only
-  const filteredData = useMemo(() => {
-    if (!tableData?.data) return [];
-
-    let filtered = tableData.data;
-
-    // Apply column filters
-    Object.entries(columnFilters).forEach(([columnName, filterValue]) => {
-      if (filterValue) {
-        filtered = filtered.filter(row => {
-          const value = row[columnName];
-          if (value === null || value === undefined) return false;
-          return String(value).toLowerCase().includes(filterValue.toLowerCase());
-        });
-      }
-    });
-
-    return filtered;
-  }, [tableData, columnFilters]);
-
   const formatCellValue = (value: any) => {
     if (value === null) return <span className="text-muted-foreground italic">NULL</span>;
     if (typeof value === 'boolean') return value ? 'true' : 'false';
@@ -179,14 +183,25 @@ const DatabaseBrowser = () => {
   const generateSQLQuery = () => {
     let query = `SELECT * FROM \`${table}\``;
     
+    const conditions = [];
+    
+    // Add search condition
     if (debouncedSearchTerm) {
-      // Show that search filter was applied (this is what actually happens on the server)
       if (tableData?.columns) {
         const concatColumns = tableData.columns.map(col => `COALESCE(\`${col.name}\`, '')`).join(', ');
-        query += ` WHERE CONCAT(${concatColumns}) LIKE '%${debouncedSearchTerm}%'`;
-      } else {
-        query += ` WHERE /* search filter applied */`;
+        conditions.push(`CONCAT(${concatColumns}) LIKE '%${debouncedSearchTerm}%'`);
       }
+    }
+    
+    // Add column filters
+    Object.entries(debouncedColumnFilters).forEach(([columnName, filterValue]) => {
+      if (filterValue) {
+        conditions.push(`\`${columnName}\` LIKE '%${filterValue}%'`);
+      }
+    });
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
     }
     
     if (limit) {
@@ -228,8 +243,9 @@ const DatabaseBrowser = () => {
   const totalPages = tableData ? Math.ceil(tableData.total / limit) : 1;
   const startRow = offset;
   const endRow = Math.min(offset + limit - 1, (tableData?.total || 0) - 1);
-  const hasActiveFilters = Object.keys(columnFilters).length > 0;
+  const hasActiveFilters = Object.keys(debouncedColumnFilters).length > 0;
   const hasServerSearch = debouncedSearchTerm.length > 0;
+  const hasAnyFilters = hasActiveFilters || hasServerSearch;
 
   return (
     <div className="overflow-y-auto h-full">
@@ -240,7 +256,7 @@ const DatabaseBrowser = () => {
             <div className="space-y-2 text-sm">
               <div>
                 Mostrando registros {startRow} - {endRow} ({tableData?.total.toLocaleString() || 0} no total,{' '}
-                {hasServerSearch && 'filtrado pelo servidor, '}
+                {hasAnyFilters && 'filtrado pelo servidor, '}
                 Consulta levou {queryTime} segundos.)
               </div>
               <div className="font-mono text-xs bg-muted p-2 rounded">
@@ -258,8 +274,7 @@ const DatabaseBrowser = () => {
                 <CardTitle>Browse Data</CardTitle>
                 <CardDescription>
                   {tableData ? `${tableData.total.toLocaleString()} total rows` : 'No data'}
-                  {hasActiveFilters && ` • ${filteredData.length} filtered`}
-                  {hasServerSearch && ` • Server filtered`}
+                  {hasAnyFilters && ` • Server filtered`}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -293,7 +308,7 @@ const DatabaseBrowser = () => {
                     onChange={(e) => handleSearchInputChange(e.target.value)}
                   />
                 </div>
-                {(hasActiveFilters || hasServerSearch) && (
+                {hasAnyFilters && (
                   <Button variant="outline" size="sm" onClick={clearAllFilters}>
                     <X className="h-4 w-4 mr-2" />
                     Clear All
@@ -313,7 +328,7 @@ const DatabaseBrowser = () => {
               </div>
 
               {/* Search Status */}
-              {(isSearching || hasServerSearch || hasActiveFilters) && (
+              {(isSearching || hasAnyFilters) && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   {isSearching && (
                     <div className="flex items-center gap-2">
@@ -322,11 +337,11 @@ const DatabaseBrowser = () => {
                     </div>
                   )}
                   {hasServerSearch && !isSearching && (
-                    <Badge variant="secondary">Server: "{debouncedSearchTerm}"</Badge>
+                    <Badge variant="secondary">Global: "{debouncedSearchTerm}"</Badge>
                   )}
                   {hasActiveFilters && (
                     <Badge variant="outline">
-                      {Object.keys(columnFilters).length} column filters
+                      {Object.keys(debouncedColumnFilters).length} column filters
                     </Badge>
                   )}
                 </div>
@@ -378,7 +393,7 @@ const DatabaseBrowser = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredData.map((row, index) => (
+                          {tableData.data.map((row, index) => (
                             <tr key={index} className="border-t hover:bg-muted/50">
                               <td className="p-3">
                                 <Checkbox />
@@ -410,8 +425,7 @@ const DatabaseBrowser = () => {
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
                       Showing {startRow + 1} to {endRow + 1} of {tableData.total.toLocaleString()} entries
-                      {hasServerSearch && ` (database filtered)`}
-                      {hasActiveFilters && ` • ${filteredData.length} visible after column filters`}
+                      {hasAnyFilters && ` (server filtered)`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
@@ -440,7 +454,7 @@ const DatabaseBrowser = () => {
                 <div className="text-center py-8">
                   <Table className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">
-                    {hasServerSearch ? 'No data found matching your search' : 'No data in this table'}
+                    {hasAnyFilters ? 'No data found matching your filters' : 'No data in this table'}
                   </p>
                 </div>
               )}

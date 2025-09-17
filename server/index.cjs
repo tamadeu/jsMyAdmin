@@ -176,7 +176,7 @@ app.get('/api/databases/:database/tables', async (req, res) => {
   }
 });
 
-// Get table data
+// Get table data with column filters
 app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
   try {
     if (!connectionPool) {
@@ -187,7 +187,19 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
     }
 
     const { database, table } = req.params;
-    const { limit = 10, offset = 0, search = '' } = req.query;
+    const { limit = 25, offset = 0, search = '' } = req.query;
+    
+    // Extract column filters from query parameters
+    const columnFilters = {};
+    Object.keys(req.query).forEach(key => {
+      if (key.startsWith('filter_')) {
+        const columnName = key.replace('filter_', '');
+        const filterValue = req.query[key];
+        if (filterValue && filterValue.trim()) {
+          columnFilters[columnName] = filterValue.trim();
+        }
+      }
+    });
     
     // Get a connection from the pool
     const connection = await connectionPool.getConnection();
@@ -199,37 +211,36 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
       // Get table structure
       const [columns] = await connection.query(`DESCRIBE \`${table}\``);
       
-      let rows, countResult;
+      // Build WHERE clause
+      const whereConditions = [];
+      const queryParams = [];
       
+      // Add search condition (global search across all columns)
       if (search && search.trim()) {
-        // With search - use a simpler approach with CONCAT and LIKE
-        // This avoids the issue with too many parameters
-        const searchTerm = mysql.escape(`%${search}%`);
-        
-        // Create a CONCAT of all columns for searching
         const concatColumns = columns.map(col => `COALESCE(\`${col.Field}\`, '')`).join(', ');
-        
-        const dataQuery = `
-          SELECT * FROM \`${table}\` 
-          WHERE CONCAT(${concatColumns}) LIKE ${searchTerm}
-          LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
-        `;
-        
-        const countQuery = `
-          SELECT COUNT(*) as total FROM \`${table}\` 
-          WHERE CONCAT(${concatColumns}) LIKE ${searchTerm}
-        `;
-        
-        [rows] = await connection.query(dataQuery);
-        [countResult] = await connection.query(countQuery);
-      } else {
-        // Without search - use simple query
-        const dataQuery = `SELECT * FROM \`${table}\` LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
-        const countQuery = `SELECT COUNT(*) as total FROM \`${table}\``;
-        
-        [rows] = await connection.query(dataQuery);
-        [countResult] = await connection.query(countQuery);
+        whereConditions.push(`CONCAT(${concatColumns}) LIKE ?`);
+        queryParams.push(`%${search}%`);
       }
+      
+      // Add column-specific filters
+      Object.entries(columnFilters).forEach(([columnName, filterValue]) => {
+        // Verify column exists
+        const columnExists = columns.some(col => col.Field === columnName);
+        if (columnExists) {
+          whereConditions.push(`\`${columnName}\` LIKE ?`);
+          queryParams.push(`%${filterValue}%`);
+        }
+      });
+      
+      // Build final query
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      
+      const dataQuery = `SELECT * FROM \`${table}\` ${whereClause} LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+      const countQuery = `SELECT COUNT(*) as total FROM \`${table}\` ${whereClause}`;
+      
+      // Execute queries
+      const [rows] = await connection.query(dataQuery, queryParams);
+      const [countResult] = await connection.query(countQuery, queryParams);
       
       res.json({
         columns: columns.map(col => ({
