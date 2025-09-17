@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
@@ -12,7 +12,7 @@ import DatabaseBrowser from "@/pages/DatabaseBrowser";
 import QueryResultTable from "@/components/QueryResultTable";
 
 const TabsDisplay = () => {
-  const { tabs, activeTabId, setActiveTab, removeTab } = useTabs();
+  const { tabs, activeTabId, setActiveTab, removeTab, getTabById } = useTabs();
 
   const renderTabContent = (tab: AppTab) => {
     switch (tab.type) {
@@ -35,6 +35,38 @@ const TabsDisplay = () => {
         return <div className="p-4 text-muted-foreground">Unknown tab type.</div>;
     }
   };
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.shiftKey) {
+      const currentIndex = tabs.findIndex(tab => tab.id === activeTabId);
+      if (currentIndex === -1) return;
+
+      if (event.key === 'X' || event.key === 'x') {
+        event.preventDefault(); // Prevent default browser behavior (e.g., selecting text)
+        const activeTab = getTabById(activeTabId);
+        if (activeTab && activeTab.closable) {
+          removeTab(activeTabId);
+        }
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        if (currentIndex > 0) {
+          setActiveTab(tabs[currentIndex - 1].id);
+        }
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        if (currentIndex < tabs.length - 1) {
+          setActiveTab(tabs[currentIndex + 1].id);
+        }
+      }
+    }
+  }, [tabs, activeTabId, setActiveTab, removeTab, getTabById]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
 
   return (
     <Tabs value={activeTabId} onValueChange={setActiveTab} className="flex flex-col flex-1">
