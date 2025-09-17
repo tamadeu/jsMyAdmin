@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,37 +10,63 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { apiService, TableData } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
+// Custom hook for debouncing
+const useDebounce = (value: string, delay: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+};
+
 const DatabaseBrowser = () => {
   const { database, table } = useParams();
   const { toast } = useToast();
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // Input value (immediate)
   const [liveSearchTerm, setLiveSearchTerm] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [tableInfo, setTableInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(10);
   const [offset, setOffset] = useState(0);
+
+  // Debounce the search input (wait 500ms after user stops typing)
+  const debouncedSearchTerm = useDebounce(searchInput, 500);
 
   useEffect(() => {
     if (database && table) {
       loadTableData();
       loadTableInfo();
     }
-  }, [database, table, limit, offset, searchTerm]);
+  }, [database, table, limit, offset, debouncedSearchTerm]);
 
   const loadTableData = async () => {
     if (!database || !table) return;
 
     try {
-      setIsLoading(true);
+      // Show loading only for initial load, not for search
+      if (!tableData) {
+        setIsLoading(true);
+      } else {
+        setIsSearching(true);
+      }
       setError(null);
 
       const data = await apiService.getTableData(database, table, {
         limit,
         offset,
-        search: searchTerm
+        search: debouncedSearchTerm
       });
 
       setTableData(data);
@@ -54,6 +80,7 @@ const DatabaseBrowser = () => {
       });
     } finally {
       setIsLoading(false);
+      setIsSearching(false);
     }
   };
 
@@ -69,8 +96,8 @@ const DatabaseBrowser = () => {
     }
   };
 
-  const handleSearch = (value: string) => {
-    setSearchTerm(value);
+  const handleSearchInputChange = (value: string) => {
+    setSearchInput(value);
     setOffset(0); // Reset to first page when searching
   };
 
@@ -96,6 +123,7 @@ const DatabaseBrowser = () => {
   const clearAllFilters = () => {
     setColumnFilters({});
     setLiveSearchTerm("");
+    setSearchInput("");
   };
 
   const handleLimitChange = (value: string) => {
@@ -190,6 +218,7 @@ const DatabaseBrowser = () => {
   const startRow = offset + 1;
   const endRow = Math.min(offset + limit, tableData?.total || 0);
   const hasActiveFilters = Object.keys(columnFilters).length > 0 || liveSearchTerm;
+  const hasServerSearch = debouncedSearchTerm.length > 0;
 
   return (
     <div className="overflow-y-auto h-full">
@@ -260,6 +289,7 @@ const DatabaseBrowser = () => {
                 <CardDescription>
                   {tableData ? `${tableData.total.toLocaleString()} total rows` : 'No data'}
                   {hasActiveFilters && ` • ${filteredData.length} filtered`}
+                  {hasServerSearch && ` • Server filtered`}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -283,11 +313,14 @@ const DatabaseBrowser = () => {
               <div className="flex items-center gap-4">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  {isSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
                   <Input 
                     placeholder="Search in database (server-side)..." 
-                    className="pl-10"
-                    value={searchTerm}
-                    onChange={(e) => handleSearch(e.target.value)}
+                    className="pl-10 pr-10"
+                    value={searchInput}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
                   />
                 </div>
                 <div className="relative flex-1">
@@ -299,10 +332,10 @@ const DatabaseBrowser = () => {
                     onChange={(e) => handleLiveSearch(e.target.value)}
                   />
                 </div>
-                {hasActiveFilters && (
+                {(hasActiveFilters || hasServerSearch) && (
                   <Button variant="outline" size="sm" onClick={clearAllFilters}>
                     <X className="h-4 w-4 mr-2" />
-                    Clear Filters
+                    Clear All
                   </Button>
                 )}
                 <Select value={limit.toString()} onValueChange={handleLimitChange}>
@@ -317,6 +350,26 @@ const DatabaseBrowser = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Search Status */}
+              {(isSearching || hasServerSearch || hasActiveFilters) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {isSearching && (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Searching...</span>
+                    </div>
+                  )}
+                  {hasServerSearch && !isSearching && (
+                    <Badge variant="secondary">Server: "{debouncedSearchTerm}"</Badge>
+                  )}
+                  {hasActiveFilters && (
+                    <Badge variant="outline">
+                      {Object.keys(columnFilters).length + (liveSearchTerm ? 1 : 0)} local filters
+                    </Badge>
+                  )}
+                </div>
+              )}
 
               {tableData && tableData.data.length > 0 ? (
                 <>
@@ -396,8 +449,8 @@ const DatabaseBrowser = () => {
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
                       Showing {startRow} to {endRow} of {tableData.total.toLocaleString()} entries
-                      {searchTerm && ` (database filtered)`}
-                      {hasActiveFilters && ` • ${filteredData.length} visible after filters`}
+                      {hasServerSearch && ` (database filtered)`}
+                      {hasActiveFilters && ` • ${filteredData.length} visible after local filters`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
@@ -426,7 +479,7 @@ const DatabaseBrowser = () => {
                 <div className="text-center py-8">
                   <Table className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">
-                    {searchTerm ? 'No data found matching your search' : 'No data in this table'}
+                    {hasServerSearch ? 'No data found matching your search' : 'No data in this table'}
                   </p>
                 </div>
               )}
