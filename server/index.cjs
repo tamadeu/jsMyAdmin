@@ -193,33 +193,32 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
     const connection = await connectionPool.getConnection();
     
     try {
-      // Switch to the specific database using query() instead of execute()
+      // Switch to the specific database
       await connection.query(`USE \`${database}\``);
       
       // Get table structure
       const [columns] = await connection.query(`DESCRIBE \`${table}\``);
       
-      // Build query and parameters
-      let dataQuery = `SELECT * FROM \`${table}\``;
-      let countQuery = `SELECT COUNT(*) as total FROM \`${table}\``;
-      let queryParams = [];
+      let rows, countResult;
       
-      // Add search condition if provided
       if (search && search.trim()) {
+        // With search - use prepared statements
         const searchColumns = columns.map(col => `\`${col.Field}\` LIKE ?`).join(' OR ');
-        const searchCondition = ` WHERE ${searchColumns}`;
-        dataQuery += searchCondition;
-        countQuery += searchCondition;
-        queryParams = columns.map(() => `%${search}%`);
+        const searchParams = columns.map(() => `%${search}%`);
+        
+        const dataQuery = `SELECT * FROM \`${table}\` WHERE ${searchColumns} LIMIT ? OFFSET ?`;
+        const countQuery = `SELECT COUNT(*) as total FROM \`${table}\` WHERE ${searchColumns}`;
+        
+        [rows] = await connection.execute(dataQuery, [...searchParams, parseInt(limit), parseInt(offset)]);
+        [countResult] = await connection.execute(countQuery, searchParams);
+      } else {
+        // Without search - use simple query
+        const dataQuery = `SELECT * FROM \`${table}\` LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+        const countQuery = `SELECT COUNT(*) as total FROM \`${table}\``;
+        
+        [rows] = await connection.query(dataQuery);
+        [countResult] = await connection.query(countQuery);
       }
-      
-      // Add pagination
-      dataQuery += ` LIMIT ? OFFSET ?`;
-      const dataParams = [...queryParams, parseInt(limit), parseInt(offset)];
-      
-      // Execute queries
-      const [rows] = await connection.execute(dataQuery, dataParams);
-      const [countResult] = await connection.execute(countQuery, queryParams);
       
       res.json({
         columns: columns.map(col => ({
@@ -265,14 +264,14 @@ app.post('/api/query', async (req, res) => {
     const connection = await connectionPool.getConnection();
     
     try {
-      // Switch to database if specified using query() instead of execute()
+      // Switch to database if specified
       if (database) {
         await connection.query(`USE \`${database}\``);
       }
 
       const startTime = Date.now();
       
-      // Use query() for most SQL commands as they might not support prepared statements
+      // Use query() for most SQL commands
       const [rows, fields] = await connection.query(query);
       const executionTime = Date.now() - startTime;
 
