@@ -33,10 +33,31 @@ const Sidebar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Get current database from URL
+  const getCurrentDatabase = () => {
+    const pathParts = location.pathname.split('/');
+    if (pathParts[1] === 'database' && pathParts[2]) {
+      return pathParts[2];
+    }
+    return null;
+  };
+
   // Load databases on component mount
   useEffect(() => {
     loadDatabases();
   }, []);
+
+  // Update expanded databases based on current route
+  useEffect(() => {
+    const currentDb = getCurrentDatabase();
+    if (currentDb) {
+      // Only expand the database that the user is currently viewing
+      setExpandedDatabases([currentDb]);
+    } else {
+      // If not viewing any specific database, don't expand any
+      setExpandedDatabases([]);
+    }
+  }, [location.pathname]);
 
   const loadDatabases = async () => {
     try {
@@ -67,11 +88,6 @@ const Sidebar = () => {
       );
 
       setDatabases(databasesWithTables);
-      
-      // Auto-expand first database if any
-      if (databasesWithTables.length > 0) {
-        setExpandedDatabases([databasesWithTables[0].name]);
-      }
       
     } catch (error) {
       console.error('Error loading databases:', error);
@@ -246,14 +262,9 @@ const Sidebar = () => {
                             className="p-2 rounded-md cursor-pointer transition-colors hover:bg-accent"
                             onClick={() => navigate(`/database/${db.name}/table/${table.name}`)}
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Table className="h-3 w-3" />
-                                <span className="text-sm">{table.name}</span>
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                {table.rows.toLocaleString()}
-                              </span>
+                            <div className="flex items-center gap-2">
+                              <Table className="h-3 w-3" />
+                              <span className="text-sm">{table.name}</span>
                             </div>
                           </div>
                         ))
