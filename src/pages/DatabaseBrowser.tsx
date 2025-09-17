@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X } from "lucide-react";
+import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,12 +57,19 @@ const DatabaseBrowser = () => {
   const [limit, setLimit] = useState(25);
   const [offset, setOffset] = useState(0);
   const [queryTime, setQueryTime] = useState<string>("0.0000");
+  const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
 
   // Debounce the search input (wait 500ms after user stops typing)
   const debouncedSearchTerm = useDebounce(searchInput, 500);
   
   // Debounce column filters (wait 500ms after user stops typing)
   const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
+
+  // Check if table has primary key
+  const hasPrimaryKey = useMemo(() => {
+    return tableData?.columns.some(col => col.key === 'PRI') || false;
+  }, [tableData]);
 
   useEffect(() => {
     if (database && table) {
@@ -162,6 +169,37 @@ const DatabaseBrowser = () => {
   const handleNextPage = () => {
     if (tableData && offset + limit < tableData.total) {
       setOffset(offset + limit);
+    }
+  };
+
+  const handleCellDoubleClick = (rowIndex: number, columnName: string, currentValue: any) => {
+    if (!hasPrimaryKey) return; // Only allow editing if table has PK
+    
+    setEditingCell({ rowIndex, columnName });
+    setEditValue(currentValue === null ? '' : String(currentValue));
+  };
+
+  const handleEditSave = () => {
+    // TODO: Implement save logic here
+    toast({
+      title: "Edit functionality",
+      description: "Cell editing will be implemented in the next update",
+      variant: "default"
+    });
+    setEditingCell(null);
+    setEditValue("");
+  };
+
+  const handleEditCancel = () => {
+    setEditingCell(null);
+    setEditValue("");
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleEditSave();
+    } else if (e.key === 'Escape') {
+      handleEditCancel();
     }
   };
 
@@ -275,6 +313,7 @@ const DatabaseBrowser = () => {
                 <CardDescription>
                   {tableData ? `${tableData.total.toLocaleString()} total rows` : 'No data'}
                   {hasAnyFilters && ` • Server filtered`}
+                  {hasPrimaryKey && ` • Editable (has PK)`}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -354,6 +393,12 @@ const DatabaseBrowser = () => {
                       <table className="w-full text-xs">
                         <thead className="bg-muted">
                           <tr>
+                            {/* Actions column - only show if table has PK */}
+                            {hasPrimaryKey && (
+                              <th className="p-2 text-left w-24">
+                                <span className="text-sm font-medium">Actions</span>
+                              </th>
+                            )}
                             <th className="p-2 text-left">
                               <Checkbox />
                             </th>
@@ -389,32 +434,68 @@ const DatabaseBrowser = () => {
                                 </div>
                               </th>
                             ))}
-                            <th className="p-2 text-left">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {tableData.data.map((row, index) => (
-                            <tr key={index} className="border-t hover:bg-muted/50">
+                          {tableData.data.map((row, rowIndex) => (
+                            <tr key={rowIndex} className="border-t hover:bg-muted/50">
+                              {/* Actions column - only show if table has PK */}
+                              {hasPrimaryKey && (
+                                <td className="p-2">
+                                  <div className="flex gap-1">
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-6 w-6 p-0"
+                                      title="Edit"
+                                    >
+                                      <Edit className="h-3 w-3 text-blue-600" />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-6 w-6 p-0"
+                                      title="Copy"
+                                    >
+                                      <Copy className="h-3 w-3 text-green-600" />
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-6 w-6 p-0"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="h-3 w-3 text-red-600" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              )}
                               <td className="p-2">
                                 <Checkbox />
                               </td>
                               {tableData.columns.map((column) => (
-                                <td key={column.name} className="p-2 max-w-xs">
-                                  <div className="truncate" title={String(row[column.name])}>
-                                    {formatCellValue(row[column.name])}
-                                  </div>
+                                <td 
+                                  key={column.name} 
+                                  className="p-2 max-w-xs cursor-pointer"
+                                  onDoubleClick={() => handleCellDoubleClick(rowIndex, column.name, row[column.name])}
+                                  title={hasPrimaryKey ? "Double-click to edit" : undefined}
+                                >
+                                  {editingCell?.rowIndex === rowIndex && editingCell?.columnName === column.name ? (
+                                    <Input
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onKeyDown={handleEditKeyDown}
+                                      onBlur={handleEditCancel}
+                                      className="h-6 text-xs p-1"
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <div className="truncate" title={String(row[column.name])}>
+                                      {formatCellValue(row[column.name])}
+                                    </div>
+                                  )}
                                 </td>
                               ))}
-                              <td className="p-2">
-                                <div className="flex gap-1">
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                    <Edit className="h-3 w-3" />
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                                    <Trash2 className="h-3 w-3 text-red-400" />
-                                  </Button>
-                                </div>
-                              </td>
                             </tr>
                           ))}
                         </tbody>
