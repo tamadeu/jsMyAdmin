@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle } from "lucide-react";
@@ -60,11 +62,11 @@ const Sidebar = () => {
   // Update expanded databases based on current active tab
   useEffect(() => {
     const activeTab = getTabById(activeTabId);
-    let targetExpandedDatabases: string[] = [];
-    let targetExpandedSections: string[] = [];
 
     if (activeTab && activeTab.type === 'table' && activeTab.params?.database) {
-      targetExpandedDatabases = [activeTab.params.database];
+      let targetExpandedDatabases: string[] = [activeTab.params.database];
+      let targetExpandedSections: string[] = [];
+
       if (activeTab.params.table) {
         // Find the database from the current `databases` state
         const db = databases.find(d => d.name === activeTab.params?.database);
@@ -73,12 +75,13 @@ const Sidebar = () => {
           targetExpandedSections = [`${activeTab.params.database}-${isView ? 'views' : 'tables'}`];
         }
       }
-    }
 
-    // Only update state if the new value is different from the current state
-    setExpandedDatabases(prev => arraysEqual(prev, targetExpandedDatabases) ? prev : targetExpandedDatabases);
-    setExpandedSections(prev => arraysEqual(prev, targetExpandedSections) ? prev : targetExpandedSections);
-
+      // Only update state if the new value is different from the current state
+      setExpandedDatabases(prev => arraysEqual(prev, targetExpandedDatabases) ? prev : targetExpandedDatabases);
+      setExpandedSections(prev => arraysEqual(prev, targetExpandedSections) ? prev : targetExpandedSections);
+    } 
+    // If not a table tab, do not modify expandedDatabases or expandedSections.
+    // This prevents forcing collapse when switching to non-table tabs, which might cause a loop.
   }, [activeTabId, databases, getTabById]); // Dependencies are activeTabId, databases, getTabById
 
   const loadDatabases = async () => {
