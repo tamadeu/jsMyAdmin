@@ -201,8 +201,6 @@ app.get('/api/databases/:database/tables', async (req, res) => {
 
     const { database } = req.params;
     
-    console.log(`Loading tables and views for database: ${database}`);
-    
     // Get detailed information about tables and views
     const [tablesAndViews] = await connectionPool.execute(`
       SELECT 
@@ -217,16 +215,11 @@ app.get('/api/databases/:database/tables', async (req, res) => {
       ORDER BY TABLE_TYPE, TABLE_NAME
     `, [database]);
 
-    console.log(`Found ${tablesAndViews.length} items in ${database}`);
-    console.log('Raw data sample:', tablesAndViews.slice(0, 2));
-
     // Separate tables and views
     const tables = [];
     const views = [];
 
     tablesAndViews.forEach(item => {
-      console.log(`Processing: ${item.table_name} - Type: ${item.table_type}`);
-      
       const tableInfo = {
         name: item.table_name,
         rows: item.table_rows || 0,
@@ -241,12 +234,9 @@ app.get('/api/databases/:database/tables', async (req, res) => {
         tables.push(tableInfo);
       } else {
         // Fallback for other types, treat as table
-        console.log(`Unknown table type: ${item.table_type}, treating as table`);
         tables.push(tableInfo);
       }
     });
-
-    console.log(`Separated into: ${tables.length} tables, ${views.length} views`);
     
     const result = {
       tables,
@@ -254,13 +244,6 @@ app.get('/api/databases/:database/tables', async (req, res) => {
       totalTables: tables.length,
       totalViews: views.length
     };
-
-    console.log('Final result sample:', {
-      totalTables: result.totalTables,
-      totalViews: result.totalViews,
-      firstTable: result.tables[0]?.name,
-      firstView: result.views[0]?.name
-    });
     
     res.json(result);
   } catch (error) {
@@ -455,10 +438,6 @@ app.put('/api/databases/:database/tables/:table/row', async (req, res) => {
       
       const updateQuery = `UPDATE \`${table}\` SET ${setClause} WHERE \`${pkColumn.Field}\` = ?`;
       
-      console.log('Update query:', updateQuery);
-      console.log('Values:', values);
-      console.log('Primary key:', primaryKey);
-      
       const [result] = await connection.execute(updateQuery, [...values, primaryKey]);
 
       res.json({
@@ -527,9 +506,6 @@ app.post('/api/databases/:database/tables/:table/row', async (req, res) => {
       const values = Object.values(insertData);
       
       const insertQuery = `INSERT INTO \`${table}\` (${columnNames}) VALUES (${placeholders})`;
-      
-      console.log('Insert query:', insertQuery);
-      console.log('Values:', values);
       
       const [result] = await connection.execute(insertQuery, values);
 

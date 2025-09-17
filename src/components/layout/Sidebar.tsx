@@ -39,6 +39,28 @@ const Sidebar = () => {
     return null;
   };
 
+  // Get current table/view from URL
+  const getCurrentTable = () => {
+    const pathParts = location.pathname.split('/');
+    if (pathParts[1] === 'database' && pathParts[2] && pathParts[3] === 'table' && pathParts[4]) {
+      return pathParts[4];
+    }
+    return null;
+  };
+
+  // Check if current table is a view
+  const isCurrentTableAView = () => {
+    const currentDb = getCurrentDatabase();
+    const currentTable = getCurrentTable();
+    
+    if (!currentDb || !currentTable) return false;
+    
+    const database = databases.find(db => db.name === currentDb);
+    if (!database) return false;
+    
+    return database.views.some(view => view.name === currentTable);
+  };
+
   // Load databases on component mount
   useEffect(() => {
     loadDatabases();
@@ -47,17 +69,30 @@ const Sidebar = () => {
   // Update expanded databases based on current route
   useEffect(() => {
     const currentDb = getCurrentDatabase();
+    const currentTable = getCurrentTable();
+    
     if (currentDb) {
       // Only expand the database that the user is currently viewing
       setExpandedDatabases([currentDb]);
-      // Also expand the tables section by default when viewing a database
-      setExpandedSections([`${currentDb}-tables`]);
+      
+      // Determine which section to expand based on current table/view
+      if (currentTable) {
+        const isView = isCurrentTableAView();
+        if (isView) {
+          setExpandedSections([`${currentDb}-views`]);
+        } else {
+          setExpandedSections([`${currentDb}-tables`]);
+        }
+      } else {
+        // Default to tables section when just viewing a database
+        setExpandedSections([`${currentDb}-tables`]);
+      }
     } else {
       // If not viewing any specific database, don't expand any
       setExpandedDatabases([]);
       setExpandedSections([]);
     }
-  }, [location.pathname]);
+  }, [location.pathname, databases]); // Add databases to dependency array
 
   const loadDatabases = async () => {
     try {
@@ -340,7 +375,7 @@ const Sidebar = () => {
                       {/* Empty state when no tables or views */}
                       {db.totalTables === 0 && db.totalViews === 0 && (
                         <div className="text-xs text-muted-foreground p-2">
-                          No tables or views found
+          No tables or views found
                         </div>
                       )}
                     </div>
