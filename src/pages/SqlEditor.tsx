@@ -34,7 +34,7 @@ const SqlEditor = () => {
       // If no SQL editor tab is active, or tab type changes, reset to default
       setSqlQuery("SELECT * FROM your_table;");
     }
-  }, [activeTabId, activeTab]); // Depend only on activeTabId and activeTab object
+  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent]); // Depend only on activeTabId, type, and content
 
   // Effect to save content from the editor's local state to the tab context
   useEffect(() => {
