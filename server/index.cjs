@@ -123,7 +123,7 @@ app.get('/api/databases', async (req, res) => {
       }
     }
 
-    const [rows] = await connectionPool.execute('SHOW DATABASES');
+    const [rows] = await connectionPool.query('SHOW DATABASES');
     const databases = rows.map(row => row.Database);
     
     res.json(databases);
@@ -145,7 +145,7 @@ app.get('/api/databases/:database/tables', async (req, res) => {
 
     const { database } = req.params;
     
-    const [tables] = await connectionPool.execute(`SHOW TABLES FROM \`${database}\``);
+    const [tables] = await connectionPool.query(`SHOW TABLES FROM \`${database}\``);
     const [status] = await connectionPool.execute(`
       SELECT 
         table_name,
@@ -190,48 +190,56 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
     const { database, table } = req.params;
     const { limit = 10, offset = 0, search = '' } = req.query;
     
-    // Switch to the specific database
-    await connectionPool.execute(`USE \`${database}\``);
+    // Get a connection from the pool
+    const connection = await connectionPool.getConnection();
     
-    // Get table structure
-    const [columns] = await connectionPool.execute(`DESCRIBE \`${table}\``);
-    
-    // Build search condition
-    let searchCondition = '';
-    let searchParams = [];
-    
-    if (search) {
-      const searchColumns = columns.map(col => `\`${col.Field}\` LIKE ?`).join(' OR ');
-      searchCondition = `WHERE ${searchColumns}`;
-      searchParams = columns.map(() => `%${search}%`);
+    try {
+      // Switch to the specific database using query() instead of execute()
+      await connection.query(`USE \`${database}\``);
+      
+      // Get table structure
+      const [columns] = await connection.execute(`DESCRIBE \`${table}\``);
+      
+      // Build search condition
+      let searchCondition = '';
+      let searchParams = [];
+      
+      if (search) {
+        const searchColumns = columns.map(col => `\`${col.Field}\` LIKE ?`).join(' OR ');
+        searchCondition = `WHERE ${searchColumns}`;
+        searchParams = columns.map(() => `%${search}%`);
+      }
+      
+      // Get data with pagination
+      const [rows] = await connection.execute(`
+        SELECT * FROM \`${table}\` 
+        ${searchCondition}
+        LIMIT ? OFFSET ?
+      `, [...searchParams, parseInt(limit), parseInt(offset)]);
+      
+      // Get total count
+      const [countResult] = await connection.execute(`
+        SELECT COUNT(*) as total FROM \`${table}\` ${searchCondition}
+      `, searchParams);
+      
+      res.json({
+        columns: columns.map(col => ({
+          name: col.Field,
+          type: col.Type,
+          null: col.Null === 'YES',
+          key: col.Key,
+          default: col.Default,
+          extra: col.Extra
+        })),
+        data: rows,
+        total: countResult[0].total,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      });
+    } finally {
+      // Always release the connection back to the pool
+      connection.release();
     }
-    
-    // Get data with pagination
-    const [rows] = await connectionPool.execute(`
-      SELECT * FROM \`${table}\` 
-      ${searchCondition}
-      LIMIT ? OFFSET ?
-    `, [...searchParams, parseInt(limit), parseInt(offset)]);
-    
-    // Get total count
-    const [countResult] = await connectionPool.execute(`
-      SELECT COUNT(*) as total FROM \`${table}\` ${searchCondition}
-    `, searchParams);
-    
-    res.json({
-      columns: columns.map(col => ({
-        name: col.Field,
-        type: col.Type,
-        null: col.Null === 'YES',
-        key: col.Key,
-        default: col.Default,
-        extra: col.Extra
-      })),
-      data: rows,
-      total: countResult[0].total,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
-    });
   } catch (error) {
     console.error('Error fetching table data:', error);
     res.status(500).json({ error: error.message });
@@ -254,37 +262,47 @@ app.post('/api/query', async (req, res) => {
       return res.status(400).json({ error: 'Query is required' });
     }
 
-    // Switch to database if specified
-    if (database) {
-      await connectionPool.execute(`USE \`${database}\``);
-    }
-
-    const startTime = Date.now();
-    const [rows, fields] = await connectionPool.execute(query);
-    const executionTime = Date.now() - startTime;
-
-    // Determine if it's a SELECT query
-    const isSelect = query.trim().toLowerCase().startsWith('select');
+    // Get a connection from the pool
+    const connection = await connectionPool.getConnection();
     
-    if (isSelect) {
-      res.json({
-        success: true,
-        data: rows,
-        fields: fields?.map(field => ({
-          name: field.name,
-          type: field.type,
-          table: field.table
-        })) || [],
-        rowCount: Array.isArray(rows) ? rows.length : 0,
-        executionTime: `${executionTime}ms`
-      });
-    } else {
-      res.json({
-        success: true,
-        message: `Query executed successfully. ${rows.affectedRows || 0} rows affected.`,
-        affectedRows: rows.affectedRows || 0,
-        executionTime: `${executionTime}ms`
-      });
+    try {
+      // Switch to database if specified using query() instead of execute()
+      if (database) {
+        await connection.query(`USE \`${database}\``);
+      }
+
+      const startTime = Date.now();
+      
+      // Use query() for most SQL commands as they might not support prepared statements
+      const [rows, fields] = await connection.query(query);
+      const executionTime = Date.now() - startTime;
+
+      // Determine if it's a SELECT query
+      const isSelect = query.trim().toLowerCase().startsWith('select');
+      
+      if (isSelect) {
+        res.json({
+          success: true,
+          data: rows,
+          fields: fields?.map(field => ({
+            name: field.name,
+            type: field.type,
+            table: field.table
+          })) || [],
+          rowCount: Array.isArray(rows) ? rows.length : 0,
+          executionTime: `${executionTime}ms`
+        });
+      } else {
+        res.json({
+          success: true,
+          message: `Query executed successfully. ${rows.affectedRows || 0} rows affected.`,
+          affectedRows: rows.affectedRows || 0,
+          executionTime: `${executionTime}ms`
+        });
+      }
+    } finally {
+      // Always release the connection back to the pool
+      connection.release();
     }
   } catch (error) {
     console.error('Error executing query:', error);
@@ -305,9 +323,9 @@ app.get('/api/status', async (req, res) => {
       }
     }
 
-    const [variables] = await connectionPool.execute('SHOW VARIABLES LIKE "version"');
-    const [status] = await connectionPool.execute('SHOW STATUS LIKE "Uptime"');
-    const [processes] = await connectionPool.execute('SHOW PROCESSLIST');
+    const [variables] = await connectionPool.query('SHOW VARIABLES LIKE "version"');
+    const [status] = await connectionPool.query('SHOW STATUS LIKE "Uptime"');
+    const [processes] = await connectionPool.query('SHOW PROCESSLIST');
 
     res.json({
       version: variables[0]?.Value || 'Unknown',
