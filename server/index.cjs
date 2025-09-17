@@ -206,18 +206,19 @@ app.get('/api/databases/:database/tables', async (req, res) => {
     // Get detailed information about tables and views
     const [tablesAndViews] = await connectionPool.execute(`
       SELECT 
-        table_name,
-        table_type,
-        table_rows,
-        ROUND(((data_length + index_length) / 1024 / 1024), 2) AS size_mb,
-        engine,
-        table_collation
-      FROM information_schema.tables 
-      WHERE table_schema = ?
-      ORDER BY table_type, table_name
+        TABLE_NAME as table_name,
+        TABLE_TYPE as table_type,
+        TABLE_ROWS as table_rows,
+        ROUND(((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024), 2) AS size_mb,
+        ENGINE as engine,
+        TABLE_COLLATION as table_collation
+      FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = ?
+      ORDER BY TABLE_TYPE, TABLE_NAME
     `, [database]);
 
     console.log(`Found ${tablesAndViews.length} items in ${database}`);
+    console.log('Raw data sample:', tablesAndViews.slice(0, 2));
 
     // Separate tables and views
     const tables = [];
@@ -254,7 +255,12 @@ app.get('/api/databases/:database/tables', async (req, res) => {
       totalViews: views.length
     };
 
-    console.log('Final result:', result);
+    console.log('Final result sample:', {
+      totalTables: result.totalTables,
+      totalViews: result.totalViews,
+      firstTable: result.tables[0]?.name,
+      firstView: result.views[0]?.name
+    });
     
     res.json(result);
   } catch (error) {
