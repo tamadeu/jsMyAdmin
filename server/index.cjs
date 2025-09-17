@@ -42,7 +42,6 @@ async function createConnectionPool(config) {
       database: config.database.defaultDatabase,
       charset: config.database.charset,
       connectionLimit: config.database.maxConnections,
-      acquireTimeout: config.database.connectionTimeout,
       ssl: config.database.ssl ? {
         ca: config.database.sslCA || undefined,
         cert: config.database.sslCertificate || undefined,
@@ -198,29 +197,29 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
       await connection.query(`USE \`${database}\``);
       
       // Get table structure
-      const [columns] = await connection.execute(`DESCRIBE \`${table}\``);
+      const [columns] = await connection.query(`DESCRIBE \`${table}\``);
       
-      // Build search condition
-      let searchCondition = '';
-      let searchParams = [];
+      // Build query and parameters
+      let dataQuery = `SELECT * FROM \`${table}\``;
+      let countQuery = `SELECT COUNT(*) as total FROM \`${table}\``;
+      let queryParams = [];
       
-      if (search) {
+      // Add search condition if provided
+      if (search && search.trim()) {
         const searchColumns = columns.map(col => `\`${col.Field}\` LIKE ?`).join(' OR ');
-        searchCondition = `WHERE ${searchColumns}`;
-        searchParams = columns.map(() => `%${search}%`);
+        const searchCondition = ` WHERE ${searchColumns}`;
+        dataQuery += searchCondition;
+        countQuery += searchCondition;
+        queryParams = columns.map(() => `%${search}%`);
       }
       
-      // Get data with pagination
-      const [rows] = await connection.execute(`
-        SELECT * FROM \`${table}\` 
-        ${searchCondition}
-        LIMIT ? OFFSET ?
-      `, [...searchParams, parseInt(limit), parseInt(offset)]);
+      // Add pagination
+      dataQuery += ` LIMIT ? OFFSET ?`;
+      const dataParams = [...queryParams, parseInt(limit), parseInt(offset)];
       
-      // Get total count
-      const [countResult] = await connection.execute(`
-        SELECT COUNT(*) as total FROM \`${table}\` ${searchCondition}
-      `, searchParams);
+      // Execute queries
+      const [rows] = await connection.execute(dataQuery, dataParams);
+      const [countResult] = await connection.execute(countQuery, queryParams);
       
       res.json({
         columns: columns.map(col => ({
