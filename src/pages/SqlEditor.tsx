@@ -111,7 +111,7 @@ const SqlEditor = () => {
                       </div>
                       <div className="border rounded-lg mt-4">
                         <div className="overflow-x-auto"> {/* This div handles horizontal scroll for the table */}
-                          <table className="w-full text-xs">
+                          <table className="text-xs"> {/* Removed w-full here */}
                             <thead className="bg-muted">
                               <tr>
                                 {queryResults.fields?.map((field) => (
