@@ -2,13 +2,15 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { QueryResult } from "@/services/api"; // Import QueryResult
 
 // Define the structure of a single tab
 export interface AppTab {
   id: string;
   title: string;
-  type: 'dashboard' | 'sql-editor' | 'table' | 'config';
+  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result'; // Added 'query-result'
   params?: { database?: string; table?: string; };
+  queryResult?: QueryResult; // Added queryResult property
   closable: boolean;
 }
 
@@ -18,7 +20,7 @@ interface TabContextType {
   activeTabId: string;
   addTab: (tab: Omit<AppTab, 'id'>) => void;
   removeTab: (tabId: string) => void;
-  setActiveTab: (tabId: string) => void; // Corrected here
+  setActiveTab: (tabId: string) => void;
   getTabById: (tabId: string) => AppTab | undefined;
 }
 
@@ -49,20 +51,23 @@ export function TabProvider({ children }: TabProviderProps) {
   const addTab = useCallback((newTab: Omit<AppTab, 'id'>) => {
     setTabs(prevTabs => {
       // Check if a tab of the same type and params already exists
-      const existingTab = prevTabs.find(tab => 
-        tab.type === newTab.type && 
-        JSON.stringify(tab.params) === JSON.stringify(newTab.params)
-      );
+      // For 'query-result' tabs, we always want a new one, so skip this check
+      if (newTab.type !== 'query-result') {
+        const existingTab = prevTabs.find(tab => 
+          tab.type === newTab.type && 
+          JSON.stringify(tab.params) === JSON.stringify(newTab.params)
+        );
 
-      if (existingTab) {
-        setActiveTabId(existingTab.id);
-        return prevTabs;
-      } else {
-        const id = uuidv4();
-        const tabToAdd = { ...newTab, id };
-        setActiveTabId(id);
-        return [...prevTabs, tabToAdd];
+        if (existingTab) {
+          setActiveTabId(existingTab.id);
+          return prevTabs;
+        }
       }
+      
+      const id = uuidv4();
+      const tabToAdd = { ...newTab, id };
+      setActiveTabId(id);
+      return [...prevTabs, tabToAdd];
     });
   }, []);
 
@@ -105,7 +110,7 @@ export function TabProvider({ children }: TabProviderProps) {
     activeTabId,
     addTab,
     removeTab,
-    setActiveTab: setActiveTabId, // Corrected here: mapping setActiveTab to setActiveTabId
+    setActiveTab: setActiveTabId,
     getTabById,
   }), [tabs, activeTabId, addTab, removeTab, setActiveTabId, getTabById]);
 

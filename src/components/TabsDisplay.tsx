@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import SqlEditor from "@/pages/SqlEditor";
 import Configuration from "@/pages/Configuration";
 import DatabaseBrowser from "@/pages/DatabaseBrowser";
+import QueryResultTable from "@/components/QueryResultTable"; // Import QueryResultTable
 
 const TabsDisplay = () => {
   const { tabs, activeTabId, setActiveTab, removeTab } = useTabs();
@@ -26,6 +27,11 @@ const TabsDisplay = () => {
           return <DatabaseBrowser database={tab.params.database} table={tab.params.table} />;
         }
         return <div className="p-4 text-red-500">Error: Missing database or table parameters.</div>;
+      case 'query-result': // New case for query results
+        if (tab.queryResult) {
+          return <QueryResultTable queryResult={tab.queryResult} />;
+        }
+        return <div className="p-4 text-red-500">Error: No query results found.</div>;
       default:
         return <div className="p-4 text-muted-foreground">Unknown tab type.</div>;
     }

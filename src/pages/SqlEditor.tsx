@@ -7,20 +7,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiService, QueryResult } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useTabs } from "@/context/TabContext"; // Import useTabs
 
 const SqlEditor = () => {
   const { toast } = useToast();
+  const { addTab } = useTabs(); // Use addTab from context
   const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;"); // Simplified initial query
-  const [queryResults, setQueryResults] = useState<QueryResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [queryHistory, setQueryHistory] = useState<Array<{ query: string; time: string; timestamp: string }>>([]);
 
   const executeQuery = async () => {
     setIsExecuting(true);
-    setQueryResults(null); // Clear previous results
     try {
       const result = await apiService.executeQuery(sqlQuery);
-      setQueryResults(result);
 
       // Add to history
       setQueryHistory(prev => [
@@ -29,10 +28,21 @@ const SqlEditor = () => {
       ]);
 
       if (result.success) {
-        toast({
-          title: "Query executed",
-          description: result.message || "SQL query executed successfully.",
-        });
+        // Check if it's a SELECT query to open a new tab
+        const isSelect = sqlQuery.trim().toLowerCase().startsWith('select');
+        if (isSelect && result.data) {
+          addTab({
+            title: `Query Result (${new Date().toLocaleTimeString()})`,
+            type: 'query-result',
+            queryResult: result,
+            closable: true,
+          });
+        } else {
+          toast({
+            title: "Query executed",
+            description: result.message || "SQL query executed successfully.",
+          });
+        }
       } else {
         toast({
           title: "Query failed",
@@ -42,7 +52,6 @@ const SqlEditor = () => {
       }
     } catch (error) {
       console.error('Error executing query:', error);
-      setQueryResults({ success: false, error: error instanceof Error ? error.message : "Unknown error", executionTime: "N/A" });
       toast({
         title: "Query failed",
         description: error instanceof Error ? error.message : "Failed to execute SQL query",
@@ -92,68 +101,16 @@ const SqlEditor = () => {
           />
         </div>
 
-        {/* Query Results Card */}
-        <Card className="flex-1 flex flex-col min-h-0"> {/* Make card take remaining space, min-h-0 to allow shrinking */}
+        {/* Placeholder for results - results will now open in a new tab */}
+        <Card className="flex-1 flex flex-col min-h-0">
           <CardHeader>
             <CardTitle>Query Results</CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto p-6"> {/* CardContent now handles vertical scroll and padding */}
-            {queryResults ? (
-              queryResults.success ? (
-                <div className="space-y-2">
-                  <div className="text-sm text-green-600">
-                    Query executed successfully in {queryResults.executionTime}
-                  </div>
-                  {queryResults.data && queryResults.data.length > 0 && (
-                    <>
-                      <div className="text-sm text-muted-foreground">
-                        {queryResults.rowCount} rows returned
-                      </div>
-                      <div className="border rounded-lg mt-4">
-                        <div className="overflow-x-auto"> {/* This div handles horizontal scroll for the table */}
-                          <table className="text-xs"> {/* Removed w-full here */}
-                            <thead className="bg-muted">
-                              <tr>
-                                {queryResults.fields?.map((field) => (
-                                  <th key={field.name} className="p-2 text-left font-medium text-sm min-w-[150px]"> {/* Added min-w */}
-                                    {field.name}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {queryResults.data.map((row, rowIndex) => (
-                                <tr key={rowIndex} className="border-t hover:bg-muted/50">
-                                  {queryResults.fields?.map((field) => (
-                                    <td key={field.name} className="p-2 min-w-[150px]"> {/* Removed max-w-xs truncate */}
-                                      {String(row[field.name])}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                  {queryResults.affectedRows !== undefined && (
-                    <div className="text-sm text-muted-foreground">
-                      {queryResults.affectedRows} rows affected.
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2 text-red-500">
-                  <AlertCircle className="h-5 w-5 inline-block mr-2" />
-                  <span className="font-medium">Error:</span> {queryResults.error}
-                </div>
-              )
-            ) : (
-              <div className="text-center text-muted-foreground py-8">
-                Execute a query to see results
-              </div>
-            )}
+          <CardContent className="flex-1 flex flex-col p-6">
+            <div className="text-center text-muted-foreground py-8">
+              Execute a SELECT query to see results in a new tab.
+              For other queries, a toast notification will appear.
+            </div>
           </CardContent>
         </Card>
       </div>
