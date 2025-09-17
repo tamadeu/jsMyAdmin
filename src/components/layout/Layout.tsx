@@ -50,7 +50,7 @@ const Layout = () => {
           database={databaseParam}
           table={tableParam}
         />
-        <div className="flex-1 overflow-hidden"> {/* Ensure this div takes full height and hides overflow */}
+        <div className="flex-1 overflow-y-auto"> {/* Changed to overflow-y-auto */}
           <TabsDisplay />
         </div>
       </div>
