@@ -26,8 +26,8 @@ function convertDateForMySQL(value) {
     return value;
   }
   
-  // If it's an ISO string or Date object, convert to MySQL format
-  if (typeof value === 'string' || value instanceof Date) {
+  // Only convert if it's clearly an ISO date string (contains T and Z)
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/.test(value)) {
     try {
       const date = new Date(value);
       if (isNaN(date.getTime())) {
@@ -41,6 +41,21 @@ function convertDateForMySQL(value) {
     }
   }
   
+  // If it's a Date object, convert it
+  if (value instanceof Date) {
+    try {
+      if (isNaN(value.getTime())) {
+        return value; // Return original if not a valid date
+      }
+      
+      // Convert to MySQL datetime format (YYYY-MM-DD HH:MM:SS)
+      return value.toISOString().slice(0, 19).replace('T', ' ');
+    } catch (error) {
+      return value; // Return original if conversion fails
+    }
+  }
+  
+  // For all other cases (strings, numbers, etc.), return as is
   return value;
 }
 
@@ -403,6 +418,11 @@ app.put('/api/databases/:database/tables/:table/row', async (req, res) => {
         .map(key => processedData[key]);
       
       const updateQuery = `UPDATE \`${table}\` SET ${setClause} WHERE \`${pkColumn.Field}\` = ?`;
+      
+      console.log('Update query:', updateQuery);
+      console.log('Values:', values);
+      console.log('Primary key:', primaryKey);
+      
       const [result] = await connection.execute(updateQuery, [...values, primaryKey]);
 
       res.json({
