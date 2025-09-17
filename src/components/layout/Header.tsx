@@ -4,18 +4,31 @@ import { Badge } from "@/components/ui/badge";
 interface HeaderProps {
   title: string;
   subtitle?: string;
+  database?: string;
+  table?: string;
 }
 
-const Header = ({ title, subtitle }: HeaderProps) => {
+const Header = ({ title, subtitle, database, table }: HeaderProps) => {
   return (
     <header className="border-b border-border px-6 py-4 bg-card">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">{title}</h1>
-          {subtitle && (
-            <div className="text-sm text-muted-foreground">
-              {subtitle}
-            </div>
+        <div className="flex flex-col gap-1">
+          {database && table ? (
+            <>
+              <h1 className="text-xl font-semibold">Table: {table}</h1>
+              <div className="text-sm text-muted-foreground">
+                Databases / {database} / {table}
+              </div>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-semibold">{title}</h1>
+              {subtitle && (
+                <div className="text-sm text-muted-foreground">
+                  {subtitle}
+                </div>
+              )}
+            </>
           )}
         </div>
         <div className="flex items-center gap-3">

@@ -39,6 +39,7 @@ const DatabaseBrowser = () => {
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(10);
   const [offset, setOffset] = useState(0);
+  const [queryTime, setQueryTime] = useState<string>("0.0000");
 
   // Debounce the search input (wait 500ms after user stops typing)
   const debouncedSearchTerm = useDebounce(searchInput, 500);
@@ -62,12 +63,15 @@ const DatabaseBrowser = () => {
       }
       setError(null);
 
+      const startTime = Date.now();
       const data = await apiService.getTableData(database, table, {
         limit,
         offset,
         search: debouncedSearchTerm
       });
-
+      const endTime = Date.now();
+      
+      setQueryTime(((endTime - startTime) / 1000).toFixed(4));
       setTableData(data);
     } catch (error) {
       console.error('Error loading table data:', error);
@@ -171,6 +175,21 @@ const DatabaseBrowser = () => {
     return 'text';
   };
 
+  // Generate SQL query string
+  const generateSQLQuery = () => {
+    let query = `SELECT * FROM \`${table}\``;
+    if (debouncedSearchTerm) {
+      query += ` WHERE /* search filter applied */`;
+    }
+    if (limit) {
+      query += ` LIMIT ${limit}`;
+    }
+    if (offset > 0) {
+      query += ` OFFSET ${offset}`;
+    }
+    return query;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -198,70 +217,29 @@ const DatabaseBrowser = () => {
 
   const currentPage = Math.floor(offset / limit) + 1;
   const totalPages = tableData ? Math.ceil(tableData.total / limit) : 1;
-  const startRow = offset + 1;
-  const endRow = Math.min(offset + limit, tableData?.total || 0);
+  const startRow = offset;
+  const endRow = Math.min(offset + limit - 1, (tableData?.total || 0) - 1);
   const hasActiveFilters = Object.keys(columnFilters).length > 0;
   const hasServerSearch = debouncedSearchTerm.length > 0;
 
   return (
     <div className="overflow-y-auto h-full">
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Table: {table}</h1>
-            <div className="text-sm text-muted-foreground">
-              Databases / {database} / {table}
+        {/* Query Information */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-2 text-sm">
+              <div>
+                Mostrando registros {startRow} - {endRow} ({tableData?.total.toLocaleString() || 0} no total,{' '}
+                {hasServerSearch && 'filtrado pelo servidor, '}
+                Consulta levou {queryTime} segundos.)
+              </div>
+              <div className="font-mono text-xs bg-muted p-2 rounded">
+                {generateSQLQuery()}
+              </div>
             </div>
-          </div>
-        </div>
-
-        {/* Table Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Engine</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-lg font-semibold">{tableInfo?.engine || 'Unknown'}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Rows</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-lg font-semibold">{tableData?.total.toLocaleString() || '0'}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Size</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-lg font-semibold">{tableInfo?.size || '0 MB'}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Collation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm">{tableInfo?.collation || 'Unknown'}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Columns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-lg font-semibold">{tableData?.columns.length || 0}</div>
-            </CardContent>
-          </Card>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Browse Data */}
         <Card>
@@ -422,7 +400,7 @@ const DatabaseBrowser = () => {
 
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                      Showing {startRow} to {endRow} of {tableData.total.toLocaleString()} entries
+                      Showing {startRow + 1} to {endRow + 1} of {tableData.total.toLocaleString()} entries
                       {hasServerSearch && ` (database filtered)`}
                       {hasActiveFilters && ` • ${filteredData.length} visible after column filters`}
                     </span>
