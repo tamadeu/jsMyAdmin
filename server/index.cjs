@@ -189,7 +189,7 @@ app.get('/api/databases', async (req, res) => {
   }
 });
 
-// Get tables for a database
+// Get tables and views for a database
 app.get('/api/databases/:database/tables', async (req, res) => {
   try {
     if (!connectionPool) {
@@ -201,32 +201,46 @@ app.get('/api/databases/:database/tables', async (req, res) => {
 
     const { database } = req.params;
     
-    const [tables] = await connectionPool.query(`SHOW TABLES FROM \`${database}\``);
-    const [status] = await connectionPool.execute(`
+    // Get detailed information about tables and views
+    const [tablesAndViews] = await connectionPool.execute(`
       SELECT 
         table_name,
+        table_type,
         table_rows,
         ROUND(((data_length + index_length) / 1024 / 1024), 2) AS size_mb,
         engine,
         table_collation
       FROM information_schema.tables 
       WHERE table_schema = ?
+      ORDER BY table_type, table_name
     `, [database]);
 
-    const tableList = tables.map(table => {
-      const tableName = Object.values(table)[0];
-      const tableInfo = status.find(s => s.table_name === tableName);
-      
-      return {
-        name: tableName,
-        rows: tableInfo?.table_rows || 0,
-        size: tableInfo?.size_mb ? `${tableInfo.size_mb} MB` : '0 MB',
-        engine: tableInfo?.engine || 'Unknown',
-        collation: tableInfo?.table_collation || 'Unknown'
+    // Separate tables and views
+    const tables = [];
+    const views = [];
+
+    tablesAndViews.forEach(item => {
+      const tableInfo = {
+        name: item.table_name,
+        rows: item.table_rows || 0,
+        size: item.size_mb ? `${item.size_mb} MB` : '0 MB',
+        engine: item.engine || 'N/A',
+        collation: item.table_collation || 'Unknown'
       };
+
+      if (item.table_type === 'VIEW') {
+        views.push(tableInfo);
+      } else {
+        tables.push(tableInfo);
+      }
     });
     
-    res.json(tableList);
+    res.json({
+      tables,
+      views,
+      totalTables: tables.length,
+      totalViews: views.length
+    });
   } catch (error) {
     console.error('Error fetching tables:', error);
     res.status(500).json({ error: error.message });

@@ -1,49 +1,16 @@
-const API_BASE_URL = 'http://localhost:3001/api';
-
-export interface DatabaseConfig {
-  database: {
-    host: string;
-    port: number;
-    username: string;
-    password: string;
-    defaultDatabase: string;
-    charset: string;
-    collation: string;
-    connectionTimeout: number;
-    maxConnections: number;
-    ssl: boolean;
-    sslCertificate: string;
-    sslKey: string;
-    sslCA: string;
-  };
-  application: {
-    theme: string;
-    language: string;
-    queryTimeout: number;
-    maxQueryResults: number;
-    autoRefresh: boolean;
-    refreshInterval: number;
-  };
-  security: {
-    allowMultipleStatements: boolean;
-    allowLocalInfile: boolean;
-    requireSSL: boolean;
-  };
+export interface TableInfo {
+  name: string;
+  rows: number;
+  size: string;
+  engine: string;
+  collation: string;
 }
 
-export interface QueryResult {
-  success: boolean;
-  data?: any[];
-  fields?: Array<{
-    name: string;
-    type: string;
-    table: string;
-  }>;
-  message?: string;
-  rowCount?: number;
-  affectedRows?: number;
-  executionTime?: string;
-  error?: string;
+export interface DatabaseTablesResponse {
+  tables: TableInfo[];
+  views: TableInfo[];
+  totalTables: number;
+  totalViews: number;
 }
 
 export interface TableData {
@@ -61,62 +28,62 @@ export interface TableData {
   offset: number;
 }
 
-export interface ServerStatus {
-  version: string;
-  uptime: string;
-  connections: number;
-  status: string;
+export interface QueryResult {
+  success: boolean;
+  data?: any[];
+  fields?: Array<{
+    name: string;
+    type: string;
+    table: string;
+  }>;
+  rowCount?: number;
+  message?: string;
+  affectedRows?: number;
+  executionTime: string;
+  error?: string;
 }
 
 class ApiService {
-  private async request(endpoint: string, options: RequestInit = {}) {
-    try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        ...options,
-      });
+  private baseUrl = 'http://localhost:3001/api';
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || error.error || 'Request failed');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('API request failed:', error);
-      throw error;
-    }
-  }
-
-  async testConnection(config: DatabaseConfig): Promise<{ success: boolean; message: string }> {
-    return this.request('/test-connection', {
+  async testConnection(config: any): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/test-connection`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(config),
     });
+
+    return response.json();
   }
 
-  async saveConfig(config: DatabaseConfig): Promise<{ success: boolean; message: string }> {
-    return this.request('/save-config', {
+  async saveConfig(config: any): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/save-config`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(config),
     });
+
+    return response.json();
   }
 
   async getDatabases(): Promise<string[]> {
-    return this.request('/databases');
+    const response = await fetch(`${this.baseUrl}/databases`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch databases');
+    }
+    return response.json();
   }
 
-  async getTables(database: string): Promise<Array<{
-    name: string;
-    rows: number;
-    size: string;
-    engine: string;
-    collation: string;
-  }>> {
-    return this.request(`/databases/${encodeURIComponent(database)}/tables`);
+  async getTables(database: string): Promise<DatabaseTablesResponse> {
+    const response = await fetch(`${this.baseUrl}/databases/${encodeURIComponent(database)}/tables`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch tables');
+    }
+    return response.json();
   }
 
   async getTableData(
@@ -130,11 +97,12 @@ class ApiService {
     } = {}
   ): Promise<TableData> {
     const params = new URLSearchParams();
+    
     if (options.limit) params.append('limit', options.limit.toString());
     if (options.offset) params.append('offset', options.offset.toString());
     if (options.search) params.append('search', options.search);
     
-    // Add column filters as separate parameters
+    // Add column filters
     if (options.columnFilters) {
       Object.entries(options.columnFilters).forEach(([column, value]) => {
         if (value) {
@@ -143,10 +111,15 @@ class ApiService {
       });
     }
 
-    const queryString = params.toString();
-    const endpoint = `/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/data${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/data?${params}`
+    );
     
-    return this.request(endpoint);
+    if (!response.ok) {
+      throw new Error('Failed to fetch table data');
+    }
+    
+    return response.json();
   }
 
   async updateCell(
@@ -156,10 +129,27 @@ class ApiService {
     columnName: string,
     newValue: any
   ): Promise<{ success: boolean; message: string; affectedRows: number }> {
-    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/cell`, {
-      method: 'PUT',
-      body: JSON.stringify({ primaryKey, columnName, newValue }),
-    });
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/cell`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          primaryKey,
+          columnName,
+          newValue
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update cell');
+    }
+
+    return response.json();
   }
 
   async updateRow(
@@ -168,10 +158,26 @@ class ApiService {
     primaryKey: any,
     data: Record<string, any>
   ): Promise<{ success: boolean; message: string; affectedRows: number }> {
-    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`, {
-      method: 'PUT',
-      body: JSON.stringify({ primaryKey, data }),
-    });
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          primaryKey,
+          data
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update row');
+    }
+
+    return response.json();
   }
 
   async insertRow(
@@ -179,10 +185,25 @@ class ApiService {
     table: string,
     data: Record<string, any>
   ): Promise<{ success: boolean; message: string; insertId: number; affectedRows: number }> {
-    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`, {
-      method: 'POST',
-      body: JSON.stringify({ data }),
-    });
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to insert row');
+    }
+
+    return response.json();
   }
 
   async deleteRow(
@@ -190,21 +211,53 @@ class ApiService {
     table: string,
     primaryKey: any
   ): Promise<{ success: boolean; message: string; affectedRows: number }> {
-    return this.request(`/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`, {
-      method: 'DELETE',
-      body: JSON.stringify({ primaryKey }),
-    });
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          primaryKey
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete row');
+    }
+
+    return response.json();
   }
 
   async executeQuery(query: string, database?: string): Promise<QueryResult> {
-    return this.request('/query', {
+    const response = await fetch(`${this.baseUrl}/query`, {
       method: 'POST',
-      body: JSON.stringify({ query, database }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        database
+      }),
     });
+
+    return response.json();
   }
 
-  async getServerStatus(): Promise<ServerStatus> {
-    return this.request('/status');
+  async getServerStatus(): Promise<{
+    version: string;
+    uptime: string;
+    connections: number;
+    status: string;
+  }> {
+    const response = await fetch(`${this.baseUrl}/status`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch server status');
+    }
+    return response.json();
   }
 }
 

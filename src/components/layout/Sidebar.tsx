@@ -1,24 +1,20 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Database, Table, Search, Settings, Play, Loader2, AlertCircle } from "lucide-react";
+import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { apiService } from "@/services/api";
+import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface DatabaseInfo {
   name: string;
-  tables: Array<{
-    name: string;
-    rows: number;
-    size: string;
-    engine: string;
-    collation: string;
-  }>;
+  tables: DatabaseTablesResponse['tables'];
+  views: DatabaseTablesResponse['views'];
   totalTables: number;
+  totalViews: number;
 }
 
 const Sidebar = () => {
@@ -30,6 +26,7 @@ const Sidebar = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedDatabases, setExpandedDatabases] = useState<string[]>([]);
+  const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -53,9 +50,12 @@ const Sidebar = () => {
     if (currentDb) {
       // Only expand the database that the user is currently viewing
       setExpandedDatabases([currentDb]);
+      // Also expand the tables section by default when viewing a database
+      setExpandedSections([`${currentDb}-tables`]);
     } else {
       // If not viewing any specific database, don't expand any
       setExpandedDatabases([]);
+      setExpandedSections([]);
     }
   }, [location.pathname]);
 
@@ -66,28 +66,32 @@ const Sidebar = () => {
       
       const databaseNames = await apiService.getDatabases();
       
-      // Load table information for each database
-      const databasesWithTables = await Promise.all(
+      // Load table and view information for each database
+      const databasesWithTablesAndViews = await Promise.all(
         databaseNames.map(async (dbName) => {
           try {
-            const tables = await apiService.getTables(dbName);
+            const tablesData = await apiService.getTables(dbName);
             return {
               name: dbName,
-              tables: tables,
-              totalTables: tables.length
+              tables: tablesData.tables,
+              views: tablesData.views,
+              totalTables: tablesData.totalTables,
+              totalViews: tablesData.totalViews
             };
           } catch (error) {
             console.error(`Error loading tables for ${dbName}:`, error);
             return {
               name: dbName,
               tables: [],
-              totalTables: 0
+              views: [],
+              totalTables: 0,
+              totalViews: 0
             };
           }
         })
       );
 
-      setDatabases(databasesWithTables);
+      setDatabases(databasesWithTablesAndViews);
       
     } catch (error) {
       console.error('Error loading databases:', error);
@@ -106,12 +110,18 @@ const Sidebar = () => {
     if (!expandedDatabases.includes(databaseName)) {
       // Load tables for this database if not already loaded
       const database = databases.find(db => db.name === databaseName);
-      if (database && database.tables.length === 0) {
+      if (database && database.tables.length === 0 && database.views.length === 0) {
         try {
-          const tables = await apiService.getTables(databaseName);
+          const tablesData = await apiService.getTables(databaseName);
           setDatabases(prev => prev.map(db => 
             db.name === databaseName 
-              ? { ...db, tables, totalTables: tables.length }
+              ? { 
+                  ...db, 
+                  tables: tablesData.tables,
+                  views: tablesData.views,
+                  totalTables: tablesData.totalTables,
+                  totalViews: tablesData.totalViews
+                }
               : db
           ));
         } catch (error) {
@@ -244,30 +254,94 @@ const Sidebar = () => {
                         <div className="text-sm font-medium">{db.name}</div>
                         <div className="text-xs text-muted-foreground">
                           {db.totalTables} {db.totalTables === 1 ? 'table' : 'tables'}
+                          {db.totalViews > 0 && `, ${db.totalViews} ${db.totalViews === 1 ? 'view' : 'views'}`}
                         </div>
                       </div>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-2">
-                    <div className="ml-6 space-y-1">
-                      <div className="text-xs text-muted-foreground mb-2">Tables</div>
-                      {db.tables.length === 0 ? (
+                    <div className="ml-6">
+                      {/* Tables and Views Accordion */}
+                      <Accordion 
+                        type="multiple" 
+                        className="w-full" 
+                        value={expandedSections}
+                        onValueChange={setExpandedSections}
+                      >
+                        {/* Tables Section */}
+                        {db.totalTables > 0 && (
+                          <AccordionItem value={`${db.name}-tables`} className="border-none">
+                            <AccordionTrigger className="hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs">
+                              <div className="flex items-center gap-2">
+                                <Table className="h-3 w-3" />
+                                <span>Tables ({db.totalTables})</span>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="pb-1">
+                              <div className="ml-4 space-y-1">
+                                {db.tables.length === 0 ? (
+                                  <div className="text-xs text-muted-foreground p-2">
+                                    No tables found
+                                  </div>
+                                ) : (
+                                  db.tables.map((table) => (
+                                    <div 
+                                      key={table.name} 
+                                      className="p-2 rounded-md cursor-pointer transition-colors hover:bg-accent"
+                                      onClick={() => navigate(`/database/${db.name}/table/${table.name}`)}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Table className="h-3 w-3" />
+                                        <span className="text-sm">{table.name}</span>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+
+                        {/* Views Section */}
+                        {db.totalViews > 0 && (
+                          <AccordionItem value={`${db.name}-views`} className="border-none">
+                            <AccordionTrigger className="hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs">
+                              <div className="flex items-center gap-2">
+                                <Eye className="h-3 w-3" />
+                                <span>Views ({db.totalViews})</span>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="pb-1">
+                              <div className="ml-4 space-y-1">
+                                {db.views.length === 0 ? (
+                                  <div className="text-xs text-muted-foreground p-2">
+                                    No views found
+                                  </div>
+                                ) : (
+                                  db.views.map((view) => (
+                                    <div 
+                                      key={view.name} 
+                                      className="p-2 rounded-md cursor-pointer transition-colors hover:bg-accent"
+                                      onClick={() => navigate(`/database/${db.name}/table/${view.name}`)}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Eye className="h-3 w-3" />
+                                        <span className="text-sm">{view.name}</span>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                      </Accordion>
+
+                      {/* Empty state when no tables or views */}
+                      {db.totalTables === 0 && db.totalViews === 0 && (
                         <div className="text-xs text-muted-foreground p-2">
-                          No tables found
+                          No tables or views found
                         </div>
-                      ) : (
-                        db.tables.map((table) => (
-                          <div 
-                            key={table.name} 
-                            className="p-2 rounded-md cursor-pointer transition-colors hover:bg-accent"
-                            onClick={() => navigate(`/database/${db.name}/table/${table.name}`)}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Table className="h-3 w-3" />
-                              <span className="text-sm">{table.name}</span>
-                            </div>
-                          </div>
-                        ))
                       )}
                     </div>
                   </AccordionContent>
