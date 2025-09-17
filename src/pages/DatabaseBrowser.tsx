@@ -21,176 +21,178 @@ const DatabaseBrowser = () => {
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Table: {table}</h1>
-          <div className="text-sm text-muted-foreground">
-            Databases / {database} / {table}
+    <div className="overflow-y-auto h-full">
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Table: {table}</h1>
+            <div className="text-sm text-muted-foreground">
+              Databases / {database} / {table}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Table Info Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        {/* Table Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Engine</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-semibold">InnoDB</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Rows</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-semibold">45,231</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Size</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-lg font-semibold">12.4 MB</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Collation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm">utf8mb4_unicode_ci</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Modified</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm">2024-01-15 14:30:22</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Browse Data */}
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Engine</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-semibold">InnoDB</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Rows</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-semibold">45,231</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Size</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-semibold">12.4 MB</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Collation</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm">utf8mb4_unicode_ci</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Modified</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm">2024-01-15 14:30:22</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Browse Data */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Browse Data</CardTitle>
-              <CardDescription>5 rows</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Insert Row
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search in table..." 
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Browse Data</CardTitle>
+                <CardDescription>5 rows</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
-              <Select defaultValue="10">
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10 rows</SelectItem>
-                  <SelectItem value="25">25 rows</SelectItem>
-                  <SelectItem value="50">50 rows</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="p-3 text-left">
-                      <Checkbox />
-                    </th>
-                    <th className="p-3 text-left">id</th>
-                    <th className="p-3 text-left">username</th>
-                    <th className="p-3 text-left">email</th>
-                    <th className="p-3 text-left">created_at</th>
-                    <th className="p-3 text-left">status</th>
-                    <th className="p-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sampleUsers.map((user) => (
-                    <tr key={user.id} className="border-t hover:bg-muted/50">
-                      <td className="p-3">
-                        <Checkbox />
-                      </td>
-                      <td className="p-3">{user.id}</td>
-                      <td className="p-3">{user.username}</td>
-                      <td className="p-3">{user.email}</td>
-                      <td className="p-3">{user.created_at}</td>
-                      <td className="p-3">
-                        <Badge 
-                          variant={user.status === "active" ? "default" : user.status === "inactive" ? "destructive" : "secondary"}
-                          className="text-xs"
-                        >
-                          {user.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-4 w-4 text-red-400" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>Showing 1 to 5 of 5 entries</span>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled>Previous</Button>
-                <Button variant="outline" size="sm">1</Button>
-                <Button variant="outline" size="sm" disabled>Next</Button>
+                <Button variant="outline" size="sm">
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Insert Row
+                </Button>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search in table..." 
+                    className="pl-10"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filter
+                </Button>
+                <Select defaultValue="10">
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 rows</SelectItem>
+                    <SelectItem value="25">25 rows</SelectItem>
+                    <SelectItem value="50">50 rows</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="p-3 text-left">
+                        <Checkbox />
+                      </th>
+                      <th className="p-3 text-left">id</th>
+                      <th className="p-3 text-left">username</th>
+                      <th className="p-3 text-left">email</th>
+                      <th className="p-3 text-left">created_at</th>
+                      <th className="p-3 text-left">status</th>
+                      <th className="p-3 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sampleUsers.map((user) => (
+                      <tr key={user.id} className="border-t hover:bg-muted/50">
+                        <td className="p-3">
+                          <Checkbox />
+                        </td>
+                        <td className="p-3">{user.id}</td>
+                        <td className="p-3">{user.username}</td>
+                        <td className="p-3">{user.email}</td>
+                        <td className="p-3">{user.created_at}</td>
+                        <td className="p-3">
+                          <Badge 
+                            variant={user.status === "active" ? "default" : user.status === "inactive" ? "destructive" : "secondary"}
+                            className="text-xs"
+                          >
+                            {user.status}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <Trash2 className="h-4 w-4 text-red-400" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>Showing 1 to 5 of 5 entries</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled>Previous</Button>
+                  <Button variant="outline" size="sm">1</Button>
+                  <Button variant="outline" size="sm" disabled>Next</Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

@@ -34,9 +34,9 @@ const SqlEditor = () => {
   };
 
   return (
-    <div className="flex h-full">
-      <div className="flex-1 p-6">
-        <div className="space-y-4 h-full flex flex-col">
+    <div className="flex h-full overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-4 min-h-full flex flex-col">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">SQL Editor</h1>
@@ -54,7 +54,7 @@ const SqlEditor = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-h-[400px]">
             <Textarea
               value={sqlQuery}
               onChange={(e) => setSqlQuery(e.target.value)}
@@ -87,8 +87,8 @@ const SqlEditor = () => {
         </div>
       </div>
 
-      <div className="w-80 border-l border-border p-6">
-        <div className="space-y-6">
+      <div className="w-80 border-l border-border overflow-y-auto">
+        <div className="p-6 space-y-6">
           <div>
             <div className="flex items-center gap-2 mb-4">
               <RotateCcw className="h-4 w-4" />
