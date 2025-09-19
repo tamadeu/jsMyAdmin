@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs, AppTab } from "@/context/TabContext"; // Import useTabs and AppTab
+import { useAuth } from "@/context/AuthContext";
 
 interface DatabaseInfo {
   name: string;
@@ -33,6 +34,7 @@ const Sidebar = () => {
   const location = useLocation();
   const { toast } = useToast();
   const { tabs, activeTabId, addTab, setActiveTab, getTabById } = useTabs(); // Use tab context
+  const { hasPrivilege } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -235,14 +237,18 @@ const Sidebar = () => {
             <Settings className="h-4 w-4 mr-2" />
             Configuration
           </Button>
-          <Button 
-            variant={isSidebarItemActive("users") ? "secondary" : "ghost"} 
-            className="w-full justify-start"
-            onClick={() => addTab({ title: "Users", type: "users", closable: true })}
-          >
-            <Users className="h-4 w-4 mr-2" />
-            Users
-          </Button>
+          {hasPrivilege("CREATE USER") && (
+            <Button
+              variant={isSidebarItemActive("users") ? "secondary" : "ghost"}
+              className="w-full justify-start"
+              onClick={() =>
+                addTab({ title: "Users", type: "users", closable: true })
+              }
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Users
+            </Button>
+          )}
         </div>
       </div>
 

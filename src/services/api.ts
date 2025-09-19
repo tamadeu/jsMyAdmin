@@ -81,6 +81,18 @@ export interface LoginCredentials {
   password?: string;
 }
 
+export interface UserProfile {
+  username: string;
+  host: string;
+  globalPrivileges: string[];
+}
+
+export interface LoginResponse {
+  success: boolean;
+  message: string;
+  user?: UserProfile;
+}
+
 class ApiService {
   private baseUrl = "http://localhost:3001/api";
   private credentials: LoginCredentials | null = null;
@@ -101,9 +113,7 @@ class ApiService {
     };
   }
 
-  async login(
-    credentials: LoginCredentials,
-  ): Promise<{ success: boolean; message: string }> {
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
     const response = await fetch(`${this.baseUrl}/login`, {
       method: "POST",
       headers: {

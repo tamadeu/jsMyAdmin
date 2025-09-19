@@ -121,7 +121,51 @@ app.post('/api/login', async (req, res) => {
     });
 
     await connection.execute('SELECT 1');
-    res.json({ success: true, message: 'Login successful' });
+
+    // Fetch global privileges
+    const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
+    let globalPrivileges = new Set();
+    let hasGrantOption = false;
+
+    grants.forEach(grantRow => {
+      const grantString = Object.values(grantRow)[0];
+      if (grantString.includes('ON *.*')) {
+        const onGlobalRegex = /^GRANT (.*?) ON \*\.\*/;
+        const match = grantString.match(onGlobalRegex);
+        if (match && match[1]) {
+          match[1].split(',').forEach(p => globalPrivileges.add(p.trim().toUpperCase()));
+        }
+        if (grantString.includes('WITH GRANT OPTION')) {
+          hasGrantOption = true;
+        }
+      }
+    });
+
+    if (hasGrantOption) {
+      globalPrivileges.add('GRANT OPTION');
+    }
+
+    let finalPrivileges = Array.from(globalPrivileges);
+
+    if (finalPrivileges.includes('ALL PRIVILEGES')) {
+      finalPrivileges = [
+        "SELECT", "INSERT", "UPDATE", "DELETE", "FILE", "CREATE", "ALTER", "INDEX", "DROP", 
+        "CREATE TEMPORARY TABLES", "SHOW VIEW", "CREATE ROUTINE", "ALTER ROUTINE", "EXECUTE", 
+        "CREATE VIEW", "EVENT", "TRIGGER", "GRANT OPTION", "SUPER", "PROCESS", "RELOAD", 
+        "SHUTDOWN", "SHOW DATABASES", "LOCK TABLES", "REFERENCES", "REPLICATION CLIENT", 
+        "REPLICATION SLAVE", "CREATE USER"
+      ];
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Login successful',
+      user: {
+        username: username,
+        host: host,
+        globalPrivileges: finalPrivileges
+      }
+    });
   } catch (error) {
     console.error('Login failed:', error);
     res.status(401).json({ success: false, message: error.message });

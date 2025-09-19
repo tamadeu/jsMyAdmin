@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import UserPrivilegesDialog from "@/components/UserPrivilegesDialog"; // Import the dialog
+import { useAuth } from "@/context/AuthContext";
 
 interface MysqlUser {
   user: string;
@@ -14,6 +15,7 @@ interface MysqlUser {
 
 const UsersPage = () => {
   const { toast } = useToast();
+  const { hasPrivilege } = useAuth();
   const [users, setUsers] = useState<MysqlUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,10 +111,12 @@ const UsersPage = () => {
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
-              <Button size="sm" onClick={handleAddUser}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add User
-              </Button>
+              {hasPrivilege("CREATE USER") && (
+                <Button size="sm" onClick={handleAddUser}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add User
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -131,14 +135,28 @@ const UsersPage = () => {
                   <TableCell className="font-medium">{user.user}</TableCell>
                   <TableCell>{user.host}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="mr-2" onClick={() => handleEditUser(user)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Privileges
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-600" onClick={() => handleDeleteUser(user)}>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </Button>
+                    {hasPrivilege("GRANT OPTION") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mr-2"
+                        onClick={() => handleEditUser(user)}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Privileges
+                      </Button>
+                    )}
+                    {hasPrivilege("CREATE USER") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-600"
+                        onClick={() => handleDeleteUser(user)}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

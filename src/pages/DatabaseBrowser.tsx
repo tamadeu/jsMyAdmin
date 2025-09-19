@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiService, TableData } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -51,6 +52,7 @@ interface DatabaseBrowserProps {
 
 const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const { toast } = useToast();
+  const { hasPrivilege } = useAuth();
   const [searchInput, setSearchInput] = useState(""); // Input value (immediate)
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [tableData, setTableData] = useState<TableData | null>(null);
@@ -190,7 +192,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
   // Inline cell editing
   const handleCellDoubleClick = (rowIndex: number, columnName: string, currentValue: any) => {
-    if (!hasPrimaryKey) return; // Only allow editing if table has PK
+    if (!hasPrimaryKey || !hasPrivilege("UPDATE")) return; // Only allow editing if table has PK
     
     setEditingCell({ rowIndex, columnName });
     setEditValue(currentValue === null ? '' : String(currentValue));
@@ -480,10 +482,12 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   <Download className="h-4 w-4 mr-2" />
                   Export
                 </Button>
-                <Button size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Insert Row
-                </Button>
+                {hasPrivilege("INSERT") && (
+                  <Button size="sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Insert Row
+                  </Button>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -548,8 +552,8 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                       <table className="w-full text-xs">
                         <thead className="bg-muted">
                           <tr>
-                            {/* Actions column - only show if table has PK */}
-                            {hasPrimaryKey && (
+                            {/* Actions column - only show if table has PK and user has privileges */}
+                            {hasPrimaryKey && (hasPrivilege("UPDATE") || hasPrivilege("INSERT") || hasPrivilege("DELETE")) && (
                               <th className="p-2 text-left w-24">
                                 <span className="text-sm font-medium">Actions</span>
                               </th>
@@ -600,37 +604,43 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                         <tbody>
                           {tableData.data.map((row, rowIndex) => (
                             <tr key={rowIndex} className="border-t hover:bg-muted/50">
-                              {/* Actions column - only show if table has PK */}
-                              {hasPrimaryKey && (
+                              {/* Actions column - only show if table has PK and user has privileges */}
+                              {hasPrimaryKey && (hasPrivilege("UPDATE") || hasPrivilege("INSERT") || hasPrivilege("DELETE")) && (
                                 <td className="p-2">
                                   <div className="flex gap-1">
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      className="h-6 w-6 p-0"
-                                      title="Edit Row"
-                                      onClick={() => handleEditRow(rowIndex)}
-                                    >
-                                      <Edit className="h-3 w-3 text-blue-600" />
-                                    </Button>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      className="h-6 w-6 p-0"
-                                      title="Copy Row"
-                                      onClick={() => handleCopyRow(rowIndex)}
-                                    >
-                                      <Copy className="h-3 w-3 text-green-600" />
-                                    </Button>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      className="h-6 w-6 p-0"
-                                      title="Delete Row"
-                                      onClick={() => handleDeleteRow(rowIndex)}
-                                    >
-                                      <Trash2 className="h-3 w-3 text-red-600" />
-                                    </Button>
+                                    {hasPrivilege("UPDATE") && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-6 w-6 p-0"
+                                        title="Edit Row"
+                                        onClick={() => handleEditRow(rowIndex)}
+                                      >
+                                        <Edit className="h-3 w-3 text-blue-600" />
+                                      </Button>
+                                    )}
+                                    {hasPrivilege("INSERT") && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-6 w-6 p-0"
+                                        title="Copy Row"
+                                        onClick={() => handleCopyRow(rowIndex)}
+                                      >
+                                        <Copy className="h-3 w-3 text-green-600" />
+                                      </Button>
+                                    )}
+                                    {hasPrivilege("DELETE") && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-6 w-6 p-0"
+                                        title="Delete Row"
+                                        onClick={() => handleDeleteRow(rowIndex)}
+                                      >
+                                        <Trash2 className="h-3 w-3 text-red-600" />
+                                      </Button>
+                                    )}
                                   </div>
                                 </td>
                               )}
@@ -648,7 +658,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                   key={column.name} 
                                   className="p-2 max-w-xs cursor-pointer"
                                   onDoubleClick={() => handleCellDoubleClick(rowIndex, column.name, row[column.name])}
-                                  title={hasPrimaryKey ? "Double-click to edit" : undefined}
+                                  title={hasPrimaryKey && hasPrivilege("UPDATE") ? "Double-click to edit" : undefined}
                                 >
                                   {editingCell?.rowIndex === rowIndex && editingCell?.columnName === column.name ? (
                                     <Input
