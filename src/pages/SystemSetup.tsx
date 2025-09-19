@@ -8,7 +8,7 @@ import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
 const SYSTEM_DATABASE = "phpmyadmin_meta";
-const SYSTEM_TABLES = ["_pma_query_history", "_pma_favorite_queries", "_pma_favorite_tables"];
+const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables"];
 
 const SystemSetup = () => {
   const { toast } = useToast();
@@ -54,7 +54,7 @@ const SystemSetup = () => {
 
       // 2. Create tables
       const queries = [
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._pma_query_history (
+        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_query_history (
           id INT AUTO_INCREMENT PRIMARY KEY,
           query_text TEXT NOT NULL,
           database_context VARCHAR(255),
@@ -63,14 +63,14 @@ const SystemSetup = () => {
           status ENUM('success', 'error') NOT NULL,
           error_message TEXT
         );`,
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._pma_favorite_queries (
+        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_favorite_queries (
           id INT AUTO_INCREMENT PRIMARY KEY,
           name VARCHAR(255) NOT NULL,
           query_text TEXT NOT NULL,
           database_context VARCHAR(255),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );`,
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._pma_favorite_tables (
+        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_favorite_tables (
           id INT AUTO_INCREMENT PRIMARY KEY,
           database_name VARCHAR(255) NOT NULL,
           table_name VARCHAR(255) NOT NULL,
