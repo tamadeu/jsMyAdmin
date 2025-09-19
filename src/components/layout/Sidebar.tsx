@@ -235,14 +235,6 @@ const Sidebar = () => {
             <Settings className="h-4 w-4 mr-2" />
             Configuration
           </Button>
-          <Button 
-            variant={isSidebarItemActive("system-setup") ? "secondary" : "ghost"} 
-            className="w-full justify-start"
-            onClick={() => addTab({ title: "System Setup", type: "system-setup", closable: true })}
-          >
-            <Wrench className="h-4 w-4 mr-2" />
-            System Setup
-          </Button>
         </div>
       </div>
 
