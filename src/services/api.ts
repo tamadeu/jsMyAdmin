@@ -292,6 +292,15 @@ class ApiService {
     }
     return response.json();
   }
+
+  async getUsers(): Promise<Array<{ user: string; host: string }>> {
+    const response = await fetch(`${this.baseUrl}/users`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch users');
+    }
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();

@@ -10,6 +10,7 @@ import SqlEditor from "@/pages/SqlEditor";
 import Configuration from "@/pages/Configuration";
 import DatabaseBrowser from "@/pages/DatabaseBrowser";
 import QueryResultTable from "@/components/QueryResultTable";
+import UsersPage from "@/pages/Users";
 
 const TabsDisplay = () => {
   const { tabs, activeTabId, setActiveTab, removeTab, getTabById } = useTabs();
@@ -31,6 +32,8 @@ const TabsDisplay = () => {
         // Pass the originalQuery and database context to QueryResultTable
         // QueryResultTable will handle re-executing if data is missing
         return <QueryResultTable queryResult={tab.queryResult || { success: false, originalQuery: tab.originalQuery, executionTime: '0ms' }} database={tab.params?.database} />;
+      case 'users':
+        return <UsersPage />;
       default:
         return <div className="p-4 text-muted-foreground">Unknown tab type.</div>;
     }

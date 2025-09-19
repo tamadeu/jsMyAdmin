@@ -40,6 +40,10 @@ const Header = () => {
         headerTitle = activeTab.title;
         headerSubtitle = 'Results from your SQL query';
         break;
+      case 'users':
+        headerTitle = 'User Accounts';
+        headerSubtitle = 'Manage MySQL user accounts and privileges';
+        break;
       default:
         headerTitle = activeTab.title;
         break;

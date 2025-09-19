@@ -10,7 +10,7 @@ const LOCAL_STORAGE_ACTIVE_TAB_KEY = 'phpmyadmin-active-tab';
 export interface AppTab {
   id: string;
   title: string;
-  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result';
+  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result' | 'users';
   params?: { database?: string; table?: string; };
   closable: boolean;
   // Runtime properties (not directly persisted for all types, or re-fetched)
@@ -24,7 +24,7 @@ export interface AppTab {
 interface PersistedTab {
   id: string;
   title: string;
-  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result';
+  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result' | 'users';
   params?: { database?: string; table?: string; };
   closable: boolean;
   sqlQueryContent?: string; // For 'sql-editor'

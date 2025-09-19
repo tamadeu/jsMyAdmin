@@ -665,6 +665,25 @@ app.get('/api/status', async (req, res) => {
   }
 });
 
+// Get MySQL users
+app.get('/api/users', async (req, res) => {
+  try {
+    if (!connectionPool) {
+      const config = await loadConfig();
+      if (!config || !await createConnectionPool(config)) {
+        return res.status(500).json({ error: 'Database connection not configured' });
+      }
+    }
+
+    const [rows] = await connectionPool.query("SELECT user, host FROM mysql.user ORDER BY user, host");
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Initialize server
 async function startServer() {
   try {
