@@ -93,6 +93,17 @@ export interface LoginResponse {
   user?: UserProfile;
 }
 
+export interface DatabasePrivilege {
+  database: string;
+  privileges: string[];
+  grantOption: boolean;
+}
+
+export interface UserPrivilegesResponse {
+  globalPrivileges: string[];
+  databasePrivileges: DatabasePrivilege[];
+}
+
 class ApiService {
   private baseUrl = "http://localhost:3001/api";
   private credentials: LoginCredentials | null = null;
@@ -378,7 +389,7 @@ class ApiService {
   async getUserPrivileges(
     user: string,
     host: string,
-  ): Promise<{ globalPrivileges: string[] }> {
+  ): Promise<UserPrivilegesResponse> {
     const response = await fetch(
       `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`,
       {
@@ -412,6 +423,54 @@ class ApiService {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || "Failed to update privileges");
+    }
+    return response.json();
+  }
+
+  async updateDatabasePrivileges(
+    user: string,
+    host: string,
+    database: string,
+    privileges: string[],
+    grantOption: boolean,
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/database-privileges`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...this.getAuthHeaders(),
+        },
+        body: JSON.stringify({ database, privileges, grantOption }),
+      },
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to update database privileges");
+    }
+    return response.json();
+  }
+
+  async revokeDatabasePrivileges(
+    user: string,
+    host: string,
+    database: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/database-privileges`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...this.getAuthHeaders(),
+        },
+        body: JSON.stringify({ database }),
+      },
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to revoke database privileges");
     }
     return response.json();
   }

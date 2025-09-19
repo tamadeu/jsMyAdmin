@@ -514,7 +514,7 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Get user privileges
+// Get user privileges (global and database-specific)
 app.get('/api/users/:user/:host/privileges', async (req, res) => {
   let connection;
   try {
@@ -522,18 +522,43 @@ app.get('/api/users/:user/:host/privileges', async (req, res) => {
     const { user, host } = req.params;
     const [rows] = await connection.query('SHOW GRANTS FOR ?@?', [user, host]);
     
-    const grantString = Object.values(rows[0])[0];
-    const match = grantString.match(/^GRANT (.*) ON/);
-    let privileges = [];
-    if (match && match[1]) {
-      privileges = match[1].split(',').map(p => p.trim().toUpperCase());
-    }
-    
-    if (privileges.includes('ALL PRIVILEGES')) {
-      privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "REFERENCES", "INDEX", "ALTER", "CREATE TEMPORARY TABLES", "LOCK TABLES", "EXECUTE", "CREATE VIEW", "SHOW VIEW", "CREATE ROUTINE", "ALTER ROUTINE", "EVENT", "TRIGGER"];
-    }
-    
-    res.json({ globalPrivileges: privileges });
+    const globalRegex = /^GRANT (.*) ON \*\.\* TO/;
+    const dbRegex = /^GRANT (.*) ON `(.*?)`\.\* TO/;
+
+    let globalPrivileges = new Set();
+    const databasePrivileges = {};
+
+    rows.forEach(row => {
+      const grant = Object.values(row)[0];
+      const withGrantOption = grant.includes('WITH GRANT OPTION');
+
+      let match = grant.match(globalRegex);
+      if (match) {
+        const privs = match[1].split(',').map(p => p.trim().toUpperCase());
+        privs.forEach(p => globalPrivileges.add(p));
+        if (withGrantOption) globalPrivileges.add('GRANT OPTION');
+        return;
+      }
+
+      match = grant.match(dbRegex);
+      if (match) {
+        const dbName = match[2];
+        if (!databasePrivileges[dbName]) {
+          databasePrivileges[dbName] = { database: dbName, privileges: new Set(), grantOption: false };
+        }
+        const privs = match[1].split(',').map(p => p.trim().toUpperCase());
+        privs.forEach(p => databasePrivileges[dbName].privileges.add(p));
+        if (withGrantOption) databasePrivileges[dbName].grantOption = true;
+      }
+    });
+
+    const finalGlobal = Array.from(globalPrivileges).filter(p => p !== 'USAGE');
+    const finalDb = Object.values(databasePrivileges).map(db => ({
+      ...db,
+      privileges: Array.from(db.privileges)
+    }));
+
+    res.json({ globalPrivileges: finalGlobal, databasePrivileges: finalDb });
   } catch (error) {
     console.error('Error fetching user privileges:', error);
     res.status(500).json({ error: error.message });
@@ -542,7 +567,7 @@ app.get('/api/users/:user/:host/privileges', async (req, res) => {
   }
 });
 
-// Update user privileges
+// Update global user privileges
 app.post('/api/users/:user/:host/privileges', async (req, res) => {
   let connection;
   try {
@@ -550,16 +575,62 @@ app.post('/api/users/:user/:host/privileges', async (req, res) => {
     const { user, host } = req.params;
     const { privileges } = req.body;
 
-    await connection.query('REVOKE ALL PRIVILEGES, GRANT OPTION FROM ?@?', [user, host]);
+    await connection.query('REVOKE ALL PRIVILEGES ON *.* FROM ?@?', [user, host]);
     
     if (privileges && privileges.length > 0) {
       const grantQuery = `GRANT ${privileges.join(', ')} ON *.* TO ?@?`;
       await connection.query(grantQuery, [user, host]);
     }
     
-    res.json({ success: true, message: 'Privileges updated successfully' });
+    res.json({ success: true, message: 'Global privileges updated successfully' });
   } catch (error) {
-    console.error('Error updating user privileges:', error);
+    console.error('Error updating global privileges:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Update/Add database privileges
+app.post('/api/users/:user/:host/database-privileges', async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnectionFromRequest(req);
+    const { user, host } = req.params;
+    const { database, privileges, grantOption } = req.body;
+
+    await connection.query('REVOKE ALL PRIVILEGES ON `??`.* FROM ?@?', [database, user, host]);
+    
+    if (privileges && privileges.length > 0) {
+      let grantQuery = `GRANT ${privileges.join(', ')} ON \`${database}\`.* TO ?@?`;
+      if (grantOption) {
+        grantQuery += ' WITH GRANT OPTION';
+      }
+      await connection.query(grantQuery, [user, host]);
+    }
+    
+    res.json({ success: true, message: 'Database privileges updated' });
+  } catch (error) {
+    console.error('Error updating database privileges:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Revoke all privileges on a database
+app.delete('/api/users/:user/:host/database-privileges', async (req, res) => {
+  let connection;
+  try {
+    connection = await createConnectionFromRequest(req);
+    const { user, host } = req.params;
+    const { database } = req.body;
+
+    await connection.query('REVOKE ALL PRIVILEGES, GRANT OPTION ON `??`.* FROM ?@?', [database, user, host]);
+    
+    res.json({ success: true, message: 'Database privileges revoked' });
+  } catch (error) {
+    console.error('Error revoking database privileges:', error);
     res.status(500).json({ error: error.message });
   } finally {
     if (connection) await connection.end();
