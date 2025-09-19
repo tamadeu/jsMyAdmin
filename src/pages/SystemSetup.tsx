@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
-const SYSTEM_DATABASE = "phpmyadmin_meta";
+const SYSTEM_DATABASE = "javascriptmyadmin_meta";
 const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables"];
 
 const SystemSetup = () => {
