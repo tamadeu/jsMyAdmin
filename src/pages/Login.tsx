@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Database, Loader2, AlertCircle } from "lucide-react";
+import { DatabaseConfig } from "@/services/api";
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -22,6 +23,20 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const savedConfigJson = localStorage.getItem('database-config');
+      if (savedConfigJson) {
+        const savedConfig: DatabaseConfig = JSON.parse(savedConfigJson);
+        setHost(savedConfig.database.host);
+        setUsername(savedConfig.database.username);
+        setPassword(savedConfig.database.password);
+      }
+    } catch (e) {
+      console.error("Failed to load config from localStorage", e);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
