@@ -10,6 +10,7 @@ import SqlEditor from "@/pages/SqlEditor";
 import Configuration from "@/pages/Configuration";
 import DatabaseBrowser from "@/pages/DatabaseBrowser";
 import QueryResultTable from "@/components/QueryResultTable";
+import SystemSetup from '@/pages/SystemSetup';
 
 const TabsDisplay = () => {
   const { tabs, activeTabId, setActiveTab, removeTab, getTabById } = useTabs();
@@ -22,6 +23,8 @@ const TabsDisplay = () => {
         return <SqlEditor />;
       case 'config':
         return <Configuration />;
+      case 'system-setup':
+        return <SystemSetup />;
       case 'table':
         if (tab.params?.database && tab.params?.table) {
           return <DatabaseBrowser database={tab.params.database} table={tab.params.table} />;

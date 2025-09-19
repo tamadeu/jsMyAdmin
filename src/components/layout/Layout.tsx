@@ -32,6 +32,10 @@ const Layout = () => {
         headerTitle = 'Database Configuration';
         headerSubtitle = 'Configure your MySQL database connection settings';
         break;
+      case 'system-setup':
+        headerTitle = 'System Setup';
+        headerSubtitle = 'Manage internal system tables';
+        break;
       case 'table':
         headerTitle = `Table: ${activeTab.params?.table}`;
         headerSubtitle = `Databases / ${activeTab.params?.database} / ${activeTab.params?.table}`;

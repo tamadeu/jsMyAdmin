@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle } from "lucide-react";
+import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -234,6 +234,14 @@ const Sidebar = () => {
           >
             <Settings className="h-4 w-4 mr-2" />
             Configuration
+          </Button>
+          <Button 
+            variant={isSidebarItemActive("system-setup") ? "secondary" : "ghost"} 
+            className="w-full justify-start"
+            onClick={() => addTab({ title: "System Setup", type: "system-setup", closable: true })}
+          >
+            <Wrench className="h-4 w-4 mr-2" />
+            System Setup
           </Button>
         </div>
       </div>
