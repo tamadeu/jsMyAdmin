@@ -301,6 +301,31 @@ class ApiService {
     }
     return response.json();
   }
+
+  async getUserPrivileges(user: string, host: string): Promise<{ globalPrivileges: string[] }> {
+    const response = await fetch(`${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch user privileges');
+    }
+    return response.json();
+  }
+
+  async updateUserPrivileges(user: string, host: string, data: { privileges: string[] }): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update privileges');
+    }
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();

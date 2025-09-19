@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import UserPrivilegesDialog from "@/components/UserPrivilegesDialog"; // Import the dialog
 
 interface MysqlUser {
   user: string;
@@ -16,6 +17,7 @@ const UsersPage = () => {
   const [users, setUsers] = useState<MysqlUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<MysqlUser | null>(null); // State for dialog
 
   const loadUsers = async () => {
     try {
@@ -48,10 +50,7 @@ const UsersPage = () => {
   };
 
   const handleEditUser = (user: MysqlUser) => {
-    toast({
-      title: "Not Implemented",
-      description: `Editing user ${user.user}@${user.host} will be implemented soon.`,
-    });
+    setEditingUser(user); // Open the dialog
   };
 
   const handleDeleteUser = (user: MysqlUser) => {
@@ -88,6 +87,13 @@ const UsersPage = () => {
 
   return (
     <div className="p-6 space-y-6">
+      {editingUser && (
+        <UserPrivilegesDialog
+          user={editingUser.user}
+          host={editingUser.host}
+          onClose={() => setEditingUser(null)}
+        />
+      )}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

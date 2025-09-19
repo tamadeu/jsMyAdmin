@@ -684,6 +684,61 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
+// Get user privileges
+app.get('/api/users/:user/:host/privileges', async (req, res) => {
+  try {
+    if (!connectionPool) {
+      return res.status(500).json({ error: 'Database connection not configured' });
+    }
+    const { user, host } = req.params;
+    const [rows] = await connectionPool.query('SHOW GRANTS FOR ?@?', [user, host]);
+    
+    const grantString = Object.values(rows[0])[0];
+    const match = grantString.match(/^GRANT (.*) ON/);
+    let privileges = [];
+    if (match && match[1]) {
+      privileges = match[1].split(',').map(p => p.trim().toUpperCase());
+    }
+    
+    // Handle ALL PRIVILEGES case
+    if (privileges.includes('ALL PRIVILEGES')) {
+      // This is a simplification. A full implementation would list all possible privileges.
+      privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "REFERENCES", "INDEX", "ALTER", "CREATE TEMPORARY TABLES", "LOCK TABLES", "EXECUTE", "CREATE VIEW", "SHOW VIEW", "CREATE ROUTINE", "ALTER ROUTINE", "EVENT", "TRIGGER"];
+    }
+    
+    res.json({ globalPrivileges: privileges });
+  } catch (error) {
+    console.error('Error fetching user privileges:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user privileges
+app.post('/api/users/:user/:host/privileges', async (req, res) => {
+  try {
+    if (!connectionPool) {
+      return res.status(500).json({ error: 'Database connection not configured' });
+    }
+    const { user, host } = req.params;
+    const { privileges } = req.body;
+
+    // This is a simplified approach. A robust solution would compare current vs. desired privileges.
+    // For now, we revoke all and grant the new set. This will remove non-global privileges.
+    // WARNING: This is destructive for non-global privileges.
+    await connectionPool.query('REVOKE ALL PRIVILEGES, GRANT OPTION FROM ?@?', [user, host]);
+    
+    if (privileges && privileges.length > 0) {
+      const grantQuery = `GRANT ${privileges.join(', ')} ON *.* TO ?@?`;
+      await connectionPool.query(grantQuery, [user, host]);
+    }
+    
+    res.json({ success: true, message: 'Privileges updated successfully' });
+  } catch (error) {
+    console.error('Error updating user privileges:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Initialize server
 async function startServer() {
   try {
