@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Loader2, AlertCircle, Save, XCircle, Trash2, Edit, PlusCircle } from "lucide-react";
+import { Loader2, AlertCircle, Save, XCircle, Trash2, Edit } from "lucide-react";
 import { apiService, DatabasePrivilege } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,10 +22,14 @@ interface UserPrivilegesDialogProps {
 const GLOBAL_PRIVILEGES = {
   data: ["SELECT", "INSERT", "UPDATE", "DELETE", "FILE"],
   structure: ["CREATE", "ALTER", "INDEX", "DROP", "CREATE TEMPORARY TABLES", "SHOW VIEW", "CREATE ROUTINE", "ALTER ROUTINE", "EXECUTE", "CREATE VIEW", "EVENT", "TRIGGER"],
-  admin: ["GRANT OPTION", "SUPER", "PROCESS", "RELOAD", "SHUTDOWN", "SHOW DATABASES", "LOCK TABLES", "REFERENCES", "REPLICATION CLIENT", "REPLICATION SLAVE", "CREATE USER"]
+  administration: ["GRANT OPTION", "SUPER", "PROCESS", "RELOAD", "SHUTDOWN", "SHOW DATABASES", "LOCK TABLES", "REFERENCES", "REPLICATION CLIENT", "REPLICATION SLAVE", "CREATE USER"]
 };
 
-const DB_PRIVILEGES_LIST = ["SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "INDEX", "DROP", "CREATE TEMPORARY TABLES", "SHOW VIEW", "CREATE ROUTINE", "ALTER ROUTINE", "EXECUTE", "CREATE VIEW", "EVENT", "TRIGGER", "REFERENCES", "LOCK TABLES"];
+const DB_PRIVILEGES = {
+  data: ["SELECT", "INSERT", "UPDATE", "DELETE"],
+  structure: ["CREATE", "ALTER", "INDEX", "DROP", "CREATE TEMPORARY TABLES", "SHOW VIEW", "CREATE ROUTINE", "ALTER ROUTINE", "EXECUTE", "CREATE VIEW", "EVENT", "TRIGGER"],
+  administration: ["LOCK TABLES", "REFERENCES"]
+};
 
 const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps) => {
   const { toast } = useToast();
@@ -33,10 +37,7 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Global privileges state
   const [globalPrivileges, setGlobalPrivileges] = useState<Set<string>>(new Set());
-
-  // Database privileges state
   const [dbPrivileges, setDbPrivileges] = useState<DatabasePrivilege[]>([]);
   const [allDatabases, setAllDatabases] = useState<string[]>([]);
   const [editingDb, setEditingDb] = useState<Partial<DatabasePrivilege> | null>(null);
@@ -64,7 +65,6 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
     fetchAllData();
   }, [fetchAllData]);
 
-  // --- Global Privileges Handlers ---
   const handleGlobalPrivilegeChange = (priv: string, checked: boolean) => {
     setGlobalPrivileges(prev => {
       const newPrivs = new Set(prev);
@@ -86,7 +86,6 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
     }
   };
 
-  // --- Database Privileges Handlers ---
   const handleRevokeDb = async (database: string) => {
     try {
       await apiService.revokeDatabasePrivileges(user, host, database);
@@ -130,20 +129,43 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
     setEditingDb(prev => ({ ...prev!, privileges: Array.from(currentPrivs) }));
   };
 
-  // --- Render Functions ---
-  const renderPrivilegeCheckboxes = (title: string, privilegeList: string[], selected: Set<string>, onChange: (priv: string, checked: boolean) => void) => (
-    <div key={title}>
-      <h4 className="font-semibold text-md mb-2">{title}</h4>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4 border rounded-md">
-        {privilegeList.map(priv => (
-          <div key={priv} className="flex items-center space-x-2">
-            <Checkbox id={`${title}-${priv}`} checked={selected.has(priv)} onCheckedChange={(checked) => onChange(priv, !!checked)} />
-            <Label htmlFor={`${title}-${priv}`} className="text-sm font-normal cursor-pointer">{priv}</Label>
+  const renderCategorizedPrivileges = (
+    categories: Record<string, string[]>,
+    selectedPrivs: Set<string>,
+    onChange: (priv: string, checked: boolean) => void
+  ) => {
+    const handleSelectAll = (privilegeList: string[]) => {
+      privilegeList.forEach(p => onChange(p, true));
+    };
+    const handleDeselectAll = (privilegeList: string[]) => {
+      privilegeList.forEach(p => onChange(p, false));
+    };
+
+    return (
+      <div className="flex flex-col md:flex-row gap-4 items-start">
+        {Object.entries(categories).map(([categoryName, privileges]) => (
+          <div key={categoryName} className="p-4 border rounded-md flex-1 w-full md:w-auto">
+            <div className="flex justify-between items-center mb-3 pb-2 border-b">
+              <h4 className="font-semibold text-md capitalize">{categoryName}</h4>
+              <div>
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => handleSelectAll(privileges)}>All</Button>
+                <span className="mx-1 text-muted-foreground">/</span>
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => handleDeselectAll(privileges)}>None</Button>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {privileges.map(priv => (
+                <div key={priv} className="flex items-center space-x-2">
+                  <Checkbox id={`${categoryName}-${priv}`} checked={selectedPrivs.has(priv)} onCheckedChange={(checked) => onChange(priv, !!checked)} />
+                  <Label htmlFor={`${categoryName}-${priv}`} className="text-sm font-normal cursor-pointer">{priv}</Label>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -162,11 +184,9 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
               <TabsTrigger value="global">Global Privileges</TabsTrigger>
               <TabsTrigger value="database">Database-Specific</TabsTrigger>
             </TabsList>
-            <TabsContent value="global" className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-2">
-              {renderPrivilegeCheckboxes("Data", GLOBAL_PRIVILEGES.data, globalPrivileges, handleGlobalPrivilegeChange)}
-              {renderPrivilegeCheckboxes("Structure", GLOBAL_PRIVILEGES.structure, globalPrivileges, handleGlobalPrivilegeChange)}
-              {renderPrivilegeCheckboxes("Administration", GLOBAL_PRIVILEGES.admin, globalPrivileges, handleGlobalPrivilegeChange)}
-              <div className="flex justify-end">
+            <TabsContent value="global" className="py-4 max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+              {renderCategorizedPrivileges(GLOBAL_PRIVILEGES, globalPrivileges, handleGlobalPrivilegeChange)}
+              <div className="flex justify-end pt-4">
                 <Button onClick={handleSaveGlobal} disabled={isSaving}>
                   {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
                   Save Global Privileges
@@ -219,15 +239,8 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
                   </div>
                   {editingDb && (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
-                        {DB_PRIVILEGES_LIST.map(priv => (
-                          <div key={priv} className="flex items-center space-x-2">
-                            <Checkbox id={`db-${priv}`} checked={editingDb.privileges?.includes(priv)} onCheckedChange={(checked) => handleEditingDbPrivChange(priv, !!checked)} />
-                            <Label htmlFor={`db-${priv}`} className="text-sm font-normal">{priv}</Label>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex items-center space-x-2">
+                      {renderCategorizedPrivileges(DB_PRIVILEGES, new Set(editingDb.privileges || []), handleEditingDbPrivChange)}
+                      <div className="flex items-center space-x-2 pt-2">
                         <Checkbox id="db-grant" checked={editingDb.grantOption} onCheckedChange={(checked) => setEditingDb(prev => ({ ...prev!, grantOption: !!checked }))} />
                         <Label htmlFor="db-grant">GRANT OPTION</Label>
                       </div>
