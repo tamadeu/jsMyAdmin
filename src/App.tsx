@@ -5,10 +5,31 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
 import Layout from "./components/layout/Layout";
-import NotFound from "./pages/NotFound";
-import { TabProvider } from "./context/TabContext"; // Import TabProvider
+import LoginPage from "./pages/Login"; // Importa LoginPage
+import { TabProvider } from "./context/TabContext";
+import { AuthProvider, useAuth } from "./context/AuthContext"; // Importa AuthProvider e useAuth
 
 const queryClient = new QueryClient();
+
+const AppContent = () => {
+  const { isAuthenticated } = useAuth();
+
+  return (
+    <BrowserRouter>
+      {isAuthenticated ? (
+        <TabProvider>
+          <Routes>
+            <Route path="/*" element={<Layout />} />
+          </Routes>
+        </TabProvider>
+      ) : (
+        <Routes>
+          <Route path="/*" element={<LoginPage />} />
+        </Routes>
+      )}
+    </BrowserRouter>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -16,15 +37,9 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
-          <TabProvider> {/* Wrap with TabProvider */}
-            <Routes>
-              <Route path="/" element={<Layout />} /> {/* Layout will now handle tabs */}
-              {/* Keep NotFound for direct invalid URL access */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </TabProvider>
-        </BrowserRouter>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
       </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>

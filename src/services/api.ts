@@ -75,14 +75,52 @@ export interface DatabaseConfig {
   };
 }
 
-class ApiService {
-  private baseUrl = 'http://localhost:3001/api';
+export interface LoginCredentials {
+  host: string;
+  username: string;
+  password?: string;
+}
 
-  async testConnection(config: DatabaseConfig): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${this.baseUrl}/test-connection`, {
-      method: 'POST',
+class ApiService {
+  private baseUrl = "http://localhost:3001/api";
+  private credentials: LoginCredentials | null = null;
+
+  setCredentials(credentials: LoginCredentials | null) {
+    this.credentials = credentials;
+  }
+
+  private getAuthHeaders(): Record<string, string> {
+    if (!this.credentials) {
+      // Lança um erro se as credenciais não estiverem definidas para chamadas autenticadas
+      throw new Error("User is not authenticated.");
+    }
+    return {
+      "X-DB-User": this.credentials.username,
+      "X-DB-Password": this.credentials.password || "",
+      "X-DB-Host": this.credentials.host,
+    };
+  }
+
+  async login(
+    credentials: LoginCredentials,
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/login`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(credentials),
+    });
+    return response.json();
+  }
+
+  async testConnection(
+    config: DatabaseConfig,
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/test-connection`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(config),
     });
@@ -90,11 +128,13 @@ class ApiService {
     return response.json();
   }
 
-  async saveConfig(config: DatabaseConfig): Promise<{ success: boolean; message: string }> {
+  async saveConfig(
+    config: DatabaseConfig,
+  ): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${this.baseUrl}/save-config`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(config),
     });
@@ -103,38 +143,44 @@ class ApiService {
   }
 
   async getDatabases(): Promise<string[]> {
-    const response = await fetch(`${this.baseUrl}/databases`);
+    const response = await fetch(`${this.baseUrl}/databases`, {
+      headers: this.getAuthHeaders(),
+    });
     if (!response.ok) {
-      throw new Error('Failed to fetch databases');
+      throw new Error("Failed to fetch databases");
     }
     return response.json();
   }
 
   async getTables(database: string): Promise<DatabaseTablesResponse> {
-    const response = await fetch(`${this.baseUrl}/databases/${encodeURIComponent(database)}/tables`);
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables`,
+      {
+        headers: this.getAuthHeaders(),
+      },
+    );
     if (!response.ok) {
-      throw new Error('Failed to fetch tables');
+      throw new Error("Failed to fetch tables");
     }
     return response.json();
   }
 
   async getTableData(
-    database: string, 
-    table: string, 
+    database: string,
+    table: string,
     options: {
       limit?: number;
       offset?: number;
       search?: string;
       columnFilters?: Record<string, string>;
-    } = {}
+    } = {},
   ): Promise<TableData> {
     const params = new URLSearchParams();
-    
-    if (options.limit) params.append('limit', options.limit.toString());
-    if (options.offset) params.append('offset', options.offset.toString());
-    if (options.search) params.append('search', options.search);
-    
-    // Add column filters
+
+    if (options.limit) params.append("limit", options.limit.toString());
+    if (options.offset) params.append("offset", options.offset.toString());
+    if (options.search) params.append("search", options.search);
+
     if (options.columnFilters) {
       Object.entries(options.columnFilters).forEach(([column, value]) => {
         if (value) {
@@ -144,13 +190,16 @@ class ApiService {
     }
 
     const response = await fetch(
-      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/data?${params}`
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/data?${params}`,
+      {
+        headers: this.getAuthHeaders(),
+      },
     );
-    
+
     if (!response.ok) {
-      throw new Error('Failed to fetch table data');
+      throw new Error("Failed to fetch table data");
     }
-    
+
     return response.json();
   }
 
@@ -159,26 +208,27 @@ class ApiService {
     table: string,
     primaryKey: any,
     columnName: string,
-    newValue: any
+    newValue: any,
   ): Promise<{ success: boolean; message: string; affectedRows: number }> {
     const response = await fetch(
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/cell`,
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          ...this.getAuthHeaders(),
         },
         body: JSON.stringify({
           primaryKey,
           columnName,
-          newValue
+          newValue,
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to update cell');
+      throw new Error(error.error || "Failed to update cell");
     }
 
     return response.json();
@@ -188,25 +238,26 @@ class ApiService {
     database: string,
     table: string,
     primaryKey: any,
-    data: Record<string, any>
+    data: Record<string, any>,
   ): Promise<{ success: boolean; message: string; affectedRows: number }> {
     const response = await fetch(
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
       {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          ...this.getAuthHeaders(),
         },
         body: JSON.stringify({
           primaryKey,
-          data
+          data,
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to update row');
+      throw new Error(error.error || "Failed to update row");
     }
 
     return response.json();
@@ -215,24 +266,30 @@ class ApiService {
   async insertRow(
     database: string,
     table: string,
-    data: Record<string, any>
-  ): Promise<{ success: boolean; message: string; insertId: number; affectedRows: number }> {
+    data: Record<string, any>,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    insertId: number;
+    affectedRows: number;
+  }> {
     const response = await fetch(
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          ...this.getAuthHeaders(),
         },
         body: JSON.stringify({
-          data
+          data,
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to insert row');
+      throw new Error(error.error || "Failed to insert row");
     }
 
     return response.json();
@@ -241,24 +298,25 @@ class ApiService {
   async deleteRow(
     database: string,
     table: string,
-    primaryKey: any
+    primaryKey: any,
   ): Promise<{ success: boolean; message: string; affectedRows: number }> {
     const response = await fetch(
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
       {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          ...this.getAuthHeaders(),
         },
         body: JSON.stringify({
-          primaryKey
+          primaryKey,
         }),
-      }
+      },
     );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to delete row');
+      throw new Error(error.error || "Failed to delete row");
     }
 
     return response.json();
@@ -266,18 +324,19 @@ class ApiService {
 
   async executeQuery(query: string, database?: string): Promise<QueryResult> {
     const response = await fetch(`${this.baseUrl}/query`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
+        ...this.getAuthHeaders(),
       },
       body: JSON.stringify({
         query,
-        database
+        database,
       }),
     });
 
     const result = await response.json();
-    return { ...result, originalQuery: query }; // Adiciona a query original ao resultado
+    return { ...result, originalQuery: query };
   }
 
   async getServerStatus(): Promise<{
@@ -286,43 +345,63 @@ class ApiService {
     connections: number;
     status: string;
   }> {
-    const response = await fetch(`${this.baseUrl}/status`);
+    const response = await fetch(`${this.baseUrl}/status`, {
+      headers: this.getAuthHeaders(),
+    });
     if (!response.ok) {
-      throw new Error('Failed to fetch server status');
+      throw new Error("Failed to fetch server status");
     }
     return response.json();
   }
 
   async getUsers(): Promise<Array<{ user: string; host: string }>> {
-    const response = await fetch(`${this.baseUrl}/users`);
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to fetch users');
-    }
-    return response.json();
-  }
-
-  async getUserPrivileges(user: string, host: string): Promise<{ globalPrivileges: string[] }> {
-    const response = await fetch(`${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`);
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to fetch user privileges');
-    }
-    return response.json();
-  }
-
-  async updateUserPrivileges(user: string, host: string, data: { privileges: string[] }): Promise<{ success: boolean; message: string }> {
-    const response = await fetch(`${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
+    const response = await fetch(`${this.baseUrl}/users`, {
+      headers: this.getAuthHeaders(),
     });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to fetch users");
+    }
+    return response.json();
+  }
+
+  async getUserPrivileges(
+    user: string,
+    host: string,
+  ): Promise<{ globalPrivileges: string[] }> {
+    const response = await fetch(
+      `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`,
+      {
+        headers: this.getAuthHeaders(),
+      },
+    );
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to fetch user privileges");
+    }
+    return response.json();
+  }
+
+  async updateUserPrivileges(
+    user: string,
+    host: string,
+    data: { privileges: string[] },
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...this.getAuthHeaders(),
+        },
+        body: JSON.stringify(data),
+      },
+    );
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to update privileges');
+      throw new Error(error.error || "Failed to update privileges");
     }
     return response.json();
   }
