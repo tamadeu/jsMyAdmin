@@ -41,11 +41,12 @@ const SqlEditor = () => {
 
   const executeQuery = useCallback(async () => {
     setIsExecuting(true);
+    let result: QueryResult | null = null;
     try {
-      const result = await apiService.executeQuery(sqlQuery);
+      result = await apiService.executeQuery(sqlQuery);
 
       setQueryHistory(prev => [
-        { query: sqlQuery, time: result.executionTime, timestamp: new Date().toLocaleString() },
+        { query: sqlQuery, time: `${result.executionTime}ms`, timestamp: new Date().toLocaleString() },
         ...prev.slice(0, 4)
       ]);
 
@@ -79,8 +80,26 @@ const SqlEditor = () => {
         description: error instanceof Error ? error.message : "Failed to execute SQL query",
         variant: "destructive"
       });
+      result = {
+        success: false,
+        error: error instanceof Error ? error.message : "Client-side error",
+        executionTime: 0,
+        originalQuery: sqlQuery
+      };
     } finally {
       setIsExecuting(false);
+      if (result) {
+        // Fire-and-forget saving to history
+        apiService.saveQueryToHistory({
+          query_text: sqlQuery,
+          execution_time_ms: result.executionTime,
+          status: result.success ? 'success' : 'error',
+          error_message: result.error,
+        }).catch(err => {
+          // Log error to console but don't bother the user
+          console.warn("Could not save query to history:", err);
+        });
+      }
     }
   }, [sqlQuery, addTab, toast, removeTab, activeTabId]); // Adicionado removeTab e activeTabId às dependências
 

@@ -447,6 +447,7 @@ app.delete('/api/databases/:database/tables/:table/row', async (req, res) => {
 // Execute SQL query
 app.post('/api/query', async (req, res) => {
   let connection;
+  const startTime = Date.now();
   try {
     connection = await createConnectionFromRequest(req);
     const { query, database } = req.body;
@@ -454,7 +455,6 @@ app.post('/api/query', async (req, res) => {
 
     if (database) await connection.query(`USE \`${database}\``);
 
-    const startTime = Date.now();
     const [rows, fields] = await connection.query(query);
     const executionTime = Date.now() - startTime;
 
@@ -463,17 +463,64 @@ app.post('/api/query', async (req, res) => {
         success: true, data: rows,
         fields: fields?.map(f => ({ name: f.name, type: f.type, table: f.table })) || [],
         rowCount: Array.isArray(rows) ? rows.length : 0,
-        executionTime: `${executionTime}ms`
+        executionTime: executionTime
       });
     } else {
       res.json({
         success: true, message: `Query executed successfully. ${rows.affectedRows || 0} rows affected.`,
-        affectedRows: rows.affectedRows || 0, executionTime: `${executionTime}ms`
+        affectedRows: rows.affectedRows || 0, executionTime: executionTime
       });
     }
   } catch (error) {
+    const executionTime = Date.now() - startTime;
     console.error('Error executing query:', error);
-    res.status(400).json({ success: false, error: error.message });
+    res.status(400).json({ success: false, error: error.message, executionTime: executionTime });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Save query to history
+app.post('/api/query-history', async (req, res) => {
+  let connection;
+  try {
+    const { query_text, database_context, execution_time_ms, status, error_message } = req.body;
+    
+    const config = await loadConfig();
+    if (!config) {
+      console.warn('Could not save query history: config file not found.');
+      return res.status(200).json({ success: true, message: 'History not saved; config missing.' });
+    }
+
+    // Use credentials from config file to ensure write access to system DB
+    connection = await mysql.createConnection({
+      host: config.database.host,
+      port: config.database.port,
+      user: config.database.username,
+      password: config.database.password,
+      timezone: '+00:00'
+    });
+
+    const historyQuery = `
+      INSERT INTO \`javascriptmyadmin_meta\`.\`_jsma_query_history\` 
+      (query_text, database_context, execution_time_ms, status, error_message) 
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    
+    await connection.execute(historyQuery, [
+      query_text,
+      database_context || null,
+      execution_time_ms,
+      status,
+      error_message || null
+    ]);
+    
+    res.json({ success: true, message: 'Query history saved.' });
+  } catch (error) {
+    // This is a non-critical, fire-and-forget feature.
+    // If it fails (e.g., system tables not set up), log it server-side but don't fail the user's request.
+    console.warn('Could not save query history:', error.message);
+    res.status(200).json({ success: false, message: 'Could not save query history.' });
   } finally {
     if (connection) await connection.end();
   }

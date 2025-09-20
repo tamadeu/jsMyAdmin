@@ -39,7 +39,7 @@ export interface QueryResult {
   rowCount?: number;
   message?: string;
   affectedRows?: number;
-  executionTime: string;
+  executionTime: number;
   error?: string;
   originalQuery?: string; // Adicionado aqui
 }
@@ -102,6 +102,14 @@ export interface DatabasePrivilege {
 export interface UserPrivilegesResponse {
   globalPrivileges: string[];
   databasePrivileges: DatabasePrivilege[];
+}
+
+export interface QueryHistoryPayload {
+  query_text: string;
+  database_context?: string;
+  execution_time_ms: number;
+  status: 'success' | 'error';
+  error_message?: string;
 }
 
 const CREDENTIALS_STORAGE_KEY = "phpmyadmin-credentials";
@@ -381,6 +389,26 @@ class ApiService {
 
     const result = await response.json();
     return { ...result, originalQuery: query };
+  }
+
+  async saveQueryToHistory(payload: QueryHistoryPayload): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/query-history`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        console.error('Failed to save query history. Status:', response.status);
+        return response.json();
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Network error while saving query history:', error);
+      return { success: false, message: error instanceof Error ? error.message : 'Network error' };
+    }
   }
 
   async getServerStatus(): Promise<{

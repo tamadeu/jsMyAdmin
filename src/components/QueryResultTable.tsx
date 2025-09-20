@@ -289,7 +289,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
               <div>
                 Mostrando registros {startRow + 1} - {endRow + 1} ({currentQueryResult.rowCount?.toLocaleString() || 0} no total,{' '}
                 {hasAnyFilters && `filtrado no cliente (${filteredData.length.toLocaleString()} resultados), `}
-                Consulta levou {currentQueryResult.executionTime} segundos.)
+                Consulta levou {(currentQueryResult.executionTime / 1000).toFixed(4)} segundos.)
               </div>
               {currentQueryResult.originalQuery && (
                 <div className="font-mono text-xs bg-muted p-2 rounded">

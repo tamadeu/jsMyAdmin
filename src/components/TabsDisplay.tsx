@@ -31,7 +31,7 @@ const TabsDisplay = () => {
       case 'query-result':
         // Pass the originalQuery and database context to QueryResultTable
         // QueryResultTable will handle re-executing if data is missing
-        return <QueryResultTable queryResult={tab.queryResult || { success: false, originalQuery: tab.originalQuery, executionTime: '0ms' }} database={tab.params?.database} />;
+        return <QueryResultTable queryResult={tab.queryResult || { success: false, originalQuery: tab.originalQuery, executionTime: 0 }} database={tab.params?.database} />;
       case 'users':
         return <UsersPage />;
       default:
