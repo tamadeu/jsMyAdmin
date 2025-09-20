@@ -321,10 +321,10 @@ app.post('/api/login', async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     systemConnection = await mysql.createConnection({
-      host: config.database.host,
-      port: config.database.port,
-      user: config.database.username,
-      password: config.database.password,
+      host: host,
+      port: port,
+      user: username,
+      password: password,
       database: 'javascriptmyadmin_meta',
       timezone: '+00:00'
     });
