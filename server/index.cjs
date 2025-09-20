@@ -121,14 +121,13 @@ async function createConnectionFromRequest(req) {
     throw new Error('Authentication credentials not found in request.');
   }
 
-  const { user, password, host_user } = req.dbCredentials;
+  const { user, password } = req.dbCredentials;
 
   const userConfig = {
     host: baseConfig.database.host,
     port: baseConfig.database.port,
     user: user,
     password: password,
-    host_user: host_user,
     charset: baseConfig.database.charset,
     ssl: baseConfig.database.ssl ? {
       ca: baseConfig.database.sslCA || undefined,
@@ -261,29 +260,36 @@ app.post('/api/login', async (req, res) => {
   let connection;
   let systemConnection;
   try {
-    const { username, password, host } = req.body;
-    const baseConfig = await loadConfig();
-    if (!baseConfig) {
-      return res.status(500).json({ success: false, message: 'Server configuration not found.' });
-    }
+    const { host, port, username, password } = req.body;
 
+    // 1. Update config file with new host and port
+    const configPath = path.join(__dirname, '../database-config.json');
+    const configData = await fs.readFile(configPath, 'utf8');
+    const config = JSON.parse(configData);
+    config.database.host = host;
+    config.database.port = parseInt(port, 10);
+    await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+
+    // 2. Test connection with provided credentials
     connection = await mysql.createConnection({
-      host: baseConfig.database.host,
-      port: baseConfig.database.port,
+      host: host,
+      port: parseInt(port, 10),
       user: username,
       password: password,
-      host_user: host,
       connectTimeout: 5000,
       timezone: '+00:00'
     });
-
     await connection.execute('SELECT 1');
 
-    // Fetch global privileges
+    // 3. Get current user's host from the successful connection
+    const [currentUserRows] = await connection.query('SELECT CURRENT_USER() as user');
+    const currentUser = currentUserRows[0].user; // e.g., 'root@localhost'
+    const [connectedUser, connectedHost] = currentUser.split('@');
+
+    // 4. Fetch global privileges
     const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
     let globalPrivileges = new Set();
     let hasGrantOption = false;
-
     grants.forEach(grantRow => {
       const grantString = Object.values(grantRow)[0];
       if (grantString.includes('ON *.*')) {
@@ -297,13 +303,8 @@ app.post('/api/login', async (req, res) => {
         }
       }
     });
-
-    if (hasGrantOption) {
-      globalPrivileges.add('GRANT OPTION');
-    }
-
+    if (hasGrantOption) globalPrivileges.add('GRANT OPTION');
     let finalPrivileges = Array.from(globalPrivileges);
-
     if (finalPrivileges.includes('ALL PRIVILEGES')) {
       finalPrivileges = [
         "SELECT", "INSERT", "UPDATE", "DELETE", "FILE", "CREATE", "ALTER", "INDEX", "DROP", 
@@ -314,32 +315,32 @@ app.post('/api/login', async (req, res) => {
       ];
     }
 
-    // Create session
+    // 5. Create session in system DB
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const encryptedPassword = encrypt(password);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     systemConnection = await mysql.createConnection({
-      host: baseConfig.database.host,
-      port: baseConfig.database.port,
-      user: baseConfig.database.username,
-      password: baseConfig.database.password,
+      host: config.database.host,
+      port: config.database.port,
+      user: config.database.username,
+      password: config.database.password,
       database: 'javascriptmyadmin_meta',
       timezone: '+00:00'
     });
-
     await systemConnection.execute(
       'INSERT INTO `_jsma_sessions` (session_token, user, host, encrypted_password, expires_at) VALUES (?, ?, ?, ?, ?)',
-      [sessionToken, username, host, encryptedPassword, expiresAt]
+      [sessionToken, username, connectedHost, encryptedPassword, expiresAt]
     );
 
+    // 6. Send response
     res.json({ 
       success: true, 
       message: 'Login successful',
       token: sessionToken,
       user: {
         username: username,
-        host: host,
+        host: connectedHost,
         globalPrivileges: finalPrivileges
       }
     });

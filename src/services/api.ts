@@ -77,6 +77,7 @@ export interface DatabaseConfig {
 
 export interface LoginCredentials {
   host: string;
+  port: number;
   username: string;
   password?: string;
 }

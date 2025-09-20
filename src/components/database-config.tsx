@@ -168,12 +168,10 @@ const DatabaseConfigComponent = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Database className="h-5 w-5" />Connection Settings</CardTitle>
-              <CardDescription>Configure your MySQL database server connection parameters. User credentials are provided at login.</CardDescription>
+              <CardDescription>Configure your MySQL database server connection parameters. The server address is set at login.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label htmlFor="host">Host</Label><Input id="host" value={config.database.host} onChange={(e) => updateConfig('database', 'host', e.target.value)} placeholder="localhost" /></div>
-                <div className="space-y-2"><Label htmlFor="port">Port</Label><Input id="port" type="number" value={config.database.port} onChange={(e) => updateConfig('database', 'port', parseInt(e.target.value))} placeholder="3306" /></div>
                 <div className="space-y-2"><Label htmlFor="defaultDatabase">Default Database</Label><Input id="defaultDatabase" value={config.database.defaultDatabase} onChange={(e) => updateConfig('database', 'defaultDatabase', e.target.value)} placeholder="mysql" /></div>
                 <div className="space-y-2"><Label htmlFor="charset">Charset</Label><Select value={config.database.charset} onValueChange={(value) => updateConfig('database', 'charset', value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="utf8mb4">utf8mb4</SelectItem><SelectItem value="utf8">utf8</SelectItem><SelectItem value="latin1">latin1</SelectItem></SelectContent></Select></div>
               </div>

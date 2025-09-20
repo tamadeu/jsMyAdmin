@@ -21,6 +21,7 @@ type SystemState = 'checking' | 'needs_initialization' | 'initializing' | 'ready
 const LoginPage = () => {
   const { login } = useAuth();
   const [host, setHost] = useState("localhost");
+  const [port, setPort] = useState(3306);
   const [username, setUsername] = useState("root");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -46,6 +47,7 @@ const LoginPage = () => {
       if (savedConfigJson) {
         const savedConfig: DatabaseConfig = JSON.parse(savedConfigJson);
         setHost(savedConfig.database.host);
+        setPort(savedConfig.database.port);
         setUsername(savedConfig.database.username);
       }
     } catch (e) {
@@ -75,7 +77,7 @@ const LoginPage = () => {
     setIsLoading(true);
     setError(null);
     try {
-      await login({ host, username, password });
+      await login({ host, port, username, password });
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Ocorreu um erro desconhecido.",
@@ -128,14 +130,26 @@ const LoginPage = () => {
         return (
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="host">Host</Label>
-                <Input
-                  id="host"
-                  value={host}
-                  onChange={(e) => setHost(e.target.value)}
-                  required
-                />
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="host">Servidor</Label>
+                  <Input
+                    id="host"
+                    value={host}
+                    onChange={(e) => setHost(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="port">Porta</Label>
+                  <Input
+                    id="port"
+                    type="number"
+                    value={port}
+                    onChange={(e) => setPort(parseInt(e.target.value, 10))}
+                    required
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="username">Usuário</Label>
@@ -178,7 +192,7 @@ const LoginPage = () => {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <Database className="mx-auto h-10 w-10 mb-2" />
-          <CardTitle className="text-2xl">jsMyAdmin</CardTitle>
+          <CardTitle className="text-2xl">phpMyAdmin</CardTitle>
           <CardDescription>
             {systemState === 'needs_initialization' ? 'Configuração Inicial Necessária' : 'Conecte-se ao seu Banco de Dados MySQL'}
           </CardDescription>
