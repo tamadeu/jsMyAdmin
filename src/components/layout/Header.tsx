@@ -19,7 +19,7 @@ const Header = () => {
   const activeTab = getTabById(activeTabId);
   const isMobile = useIsMobile();
 
-  let headerTitle = "phpMyAdmin";
+  let headerTitle = "jsMyAdmin";
   let headerSubtitle: string | undefined = undefined;
   let databaseParam: string | undefined = undefined;
   let tableParam: string | undefined = undefined;
