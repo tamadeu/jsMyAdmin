@@ -193,7 +193,7 @@ const Sidebar = () => {
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Database className="h-6 w-6" />
-          <h2 className="text-lg font-semibold">phpMyAdmin</h2>
+          <h2 className="text-lg font-semibold">jsMyAdmin</h2>
         </div>
       </div>
 
