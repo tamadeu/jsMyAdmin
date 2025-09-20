@@ -54,7 +54,11 @@ const DatabaseConfigComponent = () => {
       setIsSaving(true);
       const result = await apiService.saveConfig(config);
       if (result.success) {
-        localStorage.setItem('database-config', JSON.stringify(config));
+        const configToSave = JSON.parse(JSON.stringify(config)); // deep copy
+        if (configToSave.database) {
+          delete configToSave.database.password;
+        }
+        localStorage.setItem('database-config', JSON.stringify(configToSave));
         toast({ title: "Configuration saved", description: result.message || "Database configuration has been saved successfully" });
       } else {
         throw new Error(result.message || 'Failed to save configuration');

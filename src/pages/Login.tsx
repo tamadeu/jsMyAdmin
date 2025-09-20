@@ -31,7 +31,6 @@ const LoginPage = () => {
         const savedConfig: DatabaseConfig = JSON.parse(savedConfigJson);
         setHost(savedConfig.database.host);
         setUsername(savedConfig.database.username);
-        setPassword(savedConfig.database.password);
       }
     } catch (e) {
       console.error("Failed to load config from localStorage", e);
