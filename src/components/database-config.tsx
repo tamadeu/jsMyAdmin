@@ -213,7 +213,7 @@ const DatabaseConfigComponent = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Allow Multiple Statements</Label><p className="text-sm text-muted-foreground">Allow executing multiple SQL statements in one query</p></div><Switch checked={config.security.allowMultipleStatements} onCheckedChange={(checked) => updateConfig('security', 'allowMultipleStatements', checked)} /></div>
                 <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Allow Local Infile</Label><p className="text-sm text-muted-foreground">Allow LOAD DATA LOCAL INFILE statements</p></div><Switch checked={config.security.allowLocalInfile} onCheckedChange={(checked) => updateConfig('security', 'allowLocalInfile', checked)} /></div>
-                <div className="flex items-center justify-between"><div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Require SSL</Label><p className="text-sm text-muted-foreground">Force SSL connections only</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSSL', checked)} /></div>
+                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Require SSL</Label><p className="text-sm text-muted-foreground">Force SSL connections only</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSSL', checked)} /></div>
               </div>
             </CardContent>
           </Card>
