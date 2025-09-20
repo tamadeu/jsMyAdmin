@@ -104,12 +104,35 @@ export interface UserPrivilegesResponse {
   databasePrivileges: DatabasePrivilege[];
 }
 
+const CREDENTIALS_STORAGE_KEY = "phpmyadmin-credentials";
+
 class ApiService {
   private baseUrl = "http://localhost:3001/api";
   private credentials: LoginCredentials | null = null;
 
+  constructor() {
+    try {
+      const savedCreds = localStorage.getItem(CREDENTIALS_STORAGE_KEY);
+      if (savedCreds) {
+        this.credentials = JSON.parse(savedCreds);
+      }
+    } catch (error) {
+      console.error("Failed to load credentials from localStorage", error);
+      localStorage.removeItem(CREDENTIALS_STORAGE_KEY);
+    }
+  }
+
   setCredentials(credentials: LoginCredentials | null) {
     this.credentials = credentials;
+    if (credentials) {
+      localStorage.setItem(CREDENTIALS_STORAGE_KEY, JSON.stringify(credentials));
+    } else {
+      localStorage.removeItem(CREDENTIALS_STORAGE_KEY);
+    }
+  }
+
+  getCredentials(): LoginCredentials | null {
+    return this.credentials;
   }
 
   private getAuthHeaders(): Record<string, string> {
