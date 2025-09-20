@@ -95,6 +95,22 @@ async function loadConfig() {
   }
 }
 
+// Helper function to create a connection using the root credentials from the config file
+async function createRootConnection() {
+  const config = await loadConfig();
+  if (!config) {
+    throw new Error('Server configuration file not found.');
+  }
+  // Use the credentials from the config file, not from the request
+  return mysql.createConnection({
+    host: config.database.host,
+    port: config.database.port,
+    user: config.database.username,
+    password: config.database.password,
+    timezone: '+00:00'
+  });
+}
+
 async function createConnectionFromRequest(req) {
   const baseConfig = await loadConfig();
   if (!baseConfig) {
@@ -125,6 +141,69 @@ async function createConnectionFromRequest(req) {
 
   return mysql.createConnection(userConfig);
 }
+
+// --- System Setup Endpoints (No Auth Required) ---
+
+const SYSTEM_DATABASE = "javascriptmyadmin_meta";
+const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"];
+
+// Get system setup status
+app.get('/api/system/status', async (req, res) => {
+  let connection;
+  try {
+    connection = await createRootConnection();
+    
+    // Check if database exists
+    const [databases] = await connection.query('SHOW DATABASES LIKE ?', [SYSTEM_DATABASE]);
+    if (databases.length === 0) {
+      return res.json({ status: 'needs_initialization', message: 'System database not found.' });
+    }
+
+    // Check if tables exist
+    const [tables] = await connection.query('SHOW TABLES FROM ?? LIKE ?', [SYSTEM_DATABASE, '_jsma_%']);
+    const existingTables = tables.map(t => Object.values(t)[0]);
+    const missingTables = SYSTEM_TABLES.filter(t => !existingTables.includes(t));
+
+    if (missingTables.length > 0) {
+      return res.json({ status: 'needs_initialization', message: `Missing tables: ${missingTables.join(', ')}` });
+    }
+
+    res.json({ status: 'ready', message: 'System is ready.' });
+  } catch (error) {
+    console.error('Error checking system status:', error);
+    res.status(200).json({ status: 'needs_initialization', message: `Could not connect to check status: ${error.message}` });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Initialize system tables
+app.post('/api/system/initialize', async (req, res) => {
+  let connection;
+  try {
+    connection = await createRootConnection();
+    
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ??`, [SYSTEM_DATABASE]);
+    
+    const queries = [
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
+    ];
+
+    for (const query of queries) {
+      await connection.query(query);
+    }
+
+    res.json({ success: true, message: 'System initialized successfully.' });
+  } catch (error) {
+    console.error('Error initializing system:', error);
+    res.status(500).json({ success: false, message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
 
 // --- Auth Middleware ---
 const authMiddleware = async (req, res, next) => {

@@ -113,6 +113,11 @@ export interface QueryHistoryPayload {
   error_message?: string;
 }
 
+interface SystemStatusResponse {
+  status: 'ready' | 'needs_initialization';
+  message: string;
+}
+
 class ApiService {
   private baseUrl = "http://localhost:3001/api";
   private sessionToken: string | null = null;
@@ -142,6 +147,30 @@ class ApiService {
       headers["Authorization"] = `Bearer ${this.sessionToken}`;
     }
     return headers;
+  }
+
+  async getSystemStatus(): Promise<SystemStatusResponse> {
+    const response = await fetch(`${this.baseUrl}/system/status`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { status: 'needs_initialization', message: `Server error: ${errorText}` };
+    }
+    return response.json();
+  }
+
+  async initializeSystem(): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/system/initialize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.json();
   }
 
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
