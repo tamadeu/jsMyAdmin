@@ -190,12 +190,14 @@ app.post('/api/login', async (req, res) => {
   try {
     const { host, port, username, password } = req.body;
 
-    // 1. Update config file with new host and port
+    // 1. Update config file with new host, port, AND credentials
     const configPath = path.join(__dirname, '../database-config.json');
     const configData = await fs.readFile(configPath, 'utf8');
     const config = JSON.parse(configData);
     config.database.host = host;
     config.database.port = parseInt(port, 10);
+    config.database.username = username;
+    config.database.password = password;
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 
     // 2. Connect with provided credentials

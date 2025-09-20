@@ -1,6 +1,6 @@
 {
   "database": {
-    "host": "34.135.140.193",
+    "host": "localhost",
     "port": 3306,
     "username": "root",
     "password": "Tagima@735",
