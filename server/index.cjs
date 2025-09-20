@@ -141,68 +141,7 @@ async function createConnectionFromRequest(req) {
   return mysql.createConnection(userConfig);
 }
 
-// --- System Setup Endpoints (No Auth Required) ---
-
 const SYSTEM_DATABASE = "javascriptmyadmin_meta";
-const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"];
-
-// Get system setup status
-app.get('/api/system/status', async (req, res) => {
-  let connection;
-  try {
-    connection = await createRootConnection();
-    
-    // Check if database exists
-    const [databases] = await connection.query('SHOW DATABASES LIKE ?', [SYSTEM_DATABASE]);
-    if (databases.length === 0) {
-      return res.json({ status: 'needs_initialization', message: 'System database not found.' });
-    }
-
-    // Check if tables exist
-    const [tables] = await connection.query('SHOW TABLES FROM ?? LIKE ?', [SYSTEM_DATABASE, '_jsma_%']);
-    const existingTables = tables.map(t => Object.values(t)[0]);
-    const missingTables = SYSTEM_TABLES.filter(t => !existingTables.includes(t));
-
-    if (missingTables.length > 0) {
-      return res.json({ status: 'needs_initialization', message: `Missing tables: ${missingTables.join(', ')}` });
-    }
-
-    res.json({ status: 'ready', message: 'System is ready.' });
-  } catch (error) {
-    console.error('Error checking system status:', error);
-    res.status(200).json({ status: 'needs_initialization', message: `Could not connect to check status: ${error.message}` });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
-
-// Initialize system tables
-app.post('/api/system/initialize', async (req, res) => {
-  let connection;
-  try {
-    connection = await createRootConnection();
-    
-    await connection.query(`CREATE DATABASE IF NOT EXISTS ??`, [SYSTEM_DATABASE]);
-    
-    const queries = [
-      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
-      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
-      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
-      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
-    ];
-
-    for (const query of queries) {
-      await connection.query(query);
-    }
-
-    res.json({ success: true, message: 'System initialized successfully.' });
-  } catch (error) {
-    console.error('Error initializing system:', error);
-    res.status(500).json({ success: false, message: error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-});
 
 // --- Auth Middleware ---
 const authMiddleware = async (req, res, next) => {
@@ -214,22 +153,12 @@ const authMiddleware = async (req, res, next) => {
   
   let systemConnection;
   try {
-    const config = await loadConfig();
-    if (!config) {
-      return res.status(500).json({ error: 'Server configuration not found.' });
-    }
-    
-    systemConnection = await mysql.createConnection({
-      host: config.database.host,
-      port: config.database.port,
-      user: config.database.username,
-      password: config.database.password,
-      database: 'javascriptmyadmin_meta',
-      timezone: '+00:00'
-    });
+    // The auth middleware needs a privileged user to read the session table.
+    // This user's credentials should be in the config file.
+    systemConnection = await createRootConnection();
 
     const [sessions] = await systemConnection.execute(
-      'SELECT * FROM `_jsma_sessions` WHERE `session_token` = ? AND `expires_at` > NOW()',
+      'SELECT * FROM `javascriptmyadmin_meta`.`_jsma_sessions` WHERE `session_token` = ? AND `expires_at` > NOW()',
       [token]
     );
 
@@ -258,7 +187,6 @@ const authMiddleware = async (req, res, next) => {
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   let connection;
-  let systemConnection;
   try {
     const { host, port, username, password } = req.body;
 
@@ -270,7 +198,7 @@ app.post('/api/login', async (req, res) => {
     config.database.port = parseInt(port, 10);
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 
-    // 2. Test connection with provided credentials
+    // 2. Connect with provided credentials
     connection = await mysql.createConnection({
       host: host,
       port: parseInt(port, 10),
@@ -281,12 +209,31 @@ app.post('/api/login', async (req, res) => {
     });
     await connection.execute('SELECT 1');
 
-    // 3. Get current user's host from the successful connection
+    // 3. Check and initialize system tables using the user's connection
+    try {
+        await connection.query(`CREATE DATABASE IF NOT EXISTS ??`, [SYSTEM_DATABASE]);
+        
+        const tableCreationQueries = [
+          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
+          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
+          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
+          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
+        ];
+
+        for (const query of tableCreationQueries) {
+          await connection.query(query);
+        }
+    } catch (initError) {
+        console.error('System initialization failed during login:', initError);
+        throw new Error(`Failed to initialize system tables. Please log in with a user that has CREATE DATABASE and CREATE TABLE privileges to complete the setup. Original error: ${initError.message}`);
+    }
+
+    // 4. Get current user's host
     const [currentUserRows] = await connection.query('SELECT CURRENT_USER() as user');
-    const currentUser = currentUserRows[0].user; // e.g., 'root@localhost'
+    const currentUser = currentUserRows[0].user;
     const [connectedUser, connectedHost] = currentUser.split('@');
 
-    // 4. Fetch global privileges
+    // 5. Fetch global privileges
     const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
     let globalPrivileges = new Set();
     let hasGrantOption = false;
@@ -315,25 +262,17 @@ app.post('/api/login', async (req, res) => {
       ];
     }
 
-    // 5. Create session in system DB
+    // 6. Create session in system DB using the user's connection
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const encryptedPassword = encrypt(password);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    systemConnection = await mysql.createConnection({
-      host: host,
-      port: port,
-      user: username,
-      password: password,
-      database: 'javascriptmyadmin_meta',
-      timezone: '+00:00'
-    });
-    await systemConnection.execute(
-      'INSERT INTO `_jsma_sessions` (session_token, user, host, encrypted_password, expires_at) VALUES (?, ?, ?, ?, ?)',
+    await connection.query(
+      `INSERT INTO \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` (session_token, user, host, encrypted_password, expires_at) VALUES (?, ?, ?, ?, ?)`,
       [sessionToken, username, connectedHost, encryptedPassword, expiresAt]
     );
 
-    // 6. Send response
+    // 7. Send response
     res.json({ 
       success: true, 
       message: 'Login successful',
@@ -349,7 +288,6 @@ app.post('/api/login', async (req, res) => {
     res.status(401).json({ success: false, message: error.message });
   } finally {
     if (connection) await connection.end();
-    if (systemConnection) await systemConnection.end();
   }
 });
 
@@ -360,21 +298,9 @@ app.post('/api/logout', authMiddleware, async (req, res) => {
     const authHeader = req.headers.authorization;
     const token = authHeader.split(' ')[1];
     
-    const config = await loadConfig();
-    if (!config) {
-      return res.status(500).json({ error: 'Server configuration not found.' });
-    }
-    
-    systemConnection = await mysql.createConnection({
-      host: config.database.host,
-      port: config.database.port,
-      user: config.database.username,
-      password: config.database.password,
-      database: 'javascriptmyadmin_meta',
-      timezone: '+00:00'
-    });
+    systemConnection = await createRootConnection();
 
-    await systemConnection.execute('DELETE FROM `_jsma_sessions` WHERE `session_token` = ?', [token]);
+    await systemConnection.execute('DELETE FROM `javascriptmyadmin_meta`.`_jsma_sessions` WHERE `session_token` = ?', [token]);
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     console.error('Logout failed:', error);
@@ -744,20 +670,7 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
   try {
     const { query_text, database_context, execution_time_ms, status, error_message } = req.body;
     
-    const config = await loadConfig();
-    if (!config) {
-      console.warn('Could not save query history: config file not found.');
-      return res.status(200).json({ success: true, message: 'History not saved; config missing.' });
-    }
-
-    // Use credentials from config file to ensure write access to system DB
-    connection = await mysql.createConnection({
-      host: config.database.host,
-      port: config.database.port,
-      user: config.database.username,
-      password: config.database.password,
-      timezone: '+00:00'
-    });
+    connection = await createRootConnection();
 
     const historyQuery = `
       INSERT INTO \`javascriptmyadmin_meta\`.\`_jsma_query_history\` 
