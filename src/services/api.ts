@@ -90,6 +90,7 @@ export interface UserProfile {
 export interface LoginResponse {
   success: boolean;
   message: string;
+  token?: string;
   user?: UserProfile;
 }
 
@@ -114,30 +115,33 @@ export interface QueryHistoryPayload {
 
 class ApiService {
   private baseUrl = "http://localhost:3001/api";
-  private credentials: LoginCredentials | null = null;
+  private sessionToken: string | null = null;
 
   constructor() {
-    // Credentials are now only stored in memory, not in localStorage.
+    this.loadToken();
   }
 
-  setCredentials(credentials: LoginCredentials | null) {
-    this.credentials = credentials;
+  loadToken() {
+    this.sessionToken = localStorage.getItem('sessionToken');
   }
 
-  getCredentials(): LoginCredentials | null {
-    return this.credentials;
-  }
-
-  private getAuthHeaders(): Record<string, string> {
-    if (!this.credentials) {
-      // Lança um erro se as credenciais não estiverem definidas para chamadas autenticadas
-      throw new Error("User is not authenticated.");
+  setToken(token: string | null) {
+    this.sessionToken = token;
+    if (token) {
+      localStorage.setItem('sessionToken', token);
+    } else {
+      localStorage.removeItem('sessionToken');
     }
-    return {
-      "X-DB-User": this.credentials.username,
-      "X-DB-Password": this.credentials.password || "",
-      "X-DB-Host": this.credentials.host,
+  }
+
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
     };
+    if (this.sessionToken) {
+      headers["Authorization"] = `Bearer ${this.sessionToken}`;
+    }
+    return headers;
   }
 
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
@@ -148,6 +152,30 @@ class ApiService {
       },
       body: JSON.stringify(credentials),
     });
+    return response.json();
+  }
+
+  async logout(): Promise<void> {
+    if (!this.sessionToken) return;
+    try {
+      await fetch(`${this.baseUrl}/logout`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      });
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      this.setToken(null);
+    }
+  }
+
+  async validateSession(): Promise<UserProfile> {
+    const response = await fetch(`${this.baseUrl}/session/validate`, {
+      headers: this.getHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error("Session is not valid");
+    }
     return response.json();
   }
 
@@ -181,7 +209,7 @@ class ApiService {
 
   async getDatabases(): Promise<string[]> {
     const response = await fetch(`${this.baseUrl}/databases`, {
-      headers: this.getAuthHeaders(),
+      headers: this.getHeaders(),
     });
     if (!response.ok) {
       throw new Error("Failed to fetch databases");
@@ -193,7 +221,7 @@ class ApiService {
     const response = await fetch(
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables`,
       {
-        headers: this.getAuthHeaders(),
+        headers: this.getHeaders(),
       },
     );
     if (!response.ok) {
@@ -229,7 +257,7 @@ class ApiService {
     const response = await fetch(
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/data?${params}`,
       {
-        headers: this.getAuthHeaders(),
+        headers: this.getHeaders(),
       },
     );
 
@@ -251,10 +279,7 @@ class ApiService {
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/cell`,
       {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.getAuthHeaders(),
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           primaryKey,
           columnName,
@@ -281,10 +306,7 @@ class ApiService {
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
       {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.getAuthHeaders(),
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           primaryKey,
           data,
@@ -314,10 +336,7 @@ class ApiService {
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.getAuthHeaders(),
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           data,
         }),
@@ -341,10 +360,7 @@ class ApiService {
       `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/row`,
       {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.getAuthHeaders(),
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           primaryKey,
         }),
@@ -362,10 +378,7 @@ class ApiService {
   async executeQuery(query: string, database?: string): Promise<QueryResult> {
     const response = await fetch(`${this.baseUrl}/query`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...this.getAuthHeaders(),
-      },
+      headers: this.getHeaders(),
       body: JSON.stringify({
         query,
         database,
@@ -380,9 +393,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseUrl}/query-history`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
@@ -403,7 +414,7 @@ class ApiService {
     status: string;
   }> {
     const response = await fetch(`${this.baseUrl}/status`, {
-      headers: this.getAuthHeaders(),
+      headers: this.getHeaders(),
     });
     if (!response.ok) {
       throw new Error("Failed to fetch server status");
@@ -413,7 +424,7 @@ class ApiService {
 
   async getUsers(): Promise<Array<{ user: string; host: string }>> {
     const response = await fetch(`${this.baseUrl}/users`, {
-      headers: this.getAuthHeaders(),
+      headers: this.getHeaders(),
     });
     if (!response.ok) {
       const error = await response.json();
@@ -429,7 +440,7 @@ class ApiService {
     const response = await fetch(
       `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`,
       {
-        headers: this.getAuthHeaders(),
+        headers: this.getHeaders(),
       },
     );
     if (!response.ok) {
@@ -448,10 +459,7 @@ class ApiService {
       `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/privileges`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.getAuthHeaders(),
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(data),
       },
     );
@@ -474,10 +482,7 @@ class ApiService {
       `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/database-privileges`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.getAuthHeaders(),
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({ database, privileges, grantOption }),
       },
     );
@@ -497,10 +502,7 @@ class ApiService {
       `${this.baseUrl}/users/${encodeURIComponent(user)}/${encodeURIComponent(host)}/database-privileges`,
       {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          ...this.getAuthHeaders(),
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify({ database }),
       },
     );

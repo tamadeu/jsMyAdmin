@@ -3,10 +3,38 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// --- Criptografia de Sessão ---
+const SESSION_SECRET_KEY = process.env.SESSION_SECRET_KEY;
+if (!SESSION_SECRET_KEY || SESSION_SECRET_KEY === 'sua_chave_secreta_super_segura_aqui') {
+  console.error("FATAL ERROR: SESSION_SECRET_KEY não está definida no arquivo .env.");
+  console.error("Por favor, gere uma chave segura e adicione-a ao seu arquivo .env.");
+  process.exit(1);
+}
+
+const ALGORITHM = 'aes-256-cbc';
+const KEY = crypto.createHash('sha256').update(String(SESSION_SECRET_KEY)).digest('base64').substr(0, 32);
+
+function encrypt(text) {
+  const iv = crypto.scryptSync(SESSION_SECRET_KEY, 'salt', 16); // IV determinístico
+  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return encrypted;
+}
+
+function decrypt(encryptedText) {
+  const iv = crypto.scryptSync(SESSION_SECRET_KEY, 'salt', 16); // IV determinístico
+  const decipher = crypto.createDecipheriv(ALGORITHM, KEY, iv);
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
 
 // Middleware
 app.use(cors());
@@ -73,20 +101,18 @@ async function createConnectionFromRequest(req) {
     throw new Error('Server configuration file not found.');
   }
 
-  const dbUser = req.headers['x-db-user'];
-  const dbPassword = req.headers['x-db-password'];
-  const dbHost = req.headers['x-db-host'];
-
-  if (!dbUser || !dbHost) {
-    throw new Error('Authentication credentials not provided in headers.');
+  if (!req.dbCredentials) {
+    throw new Error('Authentication credentials not found in request.');
   }
+
+  const { user, password, host_user } = req.dbCredentials;
 
   const userConfig = {
     host: baseConfig.database.host,
     port: baseConfig.database.port,
-    user: dbUser,
-    password: dbPassword,
-    host_user: dbHost,
+    user: user,
+    password: password,
+    host_user: host_user,
     charset: baseConfig.database.charset,
     ssl: baseConfig.database.ssl ? {
       ca: baseConfig.database.sslCA || undefined,
@@ -100,9 +126,61 @@ async function createConnectionFromRequest(req) {
   return mysql.createConnection(userConfig);
 }
 
+// --- Auth Middleware ---
+const authMiddleware = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  }
+  const token = authHeader.split(' ')[1];
+  
+  let systemConnection;
+  try {
+    const config = await loadConfig();
+    if (!config) {
+      return res.status(500).json({ error: 'Server configuration not found.' });
+    }
+    
+    systemConnection = await mysql.createConnection({
+      host: config.database.host,
+      port: config.database.port,
+      user: config.database.username,
+      password: config.database.password,
+      database: 'javascriptmyadmin_meta',
+      timezone: '+00:00'
+    });
+
+    const [sessions] = await systemConnection.execute(
+      'SELECT * FROM `_jsma_sessions` WHERE `session_token` = ? AND `expires_at` > NOW()',
+      [token]
+    );
+
+    if (sessions.length === 0) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid or expired session' });
+    }
+
+    const session = sessions[0];
+    const decryptedPassword = decrypt(session.encrypted_password);
+
+    req.dbCredentials = {
+      user: session.user,
+      password: decryptedPassword,
+      host_user: session.host
+    };
+    
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    return res.status(500).json({ error: 'Internal server error during authentication' });
+  } finally {
+    if (systemConnection) await systemConnection.end();
+  }
+};
+
 // Login endpoint
 app.post('/api/login', async (req, res) => {
   let connection;
+  let systemConnection;
   try {
     const { username, password, host } = req.body;
     const baseConfig = await loadConfig();
@@ -157,9 +235,29 @@ app.post('/api/login', async (req, res) => {
       ];
     }
 
+    // Create session
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const encryptedPassword = encrypt(password);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    systemConnection = await mysql.createConnection({
+      host: baseConfig.database.host,
+      port: baseConfig.database.port,
+      user: baseConfig.database.username,
+      password: baseConfig.database.password,
+      database: 'javascriptmyadmin_meta',
+      timezone: '+00:00'
+    });
+
+    await systemConnection.execute(
+      'INSERT INTO `_jsma_sessions` (session_token, user, host, encrypted_password, expires_at) VALUES (?, ?, ?, ?, ?)',
+      [sessionToken, username, host, encryptedPassword, expiresAt]
+    );
+
     res.json({ 
       success: true, 
       message: 'Login successful',
+      token: sessionToken,
       user: {
         username: username,
         host: host,
@@ -170,11 +268,91 @@ app.post('/api/login', async (req, res) => {
     console.error('Login failed:', error);
     res.status(401).json({ success: false, message: error.message });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
+    if (systemConnection) await systemConnection.end();
   }
 });
+
+// Logout endpoint
+app.post('/api/logout', authMiddleware, async (req, res) => {
+  let systemConnection;
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader.split(' ')[1];
+    
+    const config = await loadConfig();
+    if (!config) {
+      return res.status(500).json({ error: 'Server configuration not found.' });
+    }
+    
+    systemConnection = await mysql.createConnection({
+      host: config.database.host,
+      port: config.database.port,
+      user: config.database.username,
+      password: config.database.password,
+      database: 'javascriptmyadmin_meta',
+      timezone: '+00:00'
+    });
+
+    await systemConnection.execute('DELETE FROM `_jsma_sessions` WHERE `session_token` = ?', [token]);
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout failed:', error);
+    res.status(500).json({ success: false, message: 'Failed to logout' });
+  } finally {
+    if (systemConnection) await systemConnection.end();
+  }
+});
+
+// Session validation endpoint
+app.get('/api/session/validate', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    // The middleware already validated the session. Now, just get user privileges.
+    connection = await createConnectionFromRequest(req);
+    const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
+    
+    let globalPrivileges = new Set();
+    let hasGrantOption = false;
+    grants.forEach(grantRow => {
+      const grantString = Object.values(grantRow)[0];
+      if (grantString.includes('ON *.*')) {
+        const onGlobalRegex = /^GRANT (.*?) ON \*\.\*/;
+        const match = grantString.match(onGlobalRegex);
+        if (match && match[1]) {
+          match[1].split(',').forEach(p => globalPrivileges.add(p.trim().toUpperCase()));
+        }
+        if (grantString.includes('WITH GRANT OPTION')) {
+          hasGrantOption = true;
+        }
+      }
+    });
+    if (hasGrantOption) globalPrivileges.add('GRANT OPTION');
+
+    let finalPrivileges = Array.from(globalPrivileges);
+    if (finalPrivileges.includes('ALL PRIVILEGES')) {
+      finalPrivileges = [
+        "SELECT", "INSERT", "UPDATE", "DELETE", "FILE", "CREATE", "ALTER", "INDEX", "DROP", 
+        "CREATE TEMPORARY TABLES", "SHOW VIEW", "CREATE ROUTINE", "ALTER ROUTINE", "EXECUTE", 
+        "CREATE VIEW", "EVENT", "TRIGGER", "GRANT OPTION", "SUPER", "PROCESS", "RELOAD", 
+        "SHUTDOWN", "SHOW DATABASES", "LOCK TABLES", "REFERENCES", "REPLICATION CLIENT", 
+        "REPLICATION SLAVE", "CREATE USER"
+      ];
+    }
+
+    res.json({
+      username: req.dbCredentials.user,
+      host: req.dbCredentials.host_user,
+      globalPrivileges: finalPrivileges
+    });
+  } catch (error) {
+    console.error('Session validation failed:', error);
+    res.status(401).json({ error: 'Session validation failed' });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
 
 // Test database connection (uses provided config, not headers)
 app.post('/api/test-connection', async (req, res) => {
@@ -230,7 +408,7 @@ app.post('/api/save-config', async (req, res) => {
 });
 
 // Get databases
-app.get('/api/databases', async (req, res) => {
+app.get('/api/databases', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -246,7 +424,7 @@ app.get('/api/databases', async (req, res) => {
 });
 
 // Get tables and views for a database
-app.get('/api/databases/:database/tables', async (req, res) => {
+app.get('/api/databases/:database/tables', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -280,7 +458,7 @@ app.get('/api/databases/:database/tables', async (req, res) => {
 });
 
 // Get table data
-app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
+app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -333,7 +511,7 @@ app.get('/api/databases/:database/tables/:table/data', async (req, res) => {
 });
 
 // Update a single cell
-app.put('/api/databases/:database/tables/:table/cell', async (req, res) => {
+app.put('/api/databases/:database/tables/:table/cell', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -359,7 +537,7 @@ app.put('/api/databases/:database/tables/:table/cell', async (req, res) => {
 });
 
 // Update entire row
-app.put('/api/databases/:database/tables/:table/row', async (req, res) => {
+app.put('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -387,7 +565,7 @@ app.put('/api/databases/:database/tables/:table/row', async (req, res) => {
 });
 
 // Insert new row
-app.post('/api/databases/:database/tables/:table/row', async (req, res) => {
+app.post('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -421,7 +599,7 @@ app.post('/api/databases/:database/tables/:table/row', async (req, res) => {
 });
 
 // Delete row
-app.delete('/api/databases/:database/tables/:table/row', async (req, res) => {
+app.delete('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -445,7 +623,7 @@ app.delete('/api/databases/:database/tables/:table/row', async (req, res) => {
 });
 
 // Execute SQL query
-app.post('/api/query', async (req, res) => {
+app.post('/api/query', authMiddleware, async (req, res) => {
   let connection;
   const startTime = Date.now();
   try {
@@ -481,7 +659,7 @@ app.post('/api/query', async (req, res) => {
 });
 
 // Save query to history
-app.post('/api/query-history', async (req, res) => {
+app.post('/api/query-history', authMiddleware, async (req, res) => {
   let connection;
   try {
     const { query_text, database_context, execution_time_ms, status, error_message } = req.body;
@@ -527,7 +705,7 @@ app.post('/api/query-history', async (req, res) => {
 });
 
 // Get server status
-app.get('/api/status', async (req, res) => {
+app.get('/api/status', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -547,7 +725,7 @@ app.get('/api/status', async (req, res) => {
 });
 
 // Get MySQL users
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -562,7 +740,7 @@ app.get('/api/users', async (req, res) => {
 });
 
 // Get user privileges (global and database-specific)
-app.get('/api/users/:user/:host/privileges', async (req, res) => {
+app.get('/api/users/:user/:host/privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -615,7 +793,7 @@ app.get('/api/users/:user/:host/privileges', async (req, res) => {
 });
 
 // Update global user privileges
-app.post('/api/users/:user/:host/privileges', async (req, res) => {
+app.post('/api/users/:user/:host/privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -639,7 +817,7 @@ app.post('/api/users/:user/:host/privileges', async (req, res) => {
 });
 
 // Update/Add database privileges
-app.post('/api/users/:user/:host/database-privileges', async (req, res) => {
+app.post('/api/users/:user/:host/database-privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);
@@ -666,7 +844,7 @@ app.post('/api/users/:user/:host/database-privileges', async (req, res) => {
 });
 
 // Revoke all privileges on a database
-app.delete('/api/users/:user/:host/database-privileges', async (req, res) => {
+app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
     connection = await createConnectionFromRequest(req);

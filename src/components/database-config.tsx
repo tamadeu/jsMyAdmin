@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiService, DatabaseConfig } from "@/services/api";
 
 const SYSTEM_DATABASE = "javascriptmyadmin_meta";
-const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables"];
+const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"];
 
 const DatabaseConfigComponent = () => {
   const { toast } = useToast();
@@ -106,7 +106,8 @@ const DatabaseConfigComponent = () => {
       const queries = [
         `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_query_history ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
         `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_favorite_queries ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_favorite_tables ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`
+        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_favorite_tables ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
+        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_sessions ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
       ];
       for (const query of queries) {
         const result = await apiService.executeQuery(query);
@@ -212,7 +213,7 @@ const DatabaseConfigComponent = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Allow Multiple Statements</Label><p className="text-sm text-muted-foreground">Allow executing multiple SQL statements in one query</p></div><Switch checked={config.security.allowMultipleStatements} onCheckedChange={(checked) => updateConfig('security', 'allowMultipleStatements', checked)} /></div>
                 <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Allow Local Infile</Label><p className="text-sm text-muted-foreground">Allow LOAD DATA LOCAL INFILE statements</p></div><Switch checked={config.security.allowLocalInfile} onCheckedChange={(checked) => updateConfig('security', 'allowLocalInfile', checked)} /></div>
-                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Require SSL</Label><p className="text-sm text-muted-foreground">Force SSL connections only</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSSL', checked)} /></div>
+                <div className="flex items-center justify-between"><div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Require SSL</Label><p className="text-sm text-muted-foreground">Force SSL connections only</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSSL', checked)} /></div>
               </div>
             </CardContent>
           </Card>

@@ -26,8 +26,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  const logout = useCallback(() => {
-    apiService.setCredentials(null);
+  const logout = useCallback(async () => {
+    await apiService.logout();
     setIsAuthenticated(false);
     setUser(null);
   }, []);
@@ -35,15 +35,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = useCallback(async (credentials: LoginCredentials) => {
     try {
       const result = await apiService.login(credentials);
-      if (result.success && result.user) {
-        apiService.setCredentials(credentials);
+      if (result.success && result.user && result.token) {
+        apiService.setToken(result.token);
         setIsAuthenticated(true);
         setUser(result.user);
       } else {
         throw new Error(result.message || "Login falhou");
       }
     } catch (error) {
-      logout(); // Garante que o estado seja limpo em caso de falha
+      await logout(); // Garante que o estado seja limpo em caso de falha
       throw error; // Re-lança para ser capturado pela UI
     }
   }, [logout]);
@@ -51,20 +51,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const validateSession = async () => {
       try {
-        const savedCreds = apiService.getCredentials();
-        if (savedCreds) {
-          await login(savedCreds);
-        }
+        // O construtor do apiService já carrega o token do localStorage
+        const userProfile = await apiService.validateSession();
+        setUser(userProfile);
+        setIsAuthenticated(true);
       } catch (error) {
         console.error("Session validation failed, logging out.", error);
-        logout();
+        await apiService.logout(); // Limpa qualquer token inválido
+        setUser(null);
+        setIsAuthenticated(false);
       } finally {
         setIsInitializing(false);
       }
     };
 
     validateSession();
-  }, [login, logout]);
+  }, []);
 
   const hasPrivilege = useCallback(
     (privilege: string): boolean => {
