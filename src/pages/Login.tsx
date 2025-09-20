@@ -178,7 +178,7 @@ const LoginPage = () => {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <Database className="mx-auto h-10 w-10 mb-2" />
-          <CardTitle className="text-2xl">phpMyAdmin</CardTitle>
+          <CardTitle className="text-2xl">jsMyAdmin</CardTitle>
           <CardDescription>
             {systemState === 'needs_initialization' ? 'Configuração Inicial Necessária' : 'Conecte-se ao seu Banco de Dados MySQL'}
           </CardDescription>
