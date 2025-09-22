@@ -1268,7 +1268,7 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
 });
 
 // Endpoint para verificar o status do sistema (se as tabelas meta existem)
-app.get('/api/system/status', authMiddleware, async (req, res) => {
+app.get('/api/system/status', async (req, res) => { // Removed authMiddleware
   let connection;
   try {
     connection = await getSystemPooledConnection();
@@ -1303,7 +1303,7 @@ app.get('/api/system/status', authMiddleware, async (req, res) => {
 });
 
 // Endpoint para inicializar as tabelas do sistema
-app.post('/api/system/initialize', authMiddleware, async (req, res) => {
+app.post('/api/system/initialize', async (req, res) => { // Removed authMiddleware
   let connection;
   try {
     connection = await getSystemPooledConnection();
