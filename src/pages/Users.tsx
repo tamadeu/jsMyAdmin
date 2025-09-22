@@ -7,6 +7,7 @@ import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import UserPrivilegesDialog from "@/components/UserPrivilegesDialog"; // Import the dialog
 import { useAuth } from "@/context/AuthContext";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
 
 interface MysqlUser {
   user: string;
@@ -16,6 +17,7 @@ interface MysqlUser {
 const UsersPage = () => {
   const { toast } = useToast();
   const { hasPrivilege } = useAuth();
+  const { refreshDatabases } = useDatabaseCache(); // Use the hook
   const [users, setUsers] = useState<MysqlUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +96,7 @@ const UsersPage = () => {
           user={editingUser.user}
           host={editingUser.host}
           onClose={() => setEditingUser(null)}
+          onPrivilegesUpdated={() => refreshDatabases({ force: true })} // Invalidate cache on privilege update
         />
       )}
       <Card>

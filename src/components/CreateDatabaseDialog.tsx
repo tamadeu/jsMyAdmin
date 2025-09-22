@@ -9,15 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Plus, XCircle } from "lucide-react";
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
 
 interface CreateDatabaseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onDatabaseCreated: () => void;
+  // onDatabaseCreated: () => void; // Removed, now handled by context
 }
 
-const CreateDatabaseDialog = ({ open, onOpenChange, onDatabaseCreated }: CreateDatabaseDialogProps) => {
+const CreateDatabaseDialog = ({ open, onOpenChange }: CreateDatabaseDialogProps) => {
   const { toast } = useToast();
+  const { refreshDatabases } = useDatabaseCache(); // Use the hook
   const [databaseName, setDatabaseName] = useState("");
   const [charset, setCharset] = useState("utf8mb4");
   const [collation, setCollation] = useState("utf8mb4_unicode_ci");
@@ -39,7 +41,7 @@ const CreateDatabaseDialog = ({ open, onOpenChange, onDatabaseCreated }: CreateD
           title: "Database Created",
           description: `Database '${databaseName}' created successfully.`,
         });
-        onDatabaseCreated(); // Notify parent to refresh database list
+        refreshDatabases({ force: true }); // Invalidate entire cache
         onOpenChange(false); // Close dialog
         setDatabaseName(""); // Reset form
       } else {
@@ -59,7 +61,7 @@ const CreateDatabaseDialog = ({ open, onOpenChange, onDatabaseCreated }: CreateD
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!isLoading) { onOpenChange(o); setDatabaseName(""); setError(null); } }}> {/* Reset form on close */}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

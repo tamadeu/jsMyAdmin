@@ -17,6 +17,7 @@ interface UserPrivilegesDialogProps {
   user: string;
   host: string;
   onClose: () => void;
+  onPrivilegesUpdated: () => void; // New prop
 }
 
 const GLOBAL_PRIVILEGES = {
@@ -31,7 +32,7 @@ const DB_PRIVILEGES = {
   administration: ["LOCK TABLES", "REFERENCES"]
 };
 
-const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps) => {
+const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: UserPrivilegesDialogProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -79,6 +80,7 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
       setIsSaving(true);
       await apiService.updateUserPrivileges(user, host, { privileges: Array.from(globalPrivileges) });
       toast({ title: "Global Privileges Updated" });
+      onPrivilegesUpdated(); // Notify parent to refresh cache
     } catch (err) {
       toast({ title: "Update Failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
     } finally {
@@ -90,6 +92,7 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
     try {
       await apiService.revokeDatabasePrivileges(user, host, database);
       toast({ title: "Privileges Revoked", description: `All privileges on ${database} revoked.` });
+      onPrivilegesUpdated(); // Notify parent to refresh cache
       fetchAllData();
     } catch (err) {
       toast({ title: "Revoke Failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
@@ -113,6 +116,7 @@ const UserPrivilegesDialog = ({ user, host, onClose }: UserPrivilegesDialogProps
       );
       toast({ title: "Database Privileges Updated" });
       setEditingDb(null);
+      onPrivilegesUpdated(); // Notify parent to refresh cache
       fetchAllData();
     } catch (err) {
       toast({ title: "Update Failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });

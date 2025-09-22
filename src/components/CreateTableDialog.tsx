@@ -10,13 +10,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Plus, XCircle, Table, Trash2 } from "lucide-react";
 import { apiService, TableColumnDefinition } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
 import { v4 as uuidv4 } from 'uuid';
 
 interface CreateTableDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   database: string;
-  onTableCreated: () => void;
+  // onTableCreated: () => void; // Removed, now handled by context
 }
 
 const DATA_TYPES = [
@@ -24,8 +25,9 @@ const DATA_TYPES = [
   "TINYINT", "SMALLINT", "MEDIUMINT", "BIGINT", "CHAR", "BLOB", "ENUM", "SET", "JSON"
 ];
 
-const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: CreateTableDialogProps) => {
+const CreateTableDialog = ({ open, onOpenChange, database }: CreateTableDialogProps) => {
   const { toast } = useToast();
+  const { refreshDatabases } = useDatabaseCache(); // Use the hook
   const [tableName, setTableName] = useState("");
   const [columns, setColumns] = useState<TableColumnDefinition[]>([
     { id: uuidv4(), name: "", type: "INT", nullable: false, isPrimaryKey: false, isAutoIncrement: false, defaultValue: null }
@@ -191,7 +193,7 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
           title: "Table Created",
           description: `Table '${tableName}' created successfully in '${database}'.`,
         });
-        onTableCreated(); // Notify parent to refresh table list
+        refreshDatabases({ databaseName: database }); // Invalidate cache for this database
         onOpenChange(false); // Close dialog
         resetForm(); // Reset form
       } else {

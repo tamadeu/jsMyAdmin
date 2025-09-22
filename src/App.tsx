@@ -8,6 +8,7 @@ import Layout from "./components/layout/Layout";
 import LoginPage from "./pages/Login";
 import { TabProvider } from "./context/TabContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { DatabaseCacheProvider } from "./context/DatabaseCacheContext"; // New import
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -43,12 +44,14 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="dark" storageKey="phpmyadmin-theme">
-      <AuthProvider> {/* AuthProvider movido para envolver mais componentes */}
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AppContent />
-        </TooltipProvider>
+      <AuthProvider>
+        <DatabaseCacheProvider> {/* Wrap with DatabaseCacheProvider */}
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <AppContent />
+          </TooltipProvider>
+        </DatabaseCacheProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

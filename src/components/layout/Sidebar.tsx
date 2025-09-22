@@ -12,24 +12,8 @@ import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs, AppTab } from "@/context/TabContext";
 import { useAuth } from "@/context/AuthContext";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
 import CreateDatabaseDialog from "@/components/CreateDatabaseDialog";
-
-interface DatabaseInfo {
-  name: string;
-  tables: DatabaseTablesResponse['tables'];
-  views: DatabaseTablesResponse['views'];
-  totalTables: number;
-  totalViews: number;
-}
-
-// Helper function for deep comparison of string arrays
-const arraysEqual = (a: string[], b: string[]) => {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-};
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -37,10 +21,9 @@ const Sidebar = () => {
   const { toast } = useToast();
   const { tabs, activeTabId, addTab, setActiveTab, getTabById } = useTabs();
   const { hasPrivilege } = useAuth();
+  const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache(); // Use the hook
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [expandedDatabases, setExpandedDatabases] = useState<string[]>([]);
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [isCreateDbDialogOpen, setIsCreateDbDialogOpen] = useState(false);
@@ -64,11 +47,6 @@ const Sidebar = () => {
     }
     return false;
   };
-
-  // Load databases on component mount
-  useEffect(() => {
-    loadDatabases();
-  }, []);
 
   // Update expanded databases based on current active tab
   useEffect(() => {
@@ -99,95 +77,15 @@ const Sidebar = () => {
         }
       }
 
-      setExpandedDatabases(prev => arraysEqual(prev, targetExpandedDatabases) ? prev : targetExpandedDatabases);
-      setExpandedSections(prev => arraysEqual(prev, targetExpandedSections) ? prev : targetExpandedSections);
+      // Only update if different to prevent unnecessary re-renders
+      setExpandedDatabases(prev => JSON.stringify(prev) === JSON.stringify(targetExpandedDatabases) ? prev : targetExpandedDatabases);
+      setExpandedSections(prev => JSON.stringify(prev) === JSON.stringify(targetExpandedSections) ? prev : targetExpandedSections);
     } 
   }, [activeTabId, databases, getTabById]);
 
-  const loadDatabases = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const databaseNames = await apiService.getDatabases();
-      
-      const databasesWithTablesAndViews = await Promise.all(
-        databaseNames.map(async (dbName) => {
-          try {
-            const tablesData = await apiService.getTables(dbName);
-            return {
-              name: dbName,
-              tables: tablesData.tables,
-              views: tablesData.views,
-              totalTables: tablesData.totalTables,
-              totalViews: tablesData.totalViews
-            };
-          } catch (error) {
-            console.error(`Error loading tables for ${dbName}:`, error);
-            return {
-              name: dbName,
-              tables: [],
-              views: [],
-              totalTables: 0,
-              totalViews: 0
-            };
-          }
-        })
-      );
-
-      setDatabases(prev => {
-        if (JSON.stringify(prev) === JSON.stringify(databasesWithTablesAndViews)) {
-          return prev;
-        }
-        return databasesWithTablesAndViews;
-      });
-      
-    } catch (error) {
-      console.error('Error loading databases:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load databases');
-      toast({
-        title: "Error loading databases",
-        description: "Please check your database connection in Configuration",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleDatabaseToggle = async (databaseName: string) => {
-    if (!expandedDatabases.includes(databaseName)) {
-      const database = databases.find(db => db.name === databaseName);
-      if (database && database.tables.length === 0 && database.views.length === 0) {
-        try {
-          const tablesData = await apiService.getTables(databaseName);
-          setDatabases(prev => {
-            const updated = prev.map(db => 
-              db.name === databaseName 
-                ? { 
-                    ...db, 
-                    tables: tablesData.tables,
-                    views: tablesData.views,
-                    totalTables: tablesData.totalTables,
-                    totalViews: tablesData.totalViews
-                  }
-                : db
-            );
-            if (JSON.stringify(prev) === JSON.stringify(updated)) { 
-                return prev;
-            }
-            return updated;
-          });
-        } catch (error) {
-          console.error(`Error loading tables for ${databaseName}:`, error);
-          toast({
-            title: "Error loading tables",
-            description: `Failed to load tables for ${databaseName}`,
-            variant: "destructive"
-          });
-        }
-      }
-    }
+    // The context already loads all tables/views for all databases.
+    // So, no need to fetch tables here. Just toggle expansion.
     setExpandedDatabases(prev => 
       prev.includes(databaseName) 
         ? prev.filter(name => name !== databaseName) 
@@ -280,16 +178,16 @@ const Sidebar = () => {
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={loadDatabases}
-              disabled={isLoading}
+              onClick={() => refreshDatabases({ force: true })} // Force refresh
+              disabled={isLoadingDatabases}
               className="h-6 w-6 p-0"
             >
-              <Loader2 className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+              <Loader2 className={`h-3 w-3 ${isLoadingDatabases ? 'animate-spin' : ''}`} />
             </Button>
           </div>
           
           {/* Loading State */}
-          {isLoading && (
+          {isLoadingDatabases && (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
@@ -299,7 +197,7 @@ const Sidebar = () => {
           )}
 
           {/* Error State */}
-          {error && !isLoading && (
+          {databaseError && !isLoadingDatabases && (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <AlertCircle className="h-6 w-6 mx-auto mb-2 text-red-500" />
@@ -307,7 +205,7 @@ const Sidebar = () => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={loadDatabases}
+                  onClick={() => refreshDatabases({ force: true })} // Force refresh
                   className="text-xs"
                 >
                   Retry
@@ -317,7 +215,7 @@ const Sidebar = () => {
           )}
 
           {/* Databases */}
-          {!isLoading && !error && (
+          {!isLoadingDatabases && !databaseError && (
             <Accordion 
               type="multiple" 
               className="w-full" 
@@ -449,7 +347,7 @@ const Sidebar = () => {
           )}
 
           {/* No databases found */}
-          {!isLoading && !error && filteredDatabases.length === 0 && databases.length > 0 && (
+          {!isLoadingDatabases && !databaseError && filteredDatabases.length === 0 && databases.length > 0 && (
             <div className="text-center py-4">
               <p className="text-sm text-muted-foreground">No databases match your search</p>
             </div>
@@ -471,7 +369,7 @@ const Sidebar = () => {
       <CreateDatabaseDialog
         open={isCreateDbDialogOpen}
         onOpenChange={setIsCreateDbDialogOpen}
-        onDatabaseCreated={loadDatabases}
+        onDatabaseCreated={() => refreshDatabases({ force: true })} // Invalidate cache on new DB
       />
     </div>
   );

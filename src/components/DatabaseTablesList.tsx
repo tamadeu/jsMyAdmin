@@ -10,6 +10,7 @@ import { apiService, TableInfo } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
 import CreateTableDialog from "@/components/CreateTableDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -22,38 +23,27 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   const { toast } = useToast();
   const navigate = useNavigate();
   const { hasPrivilege } = useAuth();
+  const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache(); // Use the hook
+
   const [allTables, setAllTables] = useState<TableInfo[]>([]);
   const [allViews, setAllViews] = useState<TableInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateTableDialogOpen, setIsCreateTableDialogOpen] = useState(false);
   const [deleteTableConfirm, setDeleteTableConfirm] = useState<string | null>(null);
   const [truncateTableConfirm, setTruncateTableConfirm] = useState<string | null>(null);
 
-  const loadTablesAndViews = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await apiService.getTables(database);
-      setAllTables(data.tables);
-      setAllViews(data.views);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load tables and views";
-      setError(errorMessage);
-      toast({
-        title: "Error loading tables",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [database, toast]);
-
+  // This component now gets its data from the cache context
   useEffect(() => {
-    loadTablesAndViews();
-  }, [loadTablesAndViews]);
+    const dbInfo = databases.find(db => db.name === database);
+    if (dbInfo) {
+      setAllTables(dbInfo.tables);
+      setAllViews(dbInfo.views);
+    } else {
+      // If database not found in cache, it might be loading or an error
+      setAllTables([]);
+      setAllViews([]);
+    }
+  }, [databases, database]);
 
   const filteredItems = useMemo(() => {
     let items: TableInfo[] = [];
@@ -84,7 +74,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         title: "Table Deleted",
         description: `Table '${tableName}' deleted successfully.`,
       });
-      loadTablesAndViews();
+      refreshDatabases({ databaseName: database }); // Invalidate cache for this database
     } catch (err) {
       toast({
         title: "Error Deleting Table",
@@ -103,7 +93,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         title: "Table Truncated",
         description: `All data from table '${tableName}' has been removed.`,
       });
-      loadTablesAndViews();
+      refreshDatabases({ databaseName: database }); // Invalidate cache for this database
     } catch (err) {
       toast({
         title: "Error Truncating Table",
@@ -131,7 +121,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
     }
   };
 
-  if (isLoading) {
+  if (isLoadingDatabases) { // Use isLoadingDatabases from context
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -142,13 +132,13 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
     );
   }
 
-  if (error) {
+  if (databaseError) { // Use databaseError from context
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
-          <p className="text-red-500 mb-4">{error}</p>
-          <Button onClick={loadTablesAndViews} variant="outline">
+          <p className="text-red-500 mb-4">{databaseError}</p>
+          <Button onClick={() => refreshDatabases({ force: true })} variant="outline">
             Retry
           </Button>
         </div>
@@ -166,7 +156,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
           <p className="text-muted-foreground">{getDescription()}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={loadTablesAndViews}>
+          <Button variant="outline" size="sm" onClick={() => refreshDatabases({ databaseName: database, force: true })}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -285,7 +275,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         open={isCreateTableDialogOpen}
         onOpenChange={setIsCreateTableDialogOpen}
         database={database}
-        onTableCreated={loadTablesAndViews}
+        // onTableCreated prop is no longer needed here, as CreateTableDialog directly calls refreshDatabases
       />
 
       {/* Delete Table Confirmation Dialog */}

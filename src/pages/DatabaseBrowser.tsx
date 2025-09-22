@@ -1,15 +1,19 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { Database, Table, Search, Filter, RotateCcw, Download, Plus, Edit, Trash2, Loader2, AlertCircle, X, Copy, Save, XCircle } from "lucide-react";
+"use client";
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { QueryResult, apiService, TableData } from "@/services/api";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp, Plus, Edit, Copy, Trash2, Save, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { apiService, TableData } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
 import InsertRowDialog from "@/components/InsertRowDialog"; // Import the new dialog
 
 // Custom hook for debouncing
@@ -54,6 +58,7 @@ interface DatabaseBrowserProps {
 const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const { toast } = useToast();
   const { hasPrivilege } = useAuth();
+  const { refreshDatabases } = useDatabaseCache(); // Use the hook
   const [searchInput, setSearchInput] = useState(""); // Input value (immediate)
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [tableData, setTableData] = useState<TableData | null>(null);
@@ -216,6 +221,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
       // Refresh data to show changes
       await loadTableData();
+      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
       
     } catch (error) {
       console.error('Error updating cell:', error);
@@ -266,6 +272,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
       // Refresh data to show changes
       await loadTableData();
+      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
       
     } catch (error) {
       console.error('Error updating row:', error);
@@ -305,6 +312,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
       // Refresh data to show new row
       await loadTableData();
+      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
       
     } catch (error) {
       console.error('Error copying row:', error);
@@ -337,6 +345,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
       // Refresh data to show changes
       await loadTableData();
+      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
       
     } catch (error) {
       console.error('Error deleting row:', error);
@@ -427,7 +436,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
-          <p className="text-red-500 mb-4">Failed to load table data</p>
+          <p className="text-red-500 mb-4">{error}</p>
           <Button onClick={loadTableData} variant="outline">
             Retry
           </Button>
@@ -476,7 +485,11 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={loadTableData}>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={loadTableData}
+                >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
@@ -716,7 +729,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                 </>
               ) : (
                 <div className="text-center py-8">
-                  <Table className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <TableIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">
                     {hasAnyFilters ? 'No data found matching your filters' : 'No data in this table'}
                   </p>
@@ -809,7 +822,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
             database={database}
             table={table}
             columns={tableData.columns}
-            onRowInserted={loadTableData} // Refresh data after successful insert
+            onRowInserted={() => {
+              loadTableData(); // Refresh data after successful insert
+              refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
+            }}
           />
         )}
       </div>

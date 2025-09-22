@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { apiService, TableData, TableColumnDefinition } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
 import { v4 as uuidv4 } from 'uuid';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
@@ -28,6 +29,7 @@ const DATA_TYPES = [
 const TableStructure = ({ database, table }: TableStructureProps) => {
   const { toast } = useToast();
   const { hasPrivilege } = useAuth();
+  const { refreshDatabases } = useDatabaseCache(); // Use the hook
   const [originalColumns, setOriginalColumns] = useState<TableData['columns']>([]);
   const [editableColumns, setEditableColumns] = useState<TableColumnDefinition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -216,6 +218,7 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
           description: `Structure for table '${table}' updated successfully.`,
         });
         setIsEditing(false);
+        refreshDatabases({ databaseName: database }); // Invalidate cache for this database
         loadTableStructure(); // Reload original columns
       } else {
         throw new Error(result.message || "Failed to update table structure.");
