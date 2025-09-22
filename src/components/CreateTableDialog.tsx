@@ -95,6 +95,11 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
             updatedCol.length = 11; // Default for INT types
           }
         }
+        
+        // Handle defaultValue: if input is empty, store as '', not null
+        if (field === 'defaultValue') {
+          updatedCol.defaultValue = value === '' ? '' : value;
+        }
 
         return updatedCol;
       }
@@ -155,6 +160,12 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
         setError(`Length is required and must be greater than 0 for ${col.type} column '${col.name}'.`);
         return false;
       }
+      
+      // Validation for NOT NULL columns without a default value
+      if (!col.nullable && !col.isAutoIncrement && (col.defaultValue === null || col.defaultValue === '')) {
+        setError(`Non-nullable column '${col.name}' must have a default value.`);
+        return false;
+      }
     }
 
     if (!hasPrimaryKey) {
@@ -191,7 +202,7 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
       toast({
         title: "Error Creating Table",
-        description: err instanceof Error ? err.message : "Failed to create table.",
+        description: err instanceof Error ? err.message : "Failed to create database.",
         variant: "destructive",
       });
     } finally {
@@ -272,8 +283,8 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
                   <Label htmlFor={`col-default-${col.id}`} className="text-xs">Default Value</Label>
                   <Input
                     id={`col-default-${col.id}`}
-                    value={col.defaultValue || ''}
-                    onChange={(e) => handleColumnChange(col.id, "defaultValue", e.target.value || null)}
+                    value={col.defaultValue === null ? 'NULL' : String(col.defaultValue || '')}
+                    onChange={(e) => handleColumnChange(col.id, "defaultValue", e.target.value)}
                     placeholder="NULL / 'value' / 0"
                     className="h-8 text-sm"
                   />

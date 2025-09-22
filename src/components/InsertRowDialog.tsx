@@ -36,7 +36,8 @@ const InsertRowDialog = ({ open, onOpenChange, database, table, columns, onRowIn
         } else if (col.default !== null && col.default !== undefined) {
           initialData[col.name] = String(col.default);
         } else if (col.null) {
-          initialData[col.name] = null; // Explicitly set to null for nullable fields
+          // For nullable columns, start with an empty string, not null, so user can type
+          initialData[col.name] = ''; 
         } else {
           initialData[col.name] = ''; // Empty string for non-nullable, non-default fields
         }
