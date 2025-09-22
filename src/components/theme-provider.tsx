@@ -23,7 +23,7 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "vite-ui-theme",
+  storageKey = "jsmyadmin-theme", // Updated from phpmyadmin-theme
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(

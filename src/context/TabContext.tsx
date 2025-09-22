@@ -61,12 +61,12 @@ export function TabProvider({ children }: TabProviderProps) {
 
   const getTabsKey = useCallback(() => {
     if (!user) return null;
-    return `phpmyadmin-tabs-${user.username}@${user.host}`;
+    return `jsmyadmin-tabs-${user.username}@${user.host}`;
   }, [user]);
 
   const getActiveTabKey = useCallback(() => {
     if (!user) return null;
-    return `phpmyadmin-active-tab-${user.username}@${user.host}`;
+    return `jsmyadmin-active-tab-${user.username}@${user.host}`;
   }, [user]);
 
   const saveTabsToLocalStorage = useCallback((currentTabs: AppTab[]) => {

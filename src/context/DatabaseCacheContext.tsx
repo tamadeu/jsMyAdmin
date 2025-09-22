@@ -33,7 +33,7 @@ export function DatabaseCacheProvider({ children }: { children: ReactNode }) {
 
   const getCacheKey = useCallback(() => {
     if (!user) return null;
-    return `phpmyadmin-db-cache-${user.username}@${user.host}`;
+    return `jsmyadmin-db-cache-${user.username}@${user.host}`;
   }, [user]);
 
   const loadDatabasesFromAPI = useCallback(async () => {
