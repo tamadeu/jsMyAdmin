@@ -45,12 +45,25 @@ let serverConfig = null;
 // Variável para armazenar o pool de conexões
 let dbPool = null;
 
+// Credenciais do usuário do sistema (para operações internas do backend)
+const MYSQL_SYSTEM_USER = process.env.MYSQL_SYSTEM_USER;
+const MYSQL_SYSTEM_PASSWORD = process.env.MYSQL_SYSTEM_PASSWORD;
+
+if (!MYSQL_SYSTEM_USER || !MYSQL_SYSTEM_PASSWORD) {
+  console.error("FATAL ERROR: MYSQL_SYSTEM_USER ou MYSQL_SYSTEM_PASSWORD não estão definidos no arquivo .env.");
+  console.error("Por favor, adicione as credenciais de um usuário MySQL com privilégios de CREATE DATABASE e CREATE TABLE para o backend.");
+  process.exit(1);
+}
+
 // Função para carregar a configuração do servidor uma vez
 async function loadServerConfig() {
   try {
     const configPath = path.join(__dirname, '../database-config.json');
     const configData = await fs.readFile(configPath, 'utf8');
     serverConfig = JSON.parse(configData);
+    // Adiciona as credenciais do usuário do sistema à configuração em memória
+    serverConfig.database.username = MYSQL_SYSTEM_USER;
+    serverConfig.database.password = MYSQL_SYSTEM_PASSWORD;
     console.log('Server configuration loaded successfully.');
   } catch (error) {
     console.error('Error loading server config at startup:', error);
@@ -104,16 +117,11 @@ function processDataForMySQL(data) {
 }
 
 // Helper function to get a connection from the pool (already authenticated as system user)
-async function getRootPooledConnection() {
+async function getSystemPooledConnection() {
   if (!dbPool || !serverConfig) {
     throw new Error('Database connection pool or server configuration not initialized.');
   }
-  if (!serverConfig.database.username || !serverConfig.database.password) {
-    console.error("FATAL: System user credentials (username/password) are missing in serverConfig.database. Please check database-config.json.");
-    throw new Error("System user credentials missing for internal operations.");
-  }
-
-  console.log("Attempting to get root pooled connection with user:", serverConfig.database.username);
+  console.log("Attempting to get system pooled connection with user:", serverConfig.database.username);
   // Connections from the pool are already authenticated as the system user
   return await dbPool.getConnection();
 }
@@ -159,9 +167,9 @@ const authMiddleware = async (req, res, next) => {
   }
   const token = authHeader.split(' ')[1];
   
-  let connection; // Usar 'connection' para o pool
+  let connection;
   try {
-    connection = await getRootPooledConnection(); // Obter conexão do pool para o usuário root
+    connection = await getSystemPooledConnection(); // Obter conexão do pool para o usuário do sistema
 
     const [sessions] = await connection.execute(
       'SELECT * FROM `javascriptmyadmin_meta`.`_jsma_sessions` WHERE `session_token` = ? AND `expires_at` > NOW()',
@@ -192,19 +200,29 @@ const authMiddleware = async (req, res, next) => {
 
 // Login endpoint
 app.post('/api/login', async (req, res) => {
-  let connection;
+  let userConnection; // Conexão temporária para testar as credenciais do usuário
+  let systemConnection; // Conexão do pool para operações do sistema
   try {
     const { host, port, username, password } = req.body;
 
-    // 1. Update config file with new host, port. Keep system user credentials.
+    // 1. Testar conexão com as credenciais fornecidas pelo usuário
+    userConnection = await mysql.createConnection({
+      host: host,
+      port: parseInt(port, 10),
+      user: username,
+      password: password,
+      connectTimeout: 5000,
+      timezone: '+00:00'
+    });
+    await userConnection.execute('SELECT 1'); // Verifica se a conexão é válida
+
+    // 2. Atualizar o arquivo de configuração com o novo host e porta (para o frontend)
     const configPath = path.join(__dirname, '../database-config.json');
     const configData = await fs.readFile(configPath, 'utf8');
     const config = JSON.parse(configData);
     
-    // Only update host and port from login request, keep system user credentials
     config.database.host = host;
     config.database.port = parseInt(port, 10);
-    // DO NOT update config.database.username and config.database.password here
     
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 
@@ -218,8 +236,8 @@ app.post('/api/login', async (req, res) => {
     dbPool = mysql.createPool({ // Recria o pool com a nova configuração
       host: serverConfig.database.host,
       port: serverConfig.database.port,
-      user: serverConfig.database.username, // Adicionado user
-      password: serverConfig.database.password, // Adicionado password
+      user: serverConfig.database.username, // Usuário do sistema
+      password: serverConfig.database.password, // Senha do usuário do sistema
       waitForConnections: true,
       connectionLimit: serverConfig.database.maxConnections || 10,
       queueLimit: 0,
@@ -227,44 +245,13 @@ app.post('/api/login', async (req, res) => {
     });
     console.log('Database connection pool re-initialized with new config.');
 
-
-    // 2. Connect with provided credentials (direct connection for initial test)
-    connection = await mysql.createConnection({
-      host: host,
-      port: parseInt(port, 10),
-      user: username,
-      password: password,
-      connectTimeout: 5000,
-      timezone: '+00:00'
-    });
-    await connection.execute('SELECT 1');
-
-    // 3. Check and initialize system tables using the user's connection
-    try {
-        await connection.query(`CREATE DATABASE IF NOT EXISTS ??`, [SYSTEM_DATABASE]);
-        
-        const tableCreationQueries = [
-          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
-          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
-          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
-          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
-        ];
-
-        for (const query of tableCreationQueries) {
-          await connection.query(query);
-        }
-    } catch (initError) {
-        console.error('System initialization failed during login:', initError);
-        throw new Error(`Failed to initialize system tables. Please log in with a user that has CREATE DATABASE and CREATE TABLE privileges to complete the setup. Original error: ${initError.message}`);
-    }
-
-    // 4. Get current user's host
-    const [currentUserRows] = await connection.query('SELECT CURRENT_USER() as user');
+    // 3. Obter o host do usuário conectado
+    const [currentUserRows] = await userConnection.query('SELECT CURRENT_USER() as user');
     const currentUser = currentUserRows[0].user;
     const [connectedUser, connectedHost] = currentUser.split('@');
 
-    // 5. Fetch global privileges
-    const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
+    // 4. Obter privilégios globais do usuário
+    const [grants] = await userConnection.query('SHOW GRANTS FOR CURRENT_USER()');
     let globalPrivileges = new Set();
     let hasGrantOption = false;
     grants.forEach(grantRow => {
@@ -292,17 +279,18 @@ app.post('/api/login', async (req, res) => {
       ];
     }
 
-    // 6. Create session in system DB using the user's connection
+    // 5. Criar sessão no banco de dados do sistema usando a conexão do pool do sistema
+    systemConnection = await getSystemPooledConnection();
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const encryptedPassword = encrypt(password);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    await connection.query(
+    await systemConnection.query(
       `INSERT INTO \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` (session_token, user, host, encrypted_password, expires_at) VALUES (?, ?, ?, ?, ?)`,
       [sessionToken, username, connectedHost, encryptedPassword, expiresAt]
     );
 
-    // 7. Send response
+    // 6. Enviar resposta
     res.json({ 
       success: true, 
       message: 'Login successful',
@@ -317,7 +305,8 @@ app.post('/api/login', async (req, res) => {
     console.error('Login failed:', error);
     res.status(401).json({ success: false, message: error.message });
   } finally {
-    if (connection) await connection.end(); // Conexão direta deve ser encerrada
+    if (userConnection) await userConnection.end(); // Conexão direta deve ser encerrada
+    if (systemConnection) systemConnection.release(); // Liberar conexão do pool
   }
 });
 
@@ -328,7 +317,7 @@ app.post('/api/logout', authMiddleware, async (req, res) => {
     const authHeader = req.headers.authorization;
     const token = authHeader.split(' ')[1];
     
-    connection = await getRootPooledConnection(); // Obter conexão do pool
+    connection = await getSystemPooledConnection(); // Obter conexão do pool
 
     await connection.execute('DELETE FROM `javascriptmyadmin_meta`.`_jsma_sessions` WHERE `session_token` = ?', [token]);
     res.json({ success: true, message: 'Logged out successfully' });
@@ -438,9 +427,6 @@ app.post('/api/save-config', async (req, res) => {
     // Update only host and port from the new config, preserve system user credentials
     existingConfig.database.host = config.database.host;
     existingConfig.database.port = config.database.port;
-    // Preserve existing username and password for the system user
-    // existingConfig.database.username = config.database.username; // REMOVIDO
-    // existingConfig.database.password = config.database.password; // REMOVIDO
     
     // Also update other application/security settings
     existingConfig.application = config.application;
@@ -458,8 +444,8 @@ app.post('/api/save-config', async (req, res) => {
     dbPool = mysql.createPool({ // Recria o pool com a nova configuração
       host: serverConfig.database.host,
       port: serverConfig.database.port,
-      user: serverConfig.database.username, // Adicionado user
-      password: serverConfig.database.password, // Adicionado password
+      user: serverConfig.database.username, // Usuário do sistema
+      password: serverConfig.database.password, // Senha do usuário do sistema
       waitForConnections: true,
       connectionLimit: serverConfig.database.maxConnections || 10, // Usar maxConnections da config
       queueLimit: 0, // Sem limite na fila de requisições
@@ -1070,7 +1056,7 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
   try {
     const { query_text, database_context, execution_time_ms, status, error_message } = req.body;
     
-    connection = await getRootPooledConnection(); // Obter conexão do pool
+    connection = await getSystemPooledConnection(); // Obter conexão do pool
 
     const historyQuery = `
       INSERT INTO \`javascriptmyadmin_meta\`.\`_jsma_query_history\` 
@@ -1255,6 +1241,61 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
   }
 });
 
+// Endpoint para verificar o status do sistema (se as tabelas meta existem)
+app.get('/api/system/status', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getSystemPooledConnection();
+    const [rows] = await connection.query(`SHOW DATABASES LIKE ?`, [SYSTEM_DATABASE]);
+    if (rows.length === 0) {
+      return res.json({ status: 'needs_initialization', message: 'System database not found.' });
+    }
+
+    const [tableRows] = await connection.query(`SHOW TABLES FROM \`${SYSTEM_DATABASE}\``);
+    const existingTables = tableRows.map(row => Object.values(row)[0]);
+    const missingTables = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"]
+      .filter(table => !existingTables.includes(table));
+
+    if (missingTables.length > 0) {
+      return res.json({ status: 'needs_initialization', message: `Missing system tables: ${missingTables.join(', ')}` });
+    }
+
+    res.json({ status: 'ready', message: 'System is initialized.' });
+  } catch (error) {
+    console.error('Error checking system status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Endpoint para inicializar as tabelas do sistema
+app.post('/api/system/initialize', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getSystemPooledConnection();
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ??`, [SYSTEM_DATABASE]);
+        
+    const tableCreationQueries = [
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
+    ];
+
+    for (const query of tableCreationQueries) {
+      await connection.query(query);
+    }
+    res.json({ success: true, message: 'System tables initialized successfully.' });
+  } catch (error) {
+    console.error('Error initializing system tables:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+
 // Inicializa a configuração do servidor e então inicia o servidor
 async function startServer() {
   try {
@@ -1264,8 +1305,8 @@ async function startServer() {
     dbPool = mysql.createPool({
       host: serverConfig.database.host,
       port: serverConfig.database.port,
-      user: serverConfig.database.username, // Adicionado user
-      password: serverConfig.database.password, // Adicionado password
+      user: serverConfig.database.username, // Usuário do sistema
+      password: serverConfig.database.password, // Senha do usuário do sistema
       waitForConnections: true,
       connectionLimit: serverConfig.database.maxConnections || 10, // Usar maxConnections da config
       queueLimit: 0, // Sem limite na fila de requisições

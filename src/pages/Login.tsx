@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Database, Loader2, AlertCircle } from "lucide-react";
-import { DatabaseConfig } from "@/services/api";
+import { apiService, DatabaseConfig } from "@/services/api"; // Import apiService
 
 const LoginPage = () => {
   const { login } = useAuth();
@@ -32,7 +32,7 @@ const LoginPage = () => {
         const savedConfig: DatabaseConfig = JSON.parse(savedConfigJson);
         setHost(savedConfig.database.host);
         setPort(savedConfig.database.port);
-        setUsername(savedConfig.database.username);
+        // Do NOT load username/password from config, they are user-specific for login
       }
     } catch (e) {
       console.error("Failed to load config from localStorage", e);
@@ -44,6 +44,33 @@ const LoginPage = () => {
     setIsLoading(true);
     setError(null);
     try {
+      // Save host and port to config (for frontend's general connection parameters)
+      // The backend's system user credentials are NOT saved here.
+      const currentConfig: DatabaseConfig = {
+        database: { host, port, username: "", password: "", defaultDatabase: "mysql", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", connectionTimeout: 10000, maxConnections: 10, ssl: false, sslCertificate: "", sslKey: "", sslCA: "" },
+        application: { theme: "dark", language: "en", queryTimeout: 30000, maxQueryResults: 1000, autoRefresh: false, refreshInterval: 30000 },
+        security: { allowMultipleStatements: false, allowLocalInfile: false, requireSSL: false }
+      };
+      // Attempt to load existing config from localStorage to preserve other settings
+      const savedConfigJson = localStorage.getItem('database-config');
+      if (savedConfigJson) {
+        const existingConfig = JSON.parse(savedConfigJson);
+        currentConfig.application = existingConfig.application;
+        currentConfig.security = existingConfig.security;
+        currentConfig.database.defaultDatabase = existingConfig.database.defaultDatabase;
+        currentConfig.database.charset = existingConfig.database.charset;
+        currentConfig.database.collation = existingConfig.database.collation;
+        currentConfig.database.connectionTimeout = existingConfig.database.connectionTimeout;
+        currentConfig.database.maxConnections = existingConfig.database.maxConnections;
+        currentConfig.database.ssl = existingConfig.database.ssl;
+        currentConfig.database.sslCertificate = existingConfig.database.sslCertificate;
+        currentConfig.database.sslKey = existingConfig.database.sslKey;
+        currentConfig.database.sslCA = existingConfig.database.sslCA;
+      }
+
+      await apiService.saveConfig(currentConfig); // Save only host/port and other settings
+
+      // Then attempt to login with user credentials
       await login({ host, port, username, password });
     } catch (err) {
       setError(

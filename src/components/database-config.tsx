@@ -33,7 +33,11 @@ const DatabaseConfigComponent = () => {
     try {
       const savedConfig = localStorage.getItem('database-config');
       if (savedConfig) {
-        setConfig(JSON.parse(savedConfig));
+        const parsedConfig = JSON.parse(savedConfig);
+        // Ensure username and password are not loaded from localStorage for display
+        parsedConfig.database.username = ""; 
+        parsedConfig.database.password = "";
+        setConfig(parsedConfig);
       } else {
         setConfig({
           database: { host: "localhost", port: 3306, username: "", password: "", defaultDatabase: "mysql", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", connectionTimeout: 10000, maxConnections: 10, ssl: false, sslCertificate: "", sslKey: "", sslCA: "" },
@@ -52,13 +56,31 @@ const DatabaseConfigComponent = () => {
     if (!config) return;
     try {
       setIsSaving(true);
-      const result = await apiService.saveConfig(config);
+      // When saving, we only send the relevant parts of the config.
+      // The backend's system user credentials are NOT part of this config object.
+      const configToSave = {
+        database: {
+          host: config.database.host,
+          port: config.database.port,
+          defaultDatabase: config.database.defaultDatabase,
+          charset: config.database.charset,
+          collation: config.database.collation,
+          connectionTimeout: config.database.connectionTimeout,
+          maxConnections: config.database.maxConnections,
+          ssl: config.database.ssl,
+          sslCertificate: config.database.sslCertificate,
+          sslKey: config.database.sslKey,
+          sslCA: config.database.sslCA,
+        },
+        application: config.application,
+        security: config.security
+      };
+
+      const result = await apiService.saveConfig(configToSave);
       if (result.success) {
-        const configToSave = JSON.parse(JSON.stringify(config)); // deep copy
-        if (configToSave.database) {
-          delete configToSave.database.password;
-        }
-        localStorage.setItem('database-config', JSON.stringify(configToSave));
+        // Save a version to localStorage without username/password
+        const localStorageConfig = JSON.parse(JSON.stringify(configToSave));
+        localStorage.setItem('database-config', JSON.stringify(localStorageConfig));
         toast({ title: "Configuration saved", description: result.message || "Database configuration has been saved successfully" });
       } else {
         throw new Error(result.message || 'Failed to save configuration');
@@ -79,19 +101,14 @@ const DatabaseConfigComponent = () => {
   const checkSystemTables = async () => {
     setSystemStatus('loading');
     try {
-      const databases = await apiService.getDatabases();
-      if (!databases.includes(SYSTEM_DATABASE)) {
-        setExistingTables([]);
-        setSystemStatus('ready');
-        return;
-      }
-      const { tables } = await apiService.getTables(SYSTEM_DATABASE);
-      const foundTables = tables.map(t => t.name).filter(name => SYSTEM_TABLES.includes(name));
-      setExistingTables(foundTables);
-      if (foundTables.length === SYSTEM_TABLES.length) {
+      const statusResponse = await apiService.getSystemStatus();
+      if (statusResponse.status === 'ready') {
         setSystemStatus('initialized');
+        const { tables } = await apiService.getTables(SYSTEM_DATABASE);
+        setExistingTables(tables.map(t => t.name));
       } else {
-        setSystemStatus('ready');
+        setSystemStatus('ready'); // Needs initialization
+        setExistingTables([]);
       }
     } catch (error) {
       console.error("Error checking system tables:", error);
@@ -102,20 +119,14 @@ const DatabaseConfigComponent = () => {
   const initializeSystem = async () => {
     setSystemStatus('initializing');
     try {
-      await apiService.executeQuery(`CREATE DATABASE IF NOT EXISTS ${SYSTEM_DATABASE};`);
-      const queries = [
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_query_history ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_favorite_queries ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_favorite_tables ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
-        `CREATE TABLE IF NOT EXISTS ${SYSTEM_DATABASE}._jsma_sessions ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
-      ];
-      for (const query of queries) {
-        const result = await apiService.executeQuery(query);
-        if (!result.success) throw new Error(result.error || 'Failed to execute a setup query.');
+      const result = await apiService.initializeSystem();
+      if (result.success) {
+        toast({ title: "System Initialized", description: "System tables have been created successfully." });
+        setSystemStatus('initialized');
+        await checkSystemTables(); // Re-check to update table list
+      } else {
+        throw new Error(result.message || 'Failed to initialize system tables.');
       }
-      toast({ title: "System Initialized", description: "System tables have been created successfully." });
-      setSystemStatus('initialized');
-      await checkSystemTables();
     } catch (error) {
       console.error("Error initializing system:", error);
       toast({ title: "Initialization Failed", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });

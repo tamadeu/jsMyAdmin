@@ -2,8 +2,6 @@
   "database": {
     "host": "localhost",
     "port": 3306,
-    "username": "root",
-    "password": "Tagima@735",
     "defaultDatabase": "mysql",
     "charset": "utf8mb4",
     "collation": "utf8mb4_unicode_ci",
