@@ -660,15 +660,121 @@ app.delete('/api/databases/:database/tables/:table/data', authMiddleware, async 
   }
 });
 
-// Update table structure (placeholder for now)
+// Update table structure
 app.put('/api/databases/:database/tables/:table/structure', authMiddleware, async (req, res) => {
-  console.log(`Received request to update structure for ${req.params.database}.${req.params.table}`);
-  console.log('New columns:', req.body.columns);
-  // TODO: Implement actual ALTER TABLE logic here
-  // This would involve comparing the old structure (fetched from DB) with the new structure (req.body.columns)
-  // and generating appropriate ALTER TABLE statements (ADD COLUMN, DROP COLUMN, MODIFY COLUMN).
-  // This is a complex task and will be implemented in a future iteration.
-  res.json({ success: true, message: 'Table structure update request received. (Backend logic to be implemented)' });
+  let connection;
+  try {
+    connection = await getUserPooledConnection(req);
+    const { database, table } = req.params;
+    const newColumns = req.body.columns;
+
+    if (!newColumns || !Array.isArray(newColumns)) {
+      return res.status(400).json({ success: false, error: 'New column definitions are required.' });
+    }
+
+    await connection.query(`USE \`${database}\``);
+
+    // 1. Fetch current table structure
+    const [currentDescribe] = await connection.query(`DESCRIBE \`${table}\``);
+    const currentColumns = currentDescribe.map(col => ({
+      name: col.Field,
+      type: col.Type.split('(')[0].toUpperCase(),
+      length: col.Type.includes('(') ? parseInt(col.Type.split('(')[1].replace(')', '')) : undefined,
+      nullable: col.Null === 'YES',
+      isPrimaryKey: col.Key === 'PRI',
+      isAutoIncrement: col.Extra.includes('auto_increment'),
+      defaultValue: col.Default,
+    }));
+
+    const alterStatements = [];
+    const currentColumnMap = new Map(currentColumns.map(c => [c.name, c]));
+    const newColumnMap = new Map(newColumns.map(c => [c.name, c]));
+
+    // Handle primary key changes first
+    const currentPK = currentColumns.find(c => c.isPrimaryKey);
+    const newPK = newColumns.find(c => c.isPrimaryKey);
+
+    if (currentPK && (!newPK || newPK.name !== currentPK.name)) {
+      // Drop existing primary key if it's changing or being removed
+      alterStatements.push(`ALTER TABLE \`${table}\` DROP PRIMARY KEY`);
+    }
+
+    // 2. Identify columns to drop
+    for (const currentColumn of currentColumns) {
+      if (!newColumnMap.has(currentColumn.name)) {
+        alterStatements.push(`ALTER TABLE \`${table}\` DROP COLUMN \`${currentColumn.name}\``);
+      }
+    }
+
+    // 3. Identify columns to add or modify
+    for (const newColumn of newColumns) {
+      const currentColumn = currentColumnMap.get(newColumn.name);
+
+      let columnDefinition = `\`${newColumn.name}\` ${newColumn.type}`;
+      if (newColumn.length !== undefined && newColumn.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newColumn.type.toUpperCase())) {
+        columnDefinition += `(${newColumn.length})`;
+      }
+      if (!newColumn.nullable) {
+        columnDefinition += ` NOT NULL`;
+      }
+      if (newColumn.isAutoIncrement) {
+        columnDefinition += ` AUTO_INCREMENT`;
+      }
+      if (newColumn.defaultValue !== null && newColumn.defaultValue !== undefined && newColumn.defaultValue !== '') {
+        if (typeof newColumn.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(newColumn.defaultValue.toUpperCase())) {
+          columnDefinition += ` DEFAULT ${connection.escape(newColumn.defaultValue)}`;
+        } else {
+          columnDefinition += ` DEFAULT ${newColumn.defaultValue}`;
+        }
+      } else if (newColumn.nullable && newColumn.defaultValue === null) {
+        columnDefinition += ` DEFAULT NULL`;
+      }
+
+      if (!currentColumn) {
+        // Add new column
+        alterStatements.push(`ALTER TABLE \`${table}\` ADD COLUMN ${columnDefinition}`);
+      } else {
+        // Check for modifications
+        const isModified = 
+          currentColumn.name !== newColumn.name ||
+          currentColumn.type !== newColumn.type ||
+          currentColumn.length !== newColumn.length ||
+          currentColumn.nullable !== newColumn.nullable ||
+          currentColumn.isAutoIncrement !== newColumn.isAutoIncrement ||
+          currentColumn.defaultValue !== newColumn.defaultValue;
+
+        if (isModified) {
+          // Modify existing column
+          if (currentColumn.name !== newColumn.name) {
+            // Rename and modify
+            alterStatements.push(`ALTER TABLE \`${table}\` CHANGE COLUMN \`${currentColumn.name}\` ${columnDefinition}`);
+          } else {
+            // Only modify
+            alterStatements.push(`ALTER TABLE \`${table}\` MODIFY COLUMN ${columnDefinition}`);
+          }
+        }
+      }
+    }
+
+    // Add new primary key if it's changing or being added
+    if (newPK && (!currentPK || newPK.name !== currentPK.name)) {
+      alterStatements.push(`ALTER TABLE \`${table}\` ADD PRIMARY KEY (\`${newPK.name}\`)`);
+    }
+
+
+    // Execute all alter statements
+    for (const statement of alterStatements) {
+      console.log("Executing ALTER:", statement);
+      await connection.query(statement);
+    }
+    
+    res.json({ success: true, message: 'Table structure updated successfully.' });
+  } catch (error) {
+    console.error('Error updating table structure:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
 });
 
 // Get table data
@@ -848,7 +954,7 @@ app.post('/api/query', authMiddleware, async (req, res) => {
     if (database) await connection.query(`USE \`${database}\``);
 
     const [rows, fields] = await connection.query(query);
-    const executionTime = Date.Now() - startTime;
+    const executionTime = Date.now() - startTime;
 
     if (query.trim().toLowerCase().startsWith('select')) {
       res.json({
