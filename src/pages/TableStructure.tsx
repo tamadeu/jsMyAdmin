@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Table as TableIcon, Loader2, AlertCircle, RefreshCw, Edit, Plus, Trash2, Save, XCircle } from "lucide-react";
+import { Table as TableIcon, Loader2, AlertCircle, RefreshCw, Edit, Plus, Trash2, Save, XCircle, GripVertical } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +13,7 @@ import { apiService, TableData, TableColumnDefinition } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { v4 as uuidv4 } from 'uuid';
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 interface TableStructureProps {
   database: string;
@@ -249,6 +250,18 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
     setError(null);
   };
 
+  const onDragEnd = (result: any) => {
+    if (!result.destination) {
+      return;
+    }
+
+    const reorderedColumns = Array.from(editableColumns);
+    const [removed] = reorderedColumns.splice(result.source.index, 1);
+    reorderedColumns.splice(result.destination.index, 0, removed);
+
+    setEditableColumns(reorderedColumns);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -338,125 +351,149 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
             </div>
           )}
           <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Length</TableHead>
-                  <TableHead>Null</TableHead>
-                  <TableHead>Key</TableHead>
-                  <TableHead>Default</TableHead>
-                  <TableHead>Extra</TableHead>
-                  {isEditing && <TableHead className="text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {columnsToDisplay.map((col, index) => (
-                  <TableRow key={col.id || col.name}>
-                    <TableCell className="font-medium">
-                      {isEditing ? (
-                        <Input
-                          value={col.name}
-                          onChange={(e) => handleColumnChange(col.id, "name", e.target.value)}
-                          className="h-8 text-sm"
-                        />
-                      ) : (
-                        col.name
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isEditing ? (
-                        <Select value={col.type} onValueChange={(value) => handleColumnChange(col.id, "type", value)}>
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {DATA_TYPES.map(type => (
-                              <SelectItem key={type} value={type}>{type}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        col.type
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isEditing && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(col.type) ? (
-                        <Input
-                          type="number"
-                          value={col.length || ''}
-                          onChange={(e) => handleColumnChange(col.id, "length", e.target.value ? parseInt(e.target.value) : undefined)}
-                          className="h-8 text-sm w-20"
-                        />
-                      ) : (
-                        col.length || <span className="italic text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {isEditing ? (
-                        <Checkbox
-                          checked={col.nullable}
-                          onCheckedChange={(checked) => handleColumnChange(col.id, "nullable", !!checked)}
-                          disabled={col.isPrimaryKey}
-                        />
-                      ) : (
-                        col.nullable ? 'YES' : 'NO'
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {isEditing ? (
-                          <Checkbox
-                            checked={col.isPrimaryKey}
-                            onCheckedChange={(checked) => handleColumnChange(col.id, "isPrimaryKey", !!checked)}
-                          />
-                        ) : (
-                          col.isPrimaryKey ? 'PRI' : ''
-                        )}
-                        {isEditing && <Label className="text-xs">PK</Label>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {isEditing ? (
-                        <Input
-                          value={col.defaultValue === null ? 'NULL' : String(col.defaultValue || '')}
-                          onChange={(e) => handleColumnChange(col.id, "defaultValue", e.target.value === 'NULL' ? null : e.target.value)}
-                          placeholder="NULL / 'value' / 0"
-                          className="h-8 text-sm"
-                          disabled={col.isAutoIncrement}
-                        />
-                      ) : (
-                        col.defaultValue === null ? <span className="italic text-muted-foreground">NULL</span> : String(col.defaultValue)
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        {isEditing ? (
-                          <Checkbox
-                            checked={col.isAutoIncrement}
-                            onCheckedChange={(checked) => handleColumnChange(col.id, "isAutoIncrement", !!checked)}
-                            disabled={!col.isPrimaryKey || !['INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT'].includes(col.type)}
-                          />
-                        ) : (
-                          col.isAutoIncrement ? 'auto_increment' : ''
-                        )}
-                        {isEditing && <Label className="text-xs">AI</Label>}
-                      </div>
-                    </TableCell>
-                    {isEditing && (
-                      <TableCell className="text-right">
-                        {editableColumns.length > 1 && (
-                          <Button variant="ghost" size="sm" onClick={() => handleRemoveColumn(col.id)} className="h-8 w-8 p-0 text-red-500">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    )}
+            <DragDropContext onDragEnd={onDragEnd}>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {isEditing && <TableHead className="w-10"></TableHead>} {/* Drag handle column */}
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Length</TableHead>
+                    <TableHead>Null</TableHead>
+                    <TableHead>Key</TableHead>
+                    <TableHead>Default</TableHead>
+                    <TableHead>Extra</TableHead>
+                    {isEditing && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <Droppable droppableId="columns">
+                  {(provided) => (
+                    <TableBody {...provided.droppableProps} ref={provided.innerRef}>
+                      {columnsToDisplay.map((col, index) => (
+                        <Draggable key={col.id} draggableId={col.id} index={index} isDragDisabled={!isEditing}>
+                          {(provided, snapshot) => (
+                            <TableRow
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              style={{
+                                ...provided.draggableProps.style,
+                                backgroundColor: snapshot.isDragging ? 'hsl(var(--accent))' : 'transparent',
+                              }}
+                            >
+                              {isEditing && (
+                                <TableCell className="w-10 text-center" {...provided.dragHandleProps}>
+                                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                                </TableCell>
+                              )}
+                              <TableCell className="font-medium">
+                                {isEditing ? (
+                                  <Input
+                                    value={col.name}
+                                    onChange={(e) => handleColumnChange(col.id, "name", e.target.value)}
+                                    className="h-8 text-sm"
+                                  />
+                                ) : (
+                                  col.name
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <Select value={col.type} onValueChange={(value) => handleColumnChange(col.id, "type", value)}>
+                                    <SelectTrigger className="h-8 text-sm">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {DATA_TYPES.map(type => (
+                                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  col.type
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {isEditing && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(col.type) ? (
+                                  <Input
+                                    type="number"
+                                    value={col.length || ''}
+                                    onChange={(e) => handleColumnChange(col.id, "length", e.target.value ? parseInt(e.target.value) : undefined)}
+                                    className="h-8 text-sm w-20"
+                                  />
+                                ) : (
+                                  col.length || <span className="italic text-muted-foreground">N/A</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <Checkbox
+                                    checked={col.nullable}
+                                    onCheckedChange={(checked) => handleColumnChange(col.id, "nullable", !!checked)}
+                                    disabled={col.isPrimaryKey}
+                                  />
+                                ) : (
+                                  col.nullable ? 'YES' : 'NO'
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  {isEditing ? (
+                                    <Checkbox
+                                      checked={col.isPrimaryKey}
+                                      onCheckedChange={(checked) => handleColumnChange(col.id, "isPrimaryKey", !!checked)}
+                                    />
+                                  ) : (
+                                    col.isPrimaryKey ? 'PRI' : ''
+                                  )}
+                                  {isEditing && <Label className="text-xs">PK</Label>}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {isEditing ? (
+                                  <Input
+                                    value={col.defaultValue === null ? 'NULL' : String(col.defaultValue || '')}
+                                    onChange={(e) => handleColumnChange(col.id, "defaultValue", e.target.value === 'NULL' ? null : e.target.value)}
+                                    placeholder="NULL / 'value' / 0"
+                                    className="h-8 text-sm"
+                                    disabled={col.isAutoIncrement}
+                                  />
+                                ) : (
+                                  col.defaultValue === null ? <span className="italic text-muted-foreground">NULL</span> : String(col.defaultValue)
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  {isEditing ? (
+                                    <Checkbox
+                                      checked={col.isAutoIncrement}
+                                      onCheckedChange={(checked) => handleColumnChange(col.id, "isAutoIncrement", !!checked)}
+                                      disabled={!col.isPrimaryKey || !['INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT'].includes(col.type)}
+                                    />
+                                  ) : (
+                                    col.isAutoIncrement ? 'auto_increment' : ''
+                                  )}
+                                  {isEditing && <Label className="text-xs">AI</Label>}
+                                </div>
+                              </TableCell>
+                              {isEditing && (
+                                <TableCell className="text-right">
+                                  {editableColumns.length > 1 && (
+                                    <Button variant="ghost" size="sm" onClick={() => handleRemoveColumn(col.id)} className="h-8 w-8 p-0 text-red-500">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </TableBody>
+                  )}
+                </Droppable>
+              </Table>
+            </DragDropContext>
           </div>
           {isEditing && error && <p className="text-red-500 text-sm mt-4">{error}</p>}
         </CardContent>

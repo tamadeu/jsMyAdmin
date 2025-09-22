@@ -688,7 +688,7 @@ app.put('/api/databases/:database/tables/:table/structure', authMiddleware, asyn
   try {
     connection = await getUserPooledConnection(req);
     const { database, table } = req.params;
-    const newColumns = req.body.columns;
+    const newColumns = req.body.columns; // This array now represents the desired order
 
     if (!newColumns || !Array.isArray(newColumns)) {
       return res.status(400).json({ success: false, error: 'New column definitions are required.' });
@@ -778,75 +778,67 @@ app.put('/api/databases/:database/tables/:table/structure', authMiddleware, asyn
       alterStatements.push(`ALTER TABLE \`${table}\` DROP COLUMN \`${droppedColName}\``);
     }
 
-    // Generate ALTER statements for renames, modifications, and additions
-    for (const renameInfo of columnsToRename) {
-      const { oldName, newCol } = renameInfo;
-      let columnDefinition = `\`${newCol.name}\` ${newCol.type}`;
-      if (newCol.length !== undefined && newCol.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newCol.type.toUpperCase())) {
-        columnDefinition += `(${newCol.length})`;
+    // Helper to build column definition string
+    const buildColumnDefinition = (col) => {
+      let definition = `\`${col.name}\` ${col.type}`;
+      if (col.length !== undefined && col.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(col.type.toUpperCase())) {
+        definition += `(${col.length})`;
       }
-      if (!newCol.nullable) {
-        columnDefinition += ` NOT NULL`;
+      if (!col.nullable) {
+        definition += ` NOT NULL`;
       }
-      if (newCol.isAutoIncrement) {
-        columnDefinition += ` AUTO_INCREMENT`;
+      if (col.isAutoIncrement) {
+        definition += ` AUTO_INCREMENT`;
       }
-      if (newCol.defaultValue !== null && newCol.defaultValue !== undefined && newCol.defaultValue !== '') {
-        if (typeof newCol.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(newCol.defaultValue.toUpperCase())) {
-          columnDefinition += ` DEFAULT ${connection.escape(newCol.defaultValue)}`;
+      if (col.defaultValue !== null && col.defaultValue !== undefined && col.defaultValue !== '') {
+        if (typeof col.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(col.defaultValue.toUpperCase())) {
+          definition += ` DEFAULT ${connection.escape(col.defaultValue)}`;
         } else {
-          columnDefinition += ` DEFAULT ${newCol.defaultValue}`;
+          definition += ` DEFAULT ${col.defaultValue}`;
         }
-      } else if (newCol.nullable && newCol.defaultValue === null) {
-        columnDefinition += ` DEFAULT NULL`;
+      } else if (col.nullable && col.defaultValue === null) {
+        definition += ` DEFAULT NULL`;
       }
-      alterStatements.push(`ALTER TABLE \`${table}\` CHANGE COLUMN \`${oldName}\` ${columnDefinition}`);
-    }
+      return definition;
+    };
 
-    for (const modifiedCol of columnsToModify) {
-      let columnDefinition = `\`${modifiedCol.name}\` ${modifiedCol.type}`;
-      if (modifiedCol.length !== undefined && modifiedCol.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(modifiedCol.type.toUpperCase())) {
-        columnDefinition += `(${modifiedCol.length})`;
-      }
-      if (!modifiedCol.nullable) {
-        columnDefinition += ` NOT NULL`;
-      }
-      if (modifiedCol.isAutoIncrement) {
-        columnDefinition += ` AUTO_INCREMENT`;
-      }
-      if (modifiedCol.defaultValue !== null && modifiedCol.defaultValue !== undefined && modifiedCol.defaultValue !== '') {
-        if (typeof modifiedCol.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(modifiedCol.defaultValue.toUpperCase())) {
-          columnDefinition += ` DEFAULT ${connection.escape(modifiedCol.defaultValue)}`;
-        } else {
-          columnDefinition += ` DEFAULT ${modifiedCol.defaultValue}`;
-        }
-      } else if (modifiedCol.nullable && modifiedCol.defaultValue === null) {
-        columnDefinition += ` DEFAULT NULL`;
-      }
-      alterStatements.push(`ALTER TABLE \`${table}\` MODIFY COLUMN ${columnDefinition}`);
-    }
+    // Process renames, modifications, and additions in the order they appear in newColumns
+    for (let i = 0; i < newColumns.length; i++) {
+      const newCol = newColumns[i];
+      const prevColInNewOrder = i > 0 ? newColumns[i - 1] : null;
+      const afterClause = prevColInNewOrder ? ` AFTER \`${prevColInNewOrder.name}\`` : (i === 0 ? ` FIRST` : '');
 
-    for (const addedCol of columnsToAdd) {
-      let columnDefinition = `\`${addedCol.name}\` ${addedCol.type}`;
-      if (addedCol.length !== undefined && addedCol.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(addedCol.type.toUpperCase())) {
-        columnDefinition += `(${addedCol.length})`;
-      }
-      if (!addedCol.nullable) {
-        columnDefinition += ` NOT NULL`;
-      }
-      if (addedCol.isAutoIncrement) {
-        columnDefinition += ` AUTO_INCREMENT`;
-      }
-      if (addedCol.defaultValue !== null && addedCol.defaultValue !== undefined && addedCol.defaultValue !== '') {
-        if (typeof addedCol.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(addedCol.defaultValue.toUpperCase())) {
-          columnDefinition += ` DEFAULT ${connection.escape(addedCol.defaultValue)}`;
-        } else {
-          columnDefinition += ` DEFAULT ${addedCol.defaultValue}`;
+      const currentMatchByName = currentColumnMap.get(newCol.name);
+      const renameMatch = columnsToRename.find(r => r.newCol.name === newCol.name);
+
+      if (renameMatch) {
+        // Rename and potentially modify
+        const oldName = renameMatch.oldName;
+        const columnDefinition = buildColumnDefinition(newCol);
+        alterStatements.push(`ALTER TABLE \`${table}\` CHANGE COLUMN \`${oldName}\` ${columnDefinition}${afterClause}`);
+      } else if (currentMatchByName) {
+        // Modify existing column (same name) or reorder
+        const isModified = 
+          currentMatchByName.type !== newCol.type ||
+          (currentMatchByName.length !== newCol.length && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newCol.type.toUpperCase())) ||
+          currentMatchByName.nullable !== newCol.nullable ||
+          currentMatchByName.isAutoIncrement !== newCol.isAutoIncrement ||
+          String(currentMatchByName.defaultValue) !== String(newCol.defaultValue);
+
+        // Check if position changed
+        const currentPosition = currentColumns.findIndex(c => c.name === newCol.name);
+        const newPosition = i;
+        const positionChanged = currentPosition !== newPosition;
+
+        if (isModified || positionChanged) {
+          const columnDefinition = buildColumnDefinition(newCol);
+          alterStatements.push(`ALTER TABLE \`${table}\` MODIFY COLUMN ${columnDefinition}${afterClause}`);
         }
-      } else if (addedCol.nullable && addedCol.defaultValue === null) {
-        columnDefinition += ` DEFAULT NULL`;
+      } else {
+        // Add new column
+        const columnDefinition = buildColumnDefinition(newCol);
+        alterStatements.push(`ALTER TABLE \`${table}\` ADD COLUMN ${columnDefinition}${afterClause}`);
       }
-      alterStatements.push(`ALTER TABLE \`${table}\` ADD COLUMN ${columnDefinition}`);
     }
 
     // Add new primary key if it's changing or being added
