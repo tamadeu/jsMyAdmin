@@ -17,8 +17,8 @@
     "language": "en",
     "queryTimeout": 30000,
     "maxQueryResults": 1000,
-    "autoRefresh": true,
-    "refreshInterval": 10000
+    "autoRefresh": false,
+    "refreshInterval": 30000
   },
   "security": {
     "allowMultipleStatements": false,

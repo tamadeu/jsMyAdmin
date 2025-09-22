@@ -11,14 +11,6 @@ import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext"; // Import useAuth
 
-interface DatabaseStats {
-  totalDatabases: number;
-  totalTables: number;
-  storageUsed: string;
-  storagePercent: number;
-  activeConnections: number;
-}
-
 interface ServerStatus {
   version: string;
   uptime: string;
@@ -30,13 +22,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth(); // Get authenticated user
-  const [stats, setStats] = useState<DatabaseStats>({
-    totalDatabases: 0,
-    totalTables: 0,
-    storageUsed: "0 GB",
-    storagePercent: 0,
-    activeConnections: 0
-  });
   const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,42 +41,9 @@ const Dashboard = () => {
       setIsLoading(true);
       setError(null);
 
-      // Load databases to calculate total tables and storage
-      const databaseNames = await apiService.getDatabases();
-      
-      let totalTables = 0;
-      let totalSizeMB = 0;
-
-      // Fetch tables for each database to calculate total tables and size
-      const dbPromises = databaseNames.map(async (dbName) => {
-        try {
-          const { tables, views } = await apiService.getTables(dbName);
-          const allItems = [...tables, ...views];
-          totalTables += allItems.length;
-          allItems.forEach(item => {
-            const sizeStr = item.size.replace(' MB', '').replace(' GB', '');
-            const size = parseFloat(sizeStr);
-            totalSizeMB += (item.size.includes('GB') ? size * 1024 : size);
-          });
-        } catch (error) {
-          console.warn(`Error loading tables for ${dbName}:`, error);
-        }
-      });
-      await Promise.all(dbPromises);
-
       // Get server status
       const currentServerStatus = await apiService.getServerStatus();
       setServerStatus(currentServerStatus);
-
-      setStats({
-        totalDatabases: databaseNames.length,
-        totalTables,
-        storageUsed: totalSizeMB > 1024 
-          ? `${(totalSizeMB / 1024).toFixed(1)} GB` 
-          : `${totalSizeMB.toFixed(1)} MB`,
-        storagePercent: Math.min((totalSizeMB / 1024 / 15) * 100, 100), // Assuming 15GB limit
-        activeConnections: currentServerStatus.connections
-      });
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -138,8 +90,8 @@ const Dashboard = () => {
         <p className="text-muted-foreground">Overview of your MySQL databases and recent activity</p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats Cards - REMOVED */}
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -192,7 +144,7 @@ const Dashboard = () => {
             <p className="text-xs text-muted-foreground">Current connections</p>
           </CardContent>
         </Card>
-      </div>
+      </div> */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Database Server Information */}
