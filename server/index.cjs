@@ -103,7 +103,7 @@ function processDataForMySQL(data) {
   return processedData;
 }
 
-// Helper function to get a connection from the pool and change to root user
+// Helper function to get a connection from the pool (already authenticated as system user)
 async function getRootPooledConnection() {
   if (!dbPool || !serverConfig) {
     throw new Error('Database connection pool or server configuration not initialized.');
@@ -114,26 +114,8 @@ async function getRootPooledConnection() {
   }
 
   console.log("Attempting to get root pooled connection with user:", serverConfig.database.username);
-  const connection = await dbPool.getConnection();
-  try {
-    await connection.changeUser({
-      user: serverConfig.database.username,
-      password: serverConfig.database.password,
-      database: serverConfig.database.defaultDatabase, // Optional, but good practice
-      charset: serverConfig.database.charset,
-      ssl: serverConfig.database.ssl ? {
-        ca: serverConfig.database.sslCA || undefined,
-        cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined, // Corrected from sslKey to key
-      } : false,
-      multipleStatements: serverConfig.security.allowMultipleStatements,
-      timezone: '+00:00'
-    });
-    return connection;
-  } catch (error) {
-    connection.release(); // Release connection on error
-    throw error;
-  }
+  // Connections from the pool are already authenticated as the system user
+  return await dbPool.getConnection();
 }
 
 // Helper function to get a connection from the pool and change to authenticated user
@@ -155,7 +137,7 @@ async function getUserPooledConnection(req) {
       ssl: serverConfig.database.ssl ? {
         ca: serverConfig.database.sslCA || undefined,
         cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined, // Corrected from sslKey to key
+        key: serverConfig.database.sslKey || undefined,
       } : false,
       multipleStatements: serverConfig.security.allowMultipleStatements,
       timezone: '+00:00'
@@ -236,6 +218,8 @@ app.post('/api/login', async (req, res) => {
     dbPool = mysql.createPool({ // Recria o pool com a nova configuração
       host: serverConfig.database.host,
       port: serverConfig.database.port,
+      user: serverConfig.database.username, // Adicionado user
+      password: serverConfig.database.password, // Adicionado password
       waitForConnections: true,
       connectionLimit: serverConfig.database.maxConnections || 10,
       queueLimit: 0,
@@ -422,7 +406,7 @@ app.post('/api/test-connection', async (req, res) => {
       ssl: config.database.ssl ? {
         ca: config.database.sslCA || undefined,
         cert: config.database.sslCertificate || undefined,
-        key: config.database.sslKey || undefined, // Corrected from sslKey to key
+        key: config.database.sslKey || undefined,
       } : false,
       connectTimeout: config.database.connectionTimeout,
       timezone: '+00:00'
@@ -474,6 +458,8 @@ app.post('/api/save-config', async (req, res) => {
     dbPool = mysql.createPool({ // Recria o pool com a nova configuração
       host: serverConfig.database.host,
       port: serverConfig.database.port,
+      user: serverConfig.database.username, // Adicionado user
+      password: serverConfig.database.password, // Adicionado password
       waitForConnections: true,
       connectionLimit: serverConfig.database.maxConnections || 10,
       queueLimit: 0,
@@ -942,6 +928,8 @@ async function startServer() {
     dbPool = mysql.createPool({
       host: serverConfig.database.host,
       port: serverConfig.database.port,
+      user: serverConfig.database.username, // Adicionado user
+      password: serverConfig.database.password, // Adicionado password
       waitForConnections: true,
       connectionLimit: serverConfig.database.maxConnections || 10, // Usar maxConnections da config
       queueLimit: 0, // Sem limite na fila de requisições
