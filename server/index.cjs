@@ -42,6 +42,8 @@ app.use(express.json());
 
 // Variável para armazenar a configuração do servidor em memória
 let serverConfig = null;
+// Variável para armazenar o pool de conexões
+let dbPool = null;
 
 // Função para carregar a configuração do servidor uma vez
 async function loadServerConfig() {
@@ -101,48 +103,62 @@ function processDataForMySQL(data) {
   return processedData;
 }
 
-// Helper function to create a connection using the root credentials from the in-memory config
-async function createRootConnection() {
-  if (!serverConfig) {
-    throw new Error('Server configuration not available. Please ensure it is loaded at startup.');
+// Helper function to get a connection from the pool and change to root user
+async function getRootPooledConnection() {
+  if (!dbPool || !serverConfig) {
+    throw new Error('Database connection pool or server configuration not initialized.');
   }
-  return mysql.createConnection({
-    host: serverConfig.database.host,
-    port: serverConfig.database.port,
-    user: serverConfig.database.username,
-    password: serverConfig.database.password,
-    timezone: '+00:00'
-  });
+  const connection = await dbPool.getConnection();
+  try {
+    await connection.changeUser({
+      user: serverConfig.database.username,
+      password: serverConfig.database.password,
+      database: serverConfig.database.defaultDatabase, // Optional, but good practice
+      charset: serverConfig.database.charset,
+      ssl: serverConfig.database.ssl ? {
+        ca: serverConfig.database.sslCA || undefined,
+        cert: serverConfig.database.sslCertificate || undefined,
+        key: serverConfig.database.sslKey || undefined,
+      } : false,
+      multipleStatements: serverConfig.security.allowMultipleStatements,
+      timezone: '+00:00'
+    });
+    return connection;
+  } catch (error) {
+    connection.release(); // Release connection on error
+    throw error;
+  }
 }
 
-// Helper function to create a connection using credentials from the request and in-memory server config
-async function createConnectionFromRequest(req) {
-  if (!serverConfig) {
-    throw new Error('Server configuration not available. Please ensure it is loaded at startup.');
+// Helper function to get a connection from the pool and change to authenticated user
+async function getUserPooledConnection(req) {
+  if (!dbPool || !serverConfig) {
+    throw new Error('Database connection pool or server configuration not initialized.');
   }
-
   if (!req.dbCredentials) {
     throw new Error('Authentication credentials not found in request.');
   }
 
-  const { user, password } = req.dbCredentials;
-
-  const userConfig = {
-    host: serverConfig.database.host, // Usa a configuração em memória
-    port: serverConfig.database.port, // Usa a configuração em memória
-    user: user,
-    password: password,
-    charset: serverConfig.database.charset,
-    ssl: serverConfig.database.ssl ? {
-      ca: serverConfig.database.sslCA || undefined,
-      cert: serverConfig.database.sslCertificate || undefined,
-      key: serverConfig.database.sslKey || undefined,
-    } : false,
-    multipleStatements: serverConfig.security.allowMultipleStatements,
-    timezone: '+00:00'
-  };
-
-  return mysql.createConnection(userConfig);
+  const connection = await dbPool.getConnection();
+  try {
+    await connection.changeUser({
+      user: req.dbCredentials.user,
+      password: req.dbCredentials.password,
+      database: serverConfig.database.defaultDatabase, // Use default from server config
+      charset: serverConfig.database.charset,
+      ssl: serverConfig.database.ssl ? {
+        ca: serverConfig.database.sslCA || undefined,
+        cert: serverConfig.database.sslCertificate || undefined,
+        key: serverConfig.database.sslKey || undefined,
+      } : false,
+      multipleStatements: serverConfig.security.allowMultipleStatements,
+      timezone: '+00:00'
+    });
+    return connection;
+  } catch (error) {
+    connection.release(); // Release connection on error
+    throw error;
+  }
 }
 
 const SYSTEM_DATABASE = "javascriptmyadmin_meta";
@@ -155,13 +171,11 @@ const authMiddleware = async (req, res, next) => {
   }
   const token = authHeader.split(' ')[1];
   
-  let systemConnection;
+  let connection; // Usar 'connection' para o pool
   try {
-    // The auth middleware needs a privileged user to read the session table.
-    // This user's credentials should be in the config file.
-    systemConnection = await createRootConnection();
+    connection = await getRootPooledConnection(); // Obter conexão do pool para o usuário root
 
-    const [sessions] = await systemConnection.execute(
+    const [sessions] = await connection.execute(
       'SELECT * FROM `javascriptmyadmin_meta`.`_jsma_sessions` WHERE `session_token` = ? AND `expires_at` > NOW()',
       [token]
     );
@@ -184,7 +198,7 @@ const authMiddleware = async (req, res, next) => {
     console.error('Auth middleware error:', error);
     return res.status(500).json({ error: 'Internal server error during authentication' });
   } finally {
-    if (systemConnection) await systemConnection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 };
 
@@ -206,8 +220,23 @@ app.post('/api/login', async (req, res) => {
 
     // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
     serverConfig = config;
+    // Se o pool já existe, ele precisa ser reconfigurado ou recriado para usar o novo host/port
+    if (dbPool) {
+      await dbPool.end(); // Fecha o pool existente
+      console.log('Existing database connection pool closed.');
+    }
+    dbPool = mysql.createPool({ // Recria o pool com a nova configuração
+      host: serverConfig.database.host,
+      port: serverConfig.database.port,
+      waitForConnections: true,
+      connectionLimit: serverConfig.database.maxConnections || 10,
+      queueLimit: 0,
+      timezone: '+00:00'
+    });
+    console.log('Database connection pool re-initialized with new config.');
 
-    // 2. Connect with provided credentials
+
+    // 2. Connect with provided credentials (direct connection for initial test)
     connection = await mysql.createConnection({
       host: host,
       port: parseInt(port, 10),
@@ -296,26 +325,26 @@ app.post('/api/login', async (req, res) => {
     console.error('Login failed:', error);
     res.status(401).json({ success: false, message: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) await connection.end(); // Conexão direta deve ser encerrada
   }
 });
 
 // Logout endpoint
 app.post('/api/logout', authMiddleware, async (req, res) => {
-  let systemConnection;
+  let connection;
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader.split(' ')[1];
     
-    systemConnection = await createRootConnection();
+    connection = await getRootPooledConnection(); // Obter conexão do pool
 
-    await systemConnection.execute('DELETE FROM `javascriptmyadmin_meta`.`_jsma_sessions` WHERE `session_token` = ?', [token]);
+    await connection.execute('DELETE FROM `javascriptmyadmin_meta`.`_jsma_sessions` WHERE `session_token` = ?', [token]);
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     console.error('Logout failed:', error);
     res.status(500).json({ success: false, message: 'Failed to logout' });
   } finally {
-    if (systemConnection) await systemConnection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -324,7 +353,7 @@ app.get('/api/session/validate', authMiddleware, async (req, res) => {
   let connection;
   try {
     // The middleware already validated the session. Now, just get user privileges.
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const [grants] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
     
     let globalPrivileges = new Set();
@@ -364,7 +393,7 @@ app.get('/api/session/validate', authMiddleware, async (req, res) => {
     console.error('Session validation failed:', error);
     res.status(401).json({ error: 'Session validation failed' });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -401,7 +430,7 @@ app.post('/api/test-connection', async (req, res) => {
     });
   } finally {
     if (testConnection) {
-      await testConnection.end();
+      await testConnection.end(); // Conexão direta deve ser encerrada
     }
   }
 });
@@ -414,6 +443,21 @@ app.post('/api/save-config', async (req, res) => {
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
     // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
     serverConfig = config;
+    // Se o pool já existe, ele precisa ser reconfigurado ou recriado para usar o novo host/port
+    if (dbPool) {
+      await dbPool.end(); // Fecha o pool existente
+      console.log('Existing database connection pool closed.');
+    }
+    dbPool = mysql.createPool({ // Recria o pool com a nova configuração
+      host: serverConfig.database.host,
+      port: serverConfig.database.port,
+      waitForConnections: true,
+      connectionLimit: serverConfig.database.maxConnections || 10,
+      queueLimit: 0,
+      timezone: '+00:00'
+    });
+    console.log('Database connection pool re-initialized with new config.');
+
     res.json({ success: true, message: 'Configuration saved successfully' });
   } catch (error) {
     console.error('Error saving config:', error);
@@ -428,7 +472,7 @@ app.post('/api/save-config', async (req, res) => {
 app.get('/api/databases', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const [rows] = await connection.query('SHOW DATABASES');
     const databases = rows.map(row => row.Database);
     res.json(databases);
@@ -436,7 +480,7 @@ app.get('/api/databases', authMiddleware, async (req, res) => {
     console.error('Error fetching databases:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -444,7 +488,7 @@ app.get('/api/databases', authMiddleware, async (req, res) => {
 app.get('/api/databases/:database/tables', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { database } = req.params;
     
     const [tablesAndViews] = await connection.execute(`
@@ -470,7 +514,7 @@ app.get('/api/databases/:database/tables', authMiddleware, async (req, res) => {
     console.error('Error fetching tables:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -478,7 +522,7 @@ app.get('/api/databases/:database/tables', authMiddleware, async (req, res) => {
 app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { database, table } = req.params;
     const { limit = 25, offset = 0, search = '' } = req.query;
     
@@ -523,7 +567,7 @@ app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (re
     console.error('Error fetching table data:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -531,7 +575,7 @@ app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (re
 app.put('/api/databases/:database/tables/:table/cell', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { database, table } = req.params;
     const { primaryKey, columnName, newValue } = req.body;
 
@@ -549,7 +593,7 @@ app.put('/api/databases/:database/tables/:table/cell', authMiddleware, async (re
     console.error('Error updating cell:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -557,7 +601,7 @@ app.put('/api/databases/:database/tables/:table/cell', authMiddleware, async (re
 app.put('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { database, table } = req.params;
     const { primaryKey, data } = req.body;
     if (!primaryKey || !data) return res.status(400).json({ error: 'Primary key and data are required' });
@@ -577,7 +621,7 @@ app.put('/api/databases/:database/tables/:table/row', authMiddleware, async (req
     console.error('Error updating row:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -585,7 +629,7 @@ app.put('/api/databases/:database/tables/:table/row', authMiddleware, async (req
 app.post('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { database, table } = req.params;
     const { data } = req.body;
     if (!data) return res.status(400).json({ error: 'Data is required' });
@@ -611,7 +655,7 @@ app.post('/api/databases/:database/tables/:table/row', authMiddleware, async (re
     console.error('Error inserting row:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -619,7 +663,7 @@ app.post('/api/databases/:database/tables/:table/row', authMiddleware, async (re
 app.delete('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { database, table } = req.params;
     const { primaryKey } = req.body;
     if (!primaryKey) return res.status(400).json({ error: 'Primary key is required' });
@@ -635,7 +679,7 @@ app.delete('/api/databases/:database/tables/:table/row', authMiddleware, async (
     console.error('Error deleting row:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -644,7 +688,7 @@ app.post('/api/query', authMiddleware, async (req, res) => {
   let connection;
   const startTime = Date.now();
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { query, database } = req.body;
     if (!query) return res.status(400).json({ error: 'Query is required' });
 
@@ -671,7 +715,7 @@ app.post('/api/query', authMiddleware, async (req, res) => {
     console.error('Error executing query:', error);
     res.status(400).json({ success: false, error: error.message, executionTime: executionTime });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -681,7 +725,7 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
   try {
     const { query_text, database_context, execution_time_ms, status, error_message } = req.body;
     
-    connection = await createRootConnection();
+    connection = await getRootPooledConnection(); // Obter conexão do pool
 
     const historyQuery = `
       INSERT INTO \`javascriptmyadmin_meta\`.\`_jsma_query_history\` 
@@ -704,7 +748,7 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
     console.warn('Could not save query history:', error.message);
     res.status(200).json({ success: false, message: 'Could not save query history.' });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -712,7 +756,7 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
 app.get('/api/status', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const [variables] = await connection.query('SHOW VARIABLES LIKE "version"');
     const [status] = await connection.query('SHOW STATUS LIKE "Uptime"');
     const [processes] = await connection.query('SHOW PROCESSLIST');
@@ -724,7 +768,7 @@ app.get('/api/status', authMiddleware, async (req, res) => {
     console.error('Error fetching server status:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -732,14 +776,14 @@ app.get('/api/status', authMiddleware, async (req, res) => {
 app.get('/api/users', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const [rows] = await connection.query("SELECT user, host FROM mysql.user ORDER BY user, host");
     res.json(rows);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -747,7 +791,7 @@ app.get('/api/users', authMiddleware, async (req, res) => {
 app.get('/api/users/:user/:host/privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
     const [rows] = await connection.query('SHOW GRANTS FOR ?@?', [user, host]);
     
@@ -792,7 +836,7 @@ app.get('/api/users/:user/:host/privileges', authMiddleware, async (req, res) =>
     console.error('Error fetching user privileges:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -800,7 +844,7 @@ app.get('/api/users/:user/:host/privileges', authMiddleware, async (req, res) =>
 app.post('/api/users/:user/:host/privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
     const { privileges } = req.body;
 
@@ -816,7 +860,7 @@ app.post('/api/users/:user/:host/privileges', authMiddleware, async (req, res) =
     console.error('Error updating global privileges:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -824,7 +868,7 @@ app.post('/api/users/:user/:host/privileges', authMiddleware, async (req, res) =
 app.post('/api/users/:user/:host/database-privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
     const { database, privileges, grantOption } = req.body;
 
@@ -843,7 +887,7 @@ app.post('/api/users/:user/:host/database-privileges', authMiddleware, async (re
     console.error('Error updating database privileges:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -851,7 +895,7 @@ app.post('/api/users/:user/:host/database-privileges', authMiddleware, async (re
 app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await createConnectionFromRequest(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
     const { database } = req.body;
 
@@ -862,7 +906,7 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
     console.error('Error revoking database privileges:', error);
     res.status(500).json({ error: error.message });
   } finally {
-    if (connection) await connection.end();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -870,6 +914,17 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
 async function startServer() {
   try {
     await loadServerConfig();
+    // Inicializa o pool de conexões após a configuração ser carregada
+    dbPool = mysql.createPool({
+      host: serverConfig.database.host,
+      port: serverConfig.database.port,
+      waitForConnections: true,
+      connectionLimit: serverConfig.database.maxConnections || 10, // Usar maxConnections da config
+      queueLimit: 0, // Sem limite na fila de requisições
+      timezone: '+00:00'
+    });
+    console.log('Database connection pool initialized.');
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`API available at http://localhost:${PORT}/api`);
@@ -884,5 +939,9 @@ startServer();
 
 process.on('SIGINT', async () => {
   console.log('Shutting down server...');
+  if (dbPool) {
+    await dbPool.end();
+    console.log('Database connection pool closed.');
+  }
   process.exit(0);
 });
