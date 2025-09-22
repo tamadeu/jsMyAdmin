@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Play, Save, RotateCcw, AlertCircle, AlignLeft } from "lucide-react";
+import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { apiService, QueryResult } from "@/services/api";
+import { apiService, QueryResult, QueryHistoryPayload } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
 import { format } from "sql-formatter";
@@ -18,7 +18,28 @@ const SqlEditor = () => {
 
   const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;"); 
   const [isExecuting, setIsExecuting] = useState(false);
-  const [queryHistory, setQueryHistory] = useState<Array<{ query: string; time: string; timestamp: string }>>([]);
+  const [queryHistory, setQueryHistory] = useState<QueryHistoryPayload[]>([]); // Now stores fetched history
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const fetchQueryHistory = useCallback(async () => {
+    setIsLoadingHistory(true);
+    setHistoryError(null);
+    try {
+      const historyData = await apiService.getQueryHistory();
+      setQueryHistory(historyData);
+    } catch (error) {
+      console.error('Error fetching query history:', error);
+      setHistoryError(error instanceof Error ? error.message : "Failed to load query history.");
+      toast({
+        title: "Error loading query history",
+        description: error instanceof Error ? error.message : "Failed to load query history.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     if (activeTab?.type === 'sql-editor') {
@@ -26,10 +47,11 @@ const SqlEditor = () => {
       if (sqlQuery !== tabContent) {
         setSqlQuery(tabContent);
       }
+      fetchQueryHistory(); // Fetch history when SQL Editor tab becomes active
     } else {
       setSqlQuery("SELECT * FROM your_table;");
     }
-  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent]);
+  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]);
 
   useEffect(() => {
     if (activeTabId && activeTab?.type === 'sql-editor') {
@@ -44,11 +66,6 @@ const SqlEditor = () => {
     let result: QueryResult | null = null;
     try {
       result = await apiService.executeQuery(sqlQuery);
-
-      setQueryHistory(prev => [
-        { query: sqlQuery, time: `${result.executionTime}ms`, timestamp: new Date().toLocaleString() },
-        ...prev.slice(0, 4)
-      ]);
 
       if (result.success) {
         const isSelect = sqlQuery.trim().toLowerCase().startsWith('select');
@@ -93,12 +110,14 @@ const SqlEditor = () => {
           execution_time_ms: result.executionTime,
           status: result.success ? 'success' : 'error',
           error_message: result.error,
+        }).then(() => {
+          fetchQueryHistory(); // Refresh history after saving a new query
         }).catch(err => {
           console.warn("Could not save query to history:", err);
         });
       }
     }
-  }, [sqlQuery, addTab, toast]);
+  }, [sqlQuery, addTab, toast, fetchQueryHistory]);
 
   const saveQuery = () => {
     toast({
@@ -171,34 +190,59 @@ const SqlEditor = () => {
         />
       </div>
 
-      {/* Query History Card (Moved here) */}
+      {/* Query History Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <RotateCcw className="h-5 w-5" />
-            <CardTitle>Query History</CardTitle>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              <CardTitle>My Query History</CardTitle>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={fetchQueryHistory} 
+              disabled={isLoadingHistory}
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
-          <CardDescription>Recently executed SQL queries</CardDescription>
+          <CardDescription>Recently executed SQL queries by you.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {queryHistory.length === 0 ? (
+          {isLoadingHistory ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">Loading history...</p>
+            </div>
+          ) : historyError ? (
+            <div className="flex items-center justify-center py-4 text-red-500">
+              <AlertCircle className="h-6 w-6 mx-auto mb-2" />
+              <p className="text-sm">{historyError}</p>
+            </div>
+          ) : queryHistory.length === 0 ? (
             <div className="text-center py-4 text-muted-foreground">No recent queries.</div>
           ) : (
             queryHistory.map((query, index) => (
               <div 
-                key={index} 
+                key={query.id || index} // Use id if available, fallback to index
                 className="p-3 bg-accent rounded-lg cursor-pointer hover:bg-accent/80"
-                onClick={() => setSqlQuery(query.query)}
+                onClick={() => setSqlQuery(query.query_text)}
               >
-                <div className="text-sm font-mono truncate">{query.query}</div>
-                <div className="text-xs text-muted-foreground mt-1">{query.time} • {query.timestamp}</div>
+                <div className="text-sm font-mono truncate">{query.query_text}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {query.execution_time_ms}ms • {new Date(query.executed_at!).toLocaleString()}
+                  {query.database_context && ` • DB: ${query.database_context}`}
+                  {query.status === 'error' && <span className="text-red-500 ml-2"> (Error)</span>}
+                </div>
               </div>
             ))
           )}
         </CardContent>
       </Card>
 
-      {/* Quick Actions Card (Moved here) */}
+      {/* Quick Actions Card */}
       <Card>
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>

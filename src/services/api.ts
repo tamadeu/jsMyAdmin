@@ -107,11 +107,14 @@ export interface UserPrivilegesResponse {
 }
 
 export interface QueryHistoryPayload {
+  id?: number; // Optional, for fetched history
   query_text: string;
   database_context?: string;
+  executed_by?: string; // Added executed_by
   execution_time_ms: number;
   status: 'success' | 'error';
   error_message?: string;
+  executed_at?: string; // Added executed_at for fetched history
 }
 
 interface SystemStatusResponse {
@@ -543,6 +546,16 @@ class ApiService {
       console.error('Network error while saving query history:', error);
       return { success: false, message: error instanceof Error ? error.message : 'Network error' };
     }
+  }
+
+  async getQueryHistory(): Promise<QueryHistoryPayload[]> {
+    const response = await fetch(`${this.baseUrl}/query-history`, {
+      headers: this.getHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to fetch query history");
+    }
+    return response.json();
   }
 
   async getServerStatus(): Promise<{

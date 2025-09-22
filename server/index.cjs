@@ -1055,18 +1055,20 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
   let connection;
   try {
     const { query_text, database_context, execution_time_ms, status, error_message } = req.body;
+    const executed_by = req.dbCredentials.user; // Get user from authenticated session
     
     connection = await getSystemPooledConnection(); // Obter conexão do pool
 
     const historyQuery = `
-      INSERT INTO \`javascriptmyadmin_meta\`.\`_jsma_query_history\` 
-      (query_text, database_context, execution_time_ms, status, error_message) 
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` 
+      (query_text, database_context, executed_by, execution_time_ms, status, error_message) 
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
     
     await connection.execute(historyQuery, [
       query_text,
       database_context || null,
+      executed_by, // Store the user who executed the query
       execution_time_ms,
       status,
       error_message || null
@@ -1080,6 +1082,30 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
     res.status(200).json({ success: false, message: 'Could not save query history.' });
   } finally {
     if (connection) connection.release(); // Liberar conexão de volta para o pool
+  }
+});
+
+// Get query history for the authenticated user
+app.get('/api/query-history', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    const executed_by = req.dbCredentials.user;
+    connection = await getSystemPooledConnection();
+
+    const [history] = await connection.execute(
+      `SELECT id, query_text, database_context, executed_at, execution_time_ms, status, error_message 
+       FROM \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` 
+       WHERE executed_by = ? 
+       ORDER BY executed_at DESC LIMIT 10`, // Limit to 10 recent queries
+      [executed_by]
+    );
+    
+    res.json(history);
+  } catch (error) {
+    console.error('Error fetching query history:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -1260,6 +1286,13 @@ app.get('/api/system/status', authMiddleware, async (req, res) => {
       return res.json({ status: 'needs_initialization', message: `Missing system tables: ${missingTables.join(', ')}` });
     }
 
+    // Check for 'executed_by' column in _jsma_query_history
+    const [columns] = await connection.query(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\``);
+    const hasExecutedByColumn = columns.some(col => col.Field === 'executed_by');
+    if (!hasExecutedByColumn) {
+      return res.json({ status: 'needs_initialization', message: 'Missing `executed_by` column in `_jsma_query_history` table.' });
+    }
+
     res.json({ status: 'ready', message: 'System is initialized.' });
   } catch (error) {
     console.error('Error checking system status:', error);
@@ -1277,7 +1310,7 @@ app.post('/api/system/initialize', authMiddleware, async (req, res) => {
     await connection.query(`CREATE DATABASE IF NOT EXISTS ??`, [SYSTEM_DATABASE]);
         
     const tableCreationQueries = [
-      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_by VARCHAR(255) NOT NULL, executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
       `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
       `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
       `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
@@ -1286,6 +1319,15 @@ app.post('/api/system/initialize', authMiddleware, async (req, res) => {
     for (const query of tableCreationQueries) {
       await connection.query(query);
     }
+
+    // Check if 'executed_by' column exists and add it if not (for existing installations)
+    const [columns] = await connection.query(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\``);
+    const hasExecutedByColumn = columns.some(col => col.Field === 'executed_by');
+    if (!hasExecutedByColumn) {
+      console.log("Adding 'executed_by' column to _jsma_query_history table...");
+      await connection.query(`ALTER TABLE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ADD COLUMN \`executed_by\` VARCHAR(255) NOT NULL AFTER \`database_context\``);
+    }
+
     res.json({ success: true, message: 'System tables initialized successfully.' });
   } catch (error) {
     console.error('Error initializing system tables:', error);

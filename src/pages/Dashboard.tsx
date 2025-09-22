@@ -121,27 +121,6 @@ const Dashboard = () => {
             <div className="flex justify-between"><span>Documentation:</span> <a href="https://www.dyad.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Dyad.sh</a></div>
           </CardContent>
         </Card>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Play className="h-5 w-5" />
-                <CardTitle>Recent Query Activity</CardTitle>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => navigate('/sql')}>
-                Open SQL Editor
-              </Button>
-            </div>
-            <CardDescription>Latest SQL operations</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="text-center py-4">
-              <p className="text-muted-foreground">No recent queries available.</p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );

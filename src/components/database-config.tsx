@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiService, DatabaseConfig } from "@/services/api";
 
 const SYSTEM_DATABASE = "javascriptmyadmin_meta";
-const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"];
+const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"]; // No change needed here, backend checks for column
 
 const DatabaseConfigComponent = () => {
   const { toast } = useToast();
@@ -23,6 +23,7 @@ const DatabaseConfigComponent = () => {
   // System Setup State
   const [systemStatus, setSystemStatus] = useState<'loading' | 'ready' | 'error' | 'initializing' | 'initialized'>('loading');
   const [existingTables, setExistingTables] = useState<string[]>([]);
+  const [systemMessage, setSystemMessage] = useState<string>('');
 
   useEffect(() => {
     loadConfig();
@@ -100,8 +101,10 @@ const DatabaseConfigComponent = () => {
 
   const checkSystemTables = async () => {
     setSystemStatus('loading');
+    setSystemMessage('Checking status...');
     try {
       const statusResponse = await apiService.getSystemStatus();
+      setSystemMessage(statusResponse.message);
       if (statusResponse.status === 'ready') {
         setSystemStatus('initialized');
         const { tables } = await apiService.getTables(SYSTEM_DATABASE);
@@ -113,17 +116,20 @@ const DatabaseConfigComponent = () => {
     } catch (error) {
       console.error("Error checking system tables:", error);
       setSystemStatus('error');
+      setSystemMessage(error instanceof Error ? error.message : "Error checking system status.");
     }
   };
 
   const initializeSystem = async () => {
     setSystemStatus('initializing');
+    setSystemMessage('Initializing system tables...');
     try {
       const result = await apiService.initializeSystem();
       if (result.success) {
-        toast({ title: "System Initialized", description: "System tables have been created successfully." });
+        toast({ title: "System Initialized", description: "System tables have been created/updated successfully." });
         setSystemStatus('initialized');
-        await checkSystemTables(); // Re-check to update table list
+        setSystemMessage(result.message);
+        await checkSystemTables(); // Re-check to update table list and status
       } else {
         throw new Error(result.message || 'Failed to initialize system tables.');
       }
@@ -131,14 +137,15 @@ const DatabaseConfigComponent = () => {
       console.error("Error initializing system:", error);
       toast({ title: "Initialization Failed", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
       setSystemStatus('error');
+      setSystemMessage(error instanceof Error ? error.message : "An unknown error occurred during initialization.");
     }
   };
 
   const renderSystemStatus = () => {
-    if (systemStatus === 'loading') return <div className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Checking status...</div>;
-    if (systemStatus === 'error') return <div className="flex items-center gap-2 text-red-500"><AlertCircle className="h-4 w-4" /> Error checking status.</div>;
-    if (systemStatus === 'initialized') return <div className="flex items-center gap-2 text-green-500"><CheckCircle className="h-4 w-4" /> System is initialized.</div>;
-    return <div className="flex items-center gap-2 text-yellow-500"><AlertCircle className="h-4 w-4" /> System tables need to be created.</div>;
+    if (systemStatus === 'loading') return <div className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> {systemMessage}</div>;
+    if (systemStatus === 'error') return <div className="flex items-center gap-2 text-red-500"><AlertCircle className="h-4 w-4" /> {systemMessage}</div>;
+    if (systemStatus === 'initialized') return <div className="flex items-center gap-2 text-green-500"><CheckCircle className="h-4 w-4" /> {systemMessage}</div>;
+    return <div className="flex items-center gap-2 text-yellow-500"><AlertCircle className="h-4 w-4" /> {systemMessage}</div>;
   };
 
   if (isLoading || !config) {
