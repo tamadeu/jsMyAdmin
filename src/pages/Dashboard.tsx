@@ -26,11 +26,12 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const queryHistory = [
-    { query: "SELECT * FROM users WHERE status = \"active\" ORDER BY created_at...", time: "0.045s", timestamp: "2024-01-15 14:30:22" },
-    { query: "UPDATE products SET stock = stock - 1 WHERE id = 123", time: "0.012s", timestamp: "2024-01-15 14:25:15" },
-    { query: "SELECT COUNT(*) as total_orders FROM orders WHERE DATE(created_...", time: "0.089s", timestamp: "2024-01-15 14:20:08" }
-  ];
+  // Removido: queryHistory não é mais necessário
+  // const queryHistory = [
+  //   { query: "SELECT * FROM users WHERE status = \"active\" ORDER BY created_at...", time: "0.045s", timestamp: "2024-01-15 14:30:22" },
+  //   { query: "UPDATE products SET stock = stock - 1 WHERE id = 123", time: "0.012s", timestamp: "2024-01-15 14:25:15" },
+  //   { query: "SELECT COUNT(*) as total_orders FROM orders WHERE DATE(created_...", time: "0.089s", timestamp: "2024-01-15 14:20:08" }
+  // ];
 
   useEffect(() => {
     loadDashboardData();
@@ -185,8 +186,8 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
-        <Card>
+        {/* Recent Activity - REMOVED */}
+        {/* <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -221,7 +222,7 @@ const Dashboard = () => {
               ))
             )}
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
     </div>
   );
