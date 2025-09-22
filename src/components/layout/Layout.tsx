@@ -27,6 +27,9 @@ const Layout = () => {
       addTab({ title: "Configuration", type: "config", closable: true });
     } else if (path === '/users') {
       addTab({ title: "Users", type: "users", closable: true });
+    } else if (segments.length === 1) { // e.g., /mydb
+      const database = segments[0];
+      addTab({ title: `Database: ${database}`, type: "database-tables-list", params: { database }, filterType: 'all', closable: true });
     } else if (segments.length === 2 && segments[1] === 'tables') { // e.g., /mydb/tables
       const database = segments[0];
       addTab({ title: `Tables: ${database}`, type: "database-tables-list", params: { database }, filterType: 'tables', closable: true });
