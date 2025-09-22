@@ -660,6 +660,28 @@ app.delete('/api/databases/:database/tables/:table/data', authMiddleware, async 
   }
 });
 
+// Helper to compare column definitions (excluding name for rename detection)
+function areColumnDefinitionsSimilar(col1, col2) {
+  const typesWithLength = ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'];
+
+  let lengthMatches = true;
+  if (typesWithLength.includes(col1.type) && typesWithLength.includes(col2.type)) {
+    lengthMatches = col1.length === col2.length;
+  } else if (!typesWithLength.includes(col1.type) && !typesWithLength.includes(col2.type)) {
+    lengthMatches = true; // Neither type uses length, so they match on length
+  } else {
+    lengthMatches = false; // One uses length, the other doesn't, so they don't match
+  }
+
+  return (
+    col1.type === col2.type &&
+    lengthMatches &&
+    col1.nullable === col2.nullable &&
+    col1.isAutoIncrement === col2.isAutoIncrement &&
+    String(col1.defaultValue) === String(col2.defaultValue)
+  );
+}
+
 // Update table structure
 app.put('/api/databases/:database/tables/:table/structure', authMiddleware, async (req, res) => {
   let connection;
@@ -690,77 +712,147 @@ app.put('/api/databases/:database/tables/:table/structure', authMiddleware, asyn
     const currentColumnMap = new Map(currentColumns.map(c => [c.name, c]));
     const newColumnMap = new Map(newColumns.map(c => [c.name, c]));
 
-    // Handle primary key changes first
-    const currentPK = currentColumns.find(c => c.isPrimaryKey);
-    const newPK = newColumns.find(c => c.isPrimaryKey);
+    // --- Primary Key Handling (before column changes) ---
+    const currentPKColumns = currentColumns.filter(c => c.isPrimaryKey).map(c => c.name);
+    const newPKColumns = newColumns.filter(c => c.isPrimaryKey).map(c => c.name);
 
-    if (currentPK && (!newPK || newPK.name !== currentPK.name)) {
-      // Drop existing primary key if it's changing or being removed
+    // Drop existing primary key if it's changing or being removed
+    if (currentPKColumns.length > 0 && (!newPKColumns.length || JSON.stringify(currentPKColumns.sort()) !== JSON.stringify(newPKColumns.sort()))) {
       alterStatements.push(`ALTER TABLE \`${table}\` DROP PRIMARY KEY`);
     }
 
-    // 2. Identify columns to drop
-    for (const currentColumn of currentColumns) {
-      if (!newColumnMap.has(currentColumn.name)) {
-        alterStatements.push(`ALTER TABLE \`${table}\` DROP COLUMN \`${currentColumn.name}\``);
+    // --- Identify dropped, added, modified, and renamed columns ---
+    const columnsToDrop = []; // Names of columns to drop
+    const columnsToAdd = []; // New column definitions to add
+    const columnsToModify = []; // New column definitions to modify (same name, different properties)
+    const columnsToRename = []; // Objects: { oldName: string, newCol: TableColumnDefinition }
+
+    // First, identify columns that are definitely dropped or potentially renamed (old name gone)
+    for (const currentCol of currentColumns) {
+      if (!newColumnMap.has(currentCol.name)) {
+        columnsToDrop.push(currentCol.name);
       }
     }
 
-    // 3. Identify columns to add or modify
-    for (const newColumn of newColumns) {
-      const currentColumn = currentColumnMap.get(newColumn.name);
+    // Then, identify columns that are new or modified, and try to match renames
+    const unmatchedDroppedColumns = [...columnsToDrop]; // Copy for matching
+    for (const newCol of newColumns) {
+      const currentMatchByName = currentColumnMap.get(newCol.name);
 
-      let columnDefinition = `\`${newColumn.name}\` ${newColumn.type}`;
-      if (newColumn.length !== undefined && newColumn.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newColumn.type.toUpperCase())) {
-        columnDefinition += `(${newColumn.length})`;
-      }
-      if (!newColumn.nullable) {
-        columnDefinition += ` NOT NULL`;
-      }
-      if (newColumn.isAutoIncrement) {
-        columnDefinition += ` AUTO_INCREMENT`;
-      }
-      if (newColumn.defaultValue !== null && newColumn.defaultValue !== undefined && newColumn.defaultValue !== '') {
-        if (typeof newColumn.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(newColumn.defaultValue.toUpperCase())) {
-          columnDefinition += ` DEFAULT ${connection.escape(newColumn.defaultValue)}`;
-        } else {
-          columnDefinition += ` DEFAULT ${newColumn.defaultValue}`;
-        }
-      } else if (newColumn.nullable && newColumn.defaultValue === null) {
-        columnDefinition += ` DEFAULT NULL`;
-      }
-
-      if (!currentColumn) {
-        // Add new column
-        alterStatements.push(`ALTER TABLE \`${table}\` ADD COLUMN ${columnDefinition}`);
-      } else {
-        // Check for modifications
+      if (currentMatchByName) {
+        // Column exists with the same name, check for modifications
         const isModified = 
-          currentColumn.name !== newColumn.name ||
-          currentColumn.type !== newColumn.type ||
-          currentColumn.length !== newColumn.length ||
-          currentColumn.nullable !== newColumn.nullable ||
-          currentColumn.isAutoIncrement !== newColumn.isAutoIncrement ||
-          currentColumn.defaultValue !== newColumn.defaultValue;
+          currentMatchByName.type !== newCol.type ||
+          (currentMatchByName.length !== newCol.length && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newCol.type.toUpperCase())) ||
+          currentMatchByName.nullable !== newCol.nullable ||
+          currentMatchByName.isAutoIncrement !== newCol.isAutoIncrement ||
+          String(currentMatchByName.defaultValue) !== String(newCol.defaultValue);
 
         if (isModified) {
-          // Modify existing column
-          if (currentColumn.name !== newColumn.name) {
-            // Rename and modify
-            alterStatements.push(`ALTER TABLE \`${table}\` CHANGE COLUMN \`${currentColumn.name}\` ${columnDefinition}`);
-          } else {
-            // Only modify
-            alterStatements.push(`ALTER TABLE \`${table}\` MODIFY COLUMN ${columnDefinition}`);
+          columnsToModify.push(newCol);
+        }
+      } else {
+        // This is a new column name. Could be an ADD or a RENAME.
+        // Try to find a matching dropped column that is similar.
+        let renamed = false;
+        for (let i = 0; i < unmatchedDroppedColumns.length; i++) {
+          const oldName = unmatchedDroppedColumns[i];
+          const oldCol = currentColumnMap.get(oldName); // Get full definition of the old column
+
+          // Check for similarity (excluding name)
+          if (oldCol && areColumnDefinitionsSimilar(oldCol, newCol)) {
+            columnsToRename.push({ oldName: oldName, newCol: newCol });
+            unmatchedDroppedColumns.splice(i, 1); // Remove from unmatched dropped
+            renamed = true;
+            break;
           }
         }
+        if (!renamed) {
+          columnsToAdd.push(newCol);
+        }
       }
+    }
+
+    // Any remaining in unmatchedDroppedColumns are actual drops
+    for (const droppedColName of unmatchedDroppedColumns) {
+      alterStatements.push(`ALTER TABLE \`${table}\` DROP COLUMN \`${droppedColName}\``);
+    }
+
+    // Generate ALTER statements for renames, modifications, and additions
+    for (const renameInfo of columnsToRename) {
+      const { oldName, newCol } = renameInfo;
+      let columnDefinition = `\`${newCol.name}\` ${newCol.type}`;
+      if (newCol.length !== undefined && newCol.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newCol.type.toUpperCase())) {
+        columnDefinition += `(${newCol.length})`;
+      }
+      if (!newCol.nullable) {
+        columnDefinition += ` NOT NULL`;
+      }
+      if (newCol.isAutoIncrement) {
+        columnDefinition += ` AUTO_INCREMENT`;
+      }
+      if (newCol.defaultValue !== null && newCol.defaultValue !== undefined && newCol.defaultValue !== '') {
+        if (typeof newCol.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(newCol.defaultValue.toUpperCase())) {
+          columnDefinition += ` DEFAULT ${connection.escape(newCol.defaultValue)}`;
+        } else {
+          columnDefinition += ` DEFAULT ${newCol.defaultValue}`;
+        }
+      } else if (newCol.nullable && newCol.defaultValue === null) {
+        columnDefinition += ` DEFAULT NULL`;
+      }
+      alterStatements.push(`ALTER TABLE \`${table}\` CHANGE COLUMN \`${oldName}\` ${columnDefinition}`);
+    }
+
+    for (const modifiedCol of columnsToModify) {
+      let columnDefinition = `\`${modifiedCol.name}\` ${modifiedCol.type}`;
+      if (modifiedCol.length !== undefined && modifiedCol.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(modifiedCol.type.toUpperCase())) {
+        columnDefinition += `(${modifiedCol.length})`;
+      }
+      if (!modifiedCol.nullable) {
+        columnDefinition += ` NOT NULL`;
+      }
+      if (modifiedCol.isAutoIncrement) {
+        columnDefinition += ` AUTO_INCREMENT`;
+      }
+      if (modifiedCol.defaultValue !== null && modifiedCol.defaultValue !== undefined && modifiedCol.defaultValue !== '') {
+        if (typeof modifiedCol.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(modifiedCol.defaultValue.toUpperCase())) {
+          columnDefinition += ` DEFAULT ${connection.escape(modifiedCol.defaultValue)}`;
+        } else {
+          columnDefinition += ` DEFAULT ${modifiedCol.defaultValue}`;
+        }
+      } else if (modifiedCol.nullable && modifiedCol.defaultValue === null) {
+        columnDefinition += ` DEFAULT NULL`;
+      }
+      alterStatements.push(`ALTER TABLE \`${table}\` MODIFY COLUMN ${columnDefinition}`);
+    }
+
+    for (const addedCol of columnsToAdd) {
+      let columnDefinition = `\`${addedCol.name}\` ${addedCol.type}`;
+      if (addedCol.length !== undefined && addedCol.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(addedCol.type.toUpperCase())) {
+        columnDefinition += `(${addedCol.length})`;
+      }
+      if (!addedCol.nullable) {
+        columnDefinition += ` NOT NULL`;
+      }
+      if (addedCol.isAutoIncrement) {
+        columnDefinition += ` AUTO_INCREMENT`;
+      }
+      if (addedCol.defaultValue !== null && addedCol.defaultValue !== undefined && addedCol.defaultValue !== '') {
+        if (typeof addedCol.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(addedCol.defaultValue.toUpperCase())) {
+          columnDefinition += ` DEFAULT ${connection.escape(addedCol.defaultValue)}`;
+        } else {
+          columnDefinition += ` DEFAULT ${addedCol.defaultValue}`;
+        }
+      } else if (addedCol.nullable && addedCol.defaultValue === null) {
+        columnDefinition += ` DEFAULT NULL`;
+      }
+      alterStatements.push(`ALTER TABLE \`${table}\` ADD COLUMN ${columnDefinition}`);
     }
 
     // Add new primary key if it's changing or being added
-    if (newPK && (!currentPK || newPK.name !== currentPK.name)) {
-      alterStatements.push(`ALTER TABLE \`${table}\` ADD PRIMARY KEY (\`${newPK.name}\`)`);
+    if (newPKColumns.length > 0 && (!currentPKColumns.length || JSON.stringify(currentPKColumns.sort()) !== JSON.stringify(newPKColumns.sort()))) {
+      alterStatements.push(`ALTER TABLE \`${table}\` ADD PRIMARY KEY (${newPKColumns.map(name => `\`${name}\``).join(', ')})`);
     }
-
 
     // Execute all alter statements
     for (const statement of alterStatements) {
