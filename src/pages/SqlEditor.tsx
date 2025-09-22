@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw } from "lucide-react";
+import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiService, QueryResult, QueryHistoryPayload } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
 import { format } from "sql-formatter";
+import SqlCodeEditor from "@/components/SqlCodeEditor"; // New import
 
 const SqlEditor = () => {
   const { toast } = useToast();
@@ -198,12 +198,11 @@ const SqlEditor = () => {
       </div>
 
       {/* Query Editor Area */}
-      <div className="flex-1 min-h-[70vh]"> {/* Aumentado min-h para 70vh */}
-        <Textarea
+      <div className="flex-1"> {/* Use flex-1 to make it take available space */}
+        <SqlCodeEditor
           value={sqlQuery}
-          onChange={(e) => setSqlQuery(e.target.value)}
+          onValueChange={setSqlQuery}
           onKeyDown={handleKeyDown}
-          className="h-full font-mono text-xs resize-none"
           placeholder="SELECT * FROM your_table;"
         />
       </div>
