@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X } from "lucide-react";
+import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Table as ShadcnTable, TableBody, TableCell, TableHead, TableHeader, Tab
 import { apiService, TableInfo } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import CreateTableDialog from "@/components/CreateTableDialog"; // Import the new dialog
 
 interface DatabaseTablesListProps {
   database: string;
@@ -18,11 +20,13 @@ interface DatabaseTablesListProps {
 const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesListProps) => {
   const { toast } = useToast();
   const { addTab } = useTabs();
+  const { hasPrivilege } = useAuth(); // Use hasPrivilege
   const [allTables, setAllTables] = useState<TableInfo[]>([]); // Armazena todas as tabelas
   const [allViews, setAllViews] = useState<TableInfo[]>([]);   // Armazena todas as views
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isCreateTableDialogOpen, setIsCreateTableDialogOpen] = useState(false); // State for the new dialog
 
   const loadTablesAndViews = useCallback(async () => {
     try {
@@ -126,6 +130,12 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
+          {hasPrivilege("CREATE") && filterType !== 'views' && ( // Only allow creating tables, not views
+            <Button size="sm" onClick={() => setIsCreateTableDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Table
+            </Button>
+          )}
         </div>
       </div>
 
@@ -212,6 +222,13 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
           </CardContent>
         </Card>
       )}
+
+      <CreateTableDialog
+        open={isCreateTableDialogOpen}
+        onOpenChange={setIsCreateTableDialogOpen}
+        database={database}
+        onTableCreated={loadTablesAndViews}
+      />
     </div>
   );
 };

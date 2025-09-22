@@ -119,6 +119,17 @@ interface SystemStatusResponse {
   message: string;
 }
 
+export interface TableColumnDefinition {
+  id: string; // Used for React keys
+  name: string;
+  type: string;
+  length?: number; // For VARCHAR, INT, etc.
+  nullable: boolean;
+  isPrimaryKey: boolean;
+  isAutoIncrement: boolean;
+  defaultValue: string | null;
+}
+
 class ApiService {
   private baseUrl = "http://localhost:3001/api";
   private sessionToken: string | null = null;
@@ -272,6 +283,27 @@ class ApiService {
     );
     if (!response.ok) {
       throw new Error("Failed to fetch tables");
+    }
+    return response.json();
+  }
+
+  async createTable(
+    database: string,
+    tableName: string,
+    columns: TableColumnDefinition[]
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables`,
+      {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ tableName, columns }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to create table");
     }
     return response.json();
   }

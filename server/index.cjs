@@ -561,6 +561,67 @@ app.get('/api/databases/:database/tables', authMiddleware, async (req, res) => {
   }
 });
 
+// Create new table
+app.post('/api/databases/:database/tables', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getUserPooledConnection(req);
+    const { database } = req.params;
+    const { tableName, columns } = req.body;
+
+    if (!tableName || !columns || !Array.isArray(columns) || columns.length === 0) {
+      return res.status(400).json({ success: false, error: 'Table name and column definitions are required.' });
+    }
+
+    // Basic sanitization for table name
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      return res.status(400).json({ success: false, error: 'Invalid table name. Only alphanumeric characters and underscores are allowed.' });
+    }
+
+    await connection.query(`USE \`${database}\``);
+
+    const columnDefinitions = columns.map(col => {
+      let definition = `\`${col.name}\` ${col.type}`;
+      if (col.length !== undefined && col.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(col.type.toUpperCase())) {
+        definition += `(${col.length})`;
+      }
+      if (!col.nullable) {
+        definition += ` NOT NULL`;
+      }
+      if (col.isAutoIncrement) {
+        definition += ` AUTO_INCREMENT`;
+      }
+      if (col.defaultValue !== null && col.defaultValue !== undefined && col.defaultValue !== '') {
+        // Escape default values properly
+        if (typeof col.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(col.defaultValue.toUpperCase())) {
+          definition += ` DEFAULT ${connection.escape(col.defaultValue)}`;
+        } else {
+          definition += ` DEFAULT ${col.defaultValue}`;
+        }
+      } else if (col.nullable && col.defaultValue === null) {
+        definition += ` DEFAULT NULL`;
+      }
+      return definition;
+    });
+
+    const primaryKeyColumns = columns.filter(col => col.isPrimaryKey).map(col => `\`${col.name}\``);
+    if (primaryKeyColumns.length === 0) {
+      return res.status(400).json({ success: false, error: 'A table must have at least one primary key.' });
+    }
+    columnDefinitions.push(`PRIMARY KEY (${primaryKeyColumns.join(', ')})`);
+
+    const createTableQuery = `CREATE TABLE \`${tableName}\` (${columnDefinitions.join(', ')})`;
+    
+    await connection.query(createTableQuery);
+    res.json({ success: true, message: `Table '${tableName}' created successfully.` });
+  } catch (error) {
+    console.error('Error creating table:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
 // Get table data
 app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (req, res) => {
   let connection;
