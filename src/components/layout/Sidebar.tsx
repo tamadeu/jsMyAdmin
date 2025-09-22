@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle, Wrench, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { ThemeToggle } from "@/components/theme-toggle";
 import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { useTabs, AppTab } from "@/context/TabContext"; // Import useTabs and AppTab
+import { useTabs, AppTab } from "@/context/TabContext";
 import { useAuth } from "@/context/AuthContext";
-import CreateDatabaseDialog from "@/components/CreateDatabaseDialog"; // Import the new dialog
+import CreateDatabaseDialog from "@/components/CreateDatabaseDialog";
 
 interface DatabaseInfo {
   name: string;
@@ -32,9 +32,10 @@ const arraysEqual = (a: string[], b: string[]) => {
 };
 
 const Sidebar = () => {
+  const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { tabs, activeTabId, addTab, setActiveTab, getTabById } = useTabs(); // Use tab context
+  const { tabs, activeTabId, addTab, setActiveTab, getTabById } = useTabs();
   const { hasPrivilege } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
@@ -42,7 +43,7 @@ const Sidebar = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedDatabases, setExpandedDatabases] = useState<string[]>([]);
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
-  const [isCreateDbDialogOpen, setIsCreateDbDialogOpen] = useState(false); // State for the new dialog
+  const [isCreateDbDialogOpen, setIsCreateDbDialogOpen] = useState(false);
 
   // Determine if a sidebar item corresponds to the active tab
   const isSidebarItemActive = (type: AppTab['type'], params?: AppTab['params'], filterType?: AppTab['filterType']) => {
@@ -55,6 +56,9 @@ const Sidebar = () => {
       }
       if (type === 'database-tables-list') {
         return activeTab.params?.database === params?.database && activeTab.filterType === filterType;
+      }
+      if (type === 'table-structure') {
+        return activeTab.params?.database === params?.database && activeTab.params?.table === params?.table;
       }
       return true; // For dashboard, sql-editor, config, users, just type match is enough
     }
@@ -70,34 +74,35 @@ const Sidebar = () => {
   useEffect(() => {
     const activeTab = getTabById(activeTabId);
 
-    if (activeTab && (activeTab.type === 'table' || activeTab.type === 'database-tables-list') && activeTab.params?.database) {
+    if (activeTab && (activeTab.type === 'table' || activeTab.type === 'database-tables-list' || activeTab.type === 'table-structure') && activeTab.params?.database) {
       let targetExpandedDatabases: string[] = [activeTab.params.database];
       let targetExpandedSections: string[] = [];
 
       if (activeTab.type === 'table' && activeTab.params.table) {
-        // Find the database from the current `databases` state
         const db = databases.find(d => d.name === activeTab.params?.database);
         if (db) {
           const isView = db.views.some(view => view.name === activeTab.params?.table);
           targetExpandedSections = [`${activeTab.params.database}-${isView ? 'views' : 'tables'}`];
         }
       } else if (activeTab.type === 'database-tables-list') {
-        // If the active tab is the database-tables-list, expand the relevant section
         if (activeTab.filterType === 'tables' || activeTab.filterType === 'all') {
           targetExpandedSections.push(`${activeTab.params.database}-tables`);
         }
         if (activeTab.filterType === 'views' || activeTab.filterType === 'all') {
           targetExpandedSections.push(`${activeTab.params.database}-views`);
         }
+      } else if (activeTab.type === 'table-structure' && activeTab.params.table) {
+        const db = databases.find(d => d.name === activeTab.params?.database);
+        if (db) {
+          const isView = db.views.some(view => view.name === activeTab.params?.table);
+          targetExpandedSections = [`${activeTab.params.database}-${isView ? 'views' : 'tables'}`];
+        }
       }
 
-      // Only update state if the new value is different from the current state
       setExpandedDatabases(prev => arraysEqual(prev, targetExpandedDatabases) ? prev : targetExpandedDatabases);
       setExpandedSections(prev => arraysEqual(prev, targetExpandedSections) ? prev : targetExpandedSections);
     } 
-    // If not a table tab, do not modify expandedDatabases or expandedSections.
-    // This prevents forcing collapse when switching to non-table tabs, which might cause a loop.
-  }, [activeTabId, databases, getTabById]); // Dependencies are activeTabId, databases, getTabById
+  }, [activeTabId, databases, getTabById]);
 
   const loadDatabases = async () => {
     try {
@@ -106,7 +111,6 @@ const Sidebar = () => {
       
       const databaseNames = await apiService.getDatabases();
       
-      // Load table and view information for each database
       const databasesWithTablesAndViews = await Promise.all(
         databaseNames.map(async (dbName) => {
           try {
@@ -132,7 +136,6 @@ const Sidebar = () => {
       );
 
       setDatabases(prev => {
-        // Deep compare to avoid unnecessary state updates
         if (JSON.stringify(prev) === JSON.stringify(databasesWithTablesAndViews)) {
           return prev;
         }
@@ -153,13 +156,11 @@ const Sidebar = () => {
   };
 
   const handleDatabaseToggle = async (databaseName: string) => {
-    // If the database is not currently expanded, try to load its tables/views
     if (!expandedDatabases.includes(databaseName)) {
       const database = databases.find(db => db.name === databaseName);
       if (database && database.tables.length === 0 && database.views.length === 0) {
         try {
           const tablesData = await apiService.getTables(databaseName);
-          // Only update if new data is actually different
           setDatabases(prev => {
             const updated = prev.map(db => 
               db.name === databaseName 
@@ -172,7 +173,6 @@ const Sidebar = () => {
                   }
                 : db
             );
-            // Deep compare to avoid unnecessary state updates
             if (JSON.stringify(prev) === JSON.stringify(updated)) { 
                 return prev;
             }
@@ -188,7 +188,6 @@ const Sidebar = () => {
         }
       }
     }
-    // Toggle the expanded state
     setExpandedDatabases(prev => 
       prev.includes(databaseName) 
         ? prev.filter(name => name !== databaseName) 
@@ -229,7 +228,7 @@ const Sidebar = () => {
           <Button 
             variant={isSidebarItemActive("dashboard") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => addTab({ title: "Dashboard", type: "dashboard", closable: false })}
+            onClick={() => navigate('/')}
           >
             <Database className="h-4 w-4 mr-2" />
             Dashboard
@@ -237,7 +236,7 @@ const Sidebar = () => {
           <Button 
             variant={isSidebarItemActive("sql-editor") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => addTab({ title: "SQL Editor", type: "sql-editor", closable: true })}
+            onClick={() => navigate('/sql')}
           >
             <Play className="h-4 w-4 mr-2" />
             SQL Editor
@@ -245,7 +244,7 @@ const Sidebar = () => {
           <Button 
             variant={isSidebarItemActive("config") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => addTab({ title: "Configuration", type: "config", closable: true })}
+            onClick={() => navigate('/configuration')}
           >
             <Settings className="h-4 w-4 mr-2" />
             Configuration
@@ -254,15 +253,13 @@ const Sidebar = () => {
             <Button
               variant={isSidebarItemActive("users") ? "secondary" : "ghost"}
               className="w-full justify-start"
-              onClick={() =>
-                addTab({ title: "Users", type: "users", closable: true })
-              }
+              onClick={() => navigate('/users')}
             >
               <Users className="h-4 w-4 mr-2" />
               Users
             </Button>
           )}
-          {hasPrivilege("CREATE") && ( // Check for CREATE privilege
+          {hasPrivilege("CREATE") && (
             <Button
               variant="ghost"
               className="w-full justify-start"
@@ -336,15 +333,9 @@ const Sidebar = () => {
                         : ""
                     }`}
                     onClick={(e) => {
-                      e.stopPropagation(); // Prevent default accordion toggle
-                      handleDatabaseToggle(db.name); // Toggle accordion state
-                      addTab({ 
-                        title: `Tables & Views: ${db.name}`, 
-                        type: "database-tables-list", 
-                        params: { database: db.name },
-                        filterType: 'all', // Show all by default for database name click
-                        closable: true
-                      });
+                      e.stopPropagation();
+                      handleDatabaseToggle(db.name);
+                      navigate(`/${db.name}/tables`);
                     }}
                   >
                     <div className="flex items-center gap-2 flex-1">
@@ -360,7 +351,6 @@ const Sidebar = () => {
                   </AccordionTrigger>
                   <AccordionContent className="pb-2">
                     <div className="ml-6">
-                      {/* Tables and Views Accordion (inner accordion for Tables/Views sections) */}
                       <Accordion 
                         type="multiple" 
                         className="w-full" 
@@ -377,14 +367,8 @@ const Sidebar = () => {
                                   : ""
                               }`}
                               onClick={(e) => {
-                                e.stopPropagation(); // Prevent parent accordion from closing
-                                addTab({ 
-                                  title: `Tables: ${db.name}`, 
-                                  type: "database-tables-list", 
-                                  params: { database: db.name },
-                                  filterType: 'tables', // Show only tables
-                                  closable: true
-                                });
+                                e.stopPropagation();
+                                navigate(`/${db.name}/tables`);
                               }}
                             >
                               <div className="flex items-center gap-2">
@@ -402,12 +386,7 @@ const Sidebar = () => {
                                         ? "bg-secondary hover:bg-secondary/80" 
                                         : "hover:bg-accent"
                                     }`}
-                                    onClick={() => addTab({ 
-                                      title: table.name, 
-                                      type: "table", 
-                                      params: { database: db.name, table: table.name },
-                                      closable: true
-                                    })}
+                                    onClick={() => navigate(`/${db.name}/${table.name}`)}
                                   >
                                     <div className="flex items-center gap-2">
                                       <Table className="h-3 w-3" />
@@ -430,14 +409,8 @@ const Sidebar = () => {
                                   : ""
                               }`}
                               onClick={(e) => {
-                                e.stopPropagation(); // Prevent parent accordion from closing
-                                addTab({ 
-                                  title: `Views: ${db.name}`, 
-                                  type: "database-tables-list", 
-                                  params: { database: db.name },
-                                  filterType: 'views', // Show only views
-                                  closable: true
-                                });
+                                e.stopPropagation();
+                                navigate(`/${db.name}/views`);
                               }}
                             >
                               <div className="flex items-center gap-2">
@@ -455,12 +428,7 @@ const Sidebar = () => {
                                         ? "bg-secondary hover:bg-secondary/80" 
                                         : "hover:bg-accent"
                                     }`}
-                                    onClick={() => addTab({ 
-                                      title: view.name, 
-                                      type: "table", 
-                                      params: { database: db.name, table: view.name },
-                                      closable: true
-                                    })}
+                                    onClick={() => navigate(`/${db.name}/${view.name}`)}
                                   >
                                     <div className="flex items-center gap-2">
                                       <Eye className="h-3 w-3" />
@@ -503,7 +471,7 @@ const Sidebar = () => {
       <CreateDatabaseDialog
         open={isCreateDbDialogOpen}
         onOpenChange={setIsCreateDbDialogOpen}
-        onDatabaseCreated={loadDatabases} // Refresh the database list after creation
+        onDatabaseCreated={loadDatabases}
       />
     </div>
   );

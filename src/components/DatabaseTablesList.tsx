@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table as ShadcnTable, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiService, TableInfo } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { useTabs } from "@/context/TabContext";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import CreateTableDialog from "@/components/CreateTableDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -20,7 +20,7 @@ interface DatabaseTablesListProps {
 
 const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesListProps) => {
   const { toast } = useToast();
-  const { addTab } = useTabs();
+  const navigate = useNavigate();
   const { hasPrivilege } = useAuth();
   const [allTables, setAllTables] = useState<TableInfo[]>([]);
   const [allViews, setAllViews] = useState<TableInfo[]>([]);
@@ -70,21 +70,11 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   }, [allTables, allViews, searchTerm, filterType]);
 
   const handleOpenTable = (tableName: string) => {
-    addTab({
-      title: tableName,
-      type: "table",
-      params: { database, table: tableName },
-      closable: true,
-    });
+    navigate(`/${database}/${tableName}`);
   };
 
   const handleOpenTableStructure = (tableName: string) => {
-    addTab({
-      title: `Structure: ${tableName}`,
-      type: "table-structure",
-      params: { database, table: tableName },
-      closable: true,
-    });
+    navigate(`/${database}/${tableName}/structure`);
   };
 
   const handleDeleteTable = async (tableName: string) => {
@@ -94,7 +84,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         title: "Table Deleted",
         description: `Table '${tableName}' deleted successfully.`,
       });
-      loadTablesAndViews(); // Refresh the list
+      loadTablesAndViews();
     } catch (err) {
       toast({
         title: "Error Deleting Table",
@@ -102,7 +92,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         variant: "destructive",
       });
     } finally {
-      setDeleteTableConfirm(null); // Close dialog
+      setDeleteTableConfirm(null);
     }
   };
 
@@ -113,7 +103,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         title: "Table Truncated",
         description: `All data from table '${tableName}' has been removed.`,
       });
-      loadTablesAndViews(); // Refresh the list (rows count will be 0)
+      loadTablesAndViews();
     } catch (err) {
       toast({
         title: "Error Truncating Table",
@@ -121,7 +111,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         variant: "destructive",
       });
     } finally {
-      setTruncateTableConfirm(null); // Close dialog
+      setTruncateTableConfirm(null);
     }
   };
 
@@ -268,14 +258,14 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                             <LayoutPanelTop className="h-4 w-4 mr-2" />
                             Structure
                           </Button>
-                          {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && ( // Only for tables, not views
+                          {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
                             <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="text-orange-500 hover:text-orange-600">
                               <Eraser className="h-4 w-4 mr-2" />
                               Empty
                             </Button>
                           )}
-                          {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && ( // Only for tables, not views
-                            <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="text-red-500 hover:text-red-600">
+                          {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && (
+                            <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="text-red-500 hover:bg-red-600">
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete
                             </Button>

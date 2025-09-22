@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
+import { useAuth } from "@/context/AuthContext";
 
 interface ServerStatus {
   version: string;
@@ -21,17 +21,10 @@ interface ServerStatus {
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth(); // Get authenticated user
+  const { user } = useAuth();
   const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Removido: queryHistory não é mais necessário
-  // const queryHistory = [
-  //   { query: "SELECT * FROM users WHERE status = \"active\" ORDER BY created_at...", time: "0.045s", timestamp: "2024-01-15 14:30:22" },
-  //   { query: "UPDATE products SET stock = stock - 1 WHERE id = 123", time: "0.012s", timestamp: "2024-01-15 14:25:15" },
-  //   { query: "SELECT COUNT(*) as total_orders FROM orders WHERE DATE(created_...", time: "0.089s", timestamp: "2024-01-15 14:20:08" }
-  // ];
 
   useEffect(() => {
     loadDashboardData();
@@ -42,7 +35,6 @@ const Dashboard = () => {
       setIsLoading(true);
       setError(null);
 
-      // Get server status
       const currentServerStatus = await apiService.getServerStatus();
       setServerStatus(currentServerStatus);
 
@@ -91,62 +83,6 @@ const Dashboard = () => {
         <p className="text-muted-foreground">Overview of your MySQL databases and recent activity</p>
       </div>
 
-      {/* Stats Cards - REMOVED */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Total Databases</CardTitle>
-              <Database className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalDatabases}</div>
-            <p className="text-xs text-muted-foreground">Connected databases</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Total Tables</CardTitle>
-              <Table className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalTables}</div>
-            <p className="text-xs text-muted-foreground">Across all databases</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
-              <Server className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.storageUsed}</div>
-            <Progress value={stats.storagePercent} className="mt-2 h-2" />
-            <p className="text-xs text-muted-foreground mt-1">{stats.storagePercent.toFixed(1)}% of estimated limit</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Active Connections</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeConnections}</div>
-            <p className="text-xs text-muted-foreground">Current connections</p>
-          </CardContent>
-        </Card>
-      </div> */}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Database Server Information */}
         <Card>
@@ -160,11 +96,11 @@ const Dashboard = () => {
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span>Server:</span> <span className="font-medium">{user?.host || 'N/A'}</span></div>
             <div className="flex justify-between"><span>Server type:</span> <span className="font-medium">MySQL</span></div>
-            <div className="flex justify-between"><span>Server connection:</span> <span className="font-medium">No SSL is being used</span></div> {/* Placeholder for SSL status */}
+            <div className="flex justify-between"><span>Server connection:</span> <span className="font-medium">No SSL is being used</span></div>
             <div className="flex justify-between"><span>Server version:</span> <span className="font-medium">{serverStatus?.version || 'N/A'}</span></div>
             <div className="flex justify-between"><span>Uptime:</span> <span className="font-medium">{serverStatus?.uptime || 'N/A'} seconds</span></div>
             <div className="flex justify-between"><span>User:</span> <span className="font-medium">{user?.username || 'N/A'}@{user?.host || 'N/A'}</span></div>
-            <div className="flex justify-between"><span>Server charset:</span> <span className="font-medium">UTF-8 Unicode (utf8mb4)</span></div> {/* Placeholder for charset */}
+            <div className="flex justify-between"><span>Server charset:</span> <span className="font-medium">UTF-8 Unicode (utf8mb4)</span></div>
           </CardContent>
         </Card>
 
@@ -186,8 +122,8 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Recent Activity - REMOVED */}
-        {/* <Card>
+        {/* Recent Activity */}
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -201,28 +137,11 @@ const Dashboard = () => {
             <CardDescription>Latest SQL operations</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {queryHistory.length === 0 ? (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">No recent queries.</p>
-              </div>
-            ) : (
-              queryHistory.map((query, index) => (
-                <div key={index} className="p-3 bg-accent rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                    <div className="flex-1">
-                      <div className="text-sm font-mono">{query.query}</div>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        <span>{query.timestamp}</span>
-                        <span>{query.time}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+            <div className="text-center py-4">
+              <p className="text-muted-foreground">No recent queries available.</p>
+            </div>
           </CardContent>
-        </Card> */}
+        </Card>
       </div>
     </div>
   );

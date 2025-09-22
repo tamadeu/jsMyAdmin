@@ -12,7 +12,7 @@ import { format } from "sql-formatter";
 
 const SqlEditor = () => {
   const { toast } = useToast();
-  const { addTab, activeTabId, getTabById, updateTabContent, removeTab } = useTabs(); // Adicionado removeTab
+  const { addTab, activeTabId, getTabById, updateTabContent } = useTabs();
   
   const activeTab = getTabById(activeTabId);
 
@@ -59,7 +59,6 @@ const SqlEditor = () => {
             queryResult: { ...result, originalQuery: sqlQuery },
             closable: true,
           });
-          removeTab(activeTabId); // Fecha a aba atual do SQL Editor
         } else {
           toast({
             title: "Query executed",
@@ -89,19 +88,17 @@ const SqlEditor = () => {
     } finally {
       setIsExecuting(false);
       if (result) {
-        // Fire-and-forget saving to history
         apiService.saveQueryToHistory({
           query_text: sqlQuery,
           execution_time_ms: result.executionTime,
           status: result.success ? 'success' : 'error',
           error_message: result.error,
         }).catch(err => {
-          // Log error to console but don't bother the user
           console.warn("Could not save query to history:", err);
         });
       }
     }
-  }, [sqlQuery, addTab, toast, removeTab, activeTabId]); // Adicionado removeTab e activeTabId às dependências
+  }, [sqlQuery, addTab, toast]);
 
   const saveQuery = () => {
     toast({

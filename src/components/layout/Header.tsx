@@ -21,8 +21,6 @@ const Header = () => {
 
   let headerTitle = "jsMyAdmin";
   let headerSubtitle: string | undefined = undefined;
-  let databaseParam: string | undefined = undefined;
-  let tableParam: string | undefined = undefined;
 
   if (activeTab) {
     switch (activeTab.type) {
@@ -41,8 +39,6 @@ const Header = () => {
       case "table":
         headerTitle = `Table: ${activeTab.params?.table}`;
         headerSubtitle = `Databases / ${activeTab.params?.database} / ${activeTab.params?.table}`;
-        databaseParam = activeTab.params?.database;
-        tableParam = activeTab.params?.table;
         break;
       case "query-result":
         headerTitle = activeTab.title;
@@ -51,6 +47,14 @@ const Header = () => {
       case "users":
         headerTitle = "User Accounts";
         headerSubtitle = "Manage MySQL user accounts and privileges";
+        break;
+      case "database-tables-list":
+        headerTitle = activeTab.title; // e.g., "Tables: mydb"
+        headerSubtitle = `Databases / ${activeTab.params?.database}`;
+        break;
+      case "table-structure":
+        headerTitle = `Structure: ${activeTab.params?.table}`;
+        headerSubtitle = `Databases / ${activeTab.params?.database} / ${activeTab.params?.table} Structure`;
         break;
       default:
         headerTitle = activeTab.title;
@@ -64,22 +68,11 @@ const Header = () => {
         <div className="flex items-center gap-3">
           {isMobile && <MobileSidebar />}
           <div className="flex flex-col gap-1">
-            {databaseParam && tableParam ? (
-              <>
-                <h1 className="text-xl font-semibold">Table: {tableParam}</h1>
-                <div className="text-sm text-muted-foreground">
-                  Databases / {databaseParam} / {tableParam}
-                </div>
-              </>
-            ) : (
-              <>
-                <h1 className="text-xl font-semibold">{headerTitle}</h1>
-                {headerSubtitle && (
-                  <div className="text-sm text-muted-foreground">
-                    {headerSubtitle}
-                  </div>
-                )}
-              </>
+            <h1 className="text-xl font-semibold">{headerTitle}</h1>
+            {headerSubtitle && (
+              <div className="text-sm text-muted-foreground">
+                {headerSubtitle}
+              </div>
             )}
           </div>
         </div>
