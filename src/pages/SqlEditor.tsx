@@ -198,7 +198,7 @@ const SqlEditor = () => {
       </div>
 
       {/* Query Editor Area */}
-      <div className="flex-1 min-h-[500px]"> {/* Aumentado min-h para 500px */}
+      <div className="flex-1 min-h-[70vh]"> {/* Aumentado min-h para 70vh */}
         <Textarea
           value={sqlQuery}
           onChange={(e) => setSqlQuery(e.target.value)}
