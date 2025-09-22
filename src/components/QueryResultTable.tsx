@@ -3,13 +3,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { QueryResult, apiService } from "@/services/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useTabs } from "@/context/TabContext"; // Import useTabs
+import { format } from "sql-formatter"; // Import sql-formatter
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -52,6 +54,7 @@ interface QueryResultTableProps {
 
 const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryResultTableProps) => {
   const { toast } = useToast();
+  const { addTab, removeTab, activeTabId } = useTabs(); // Use useTabs hook
   const [currentQueryResult, setCurrentQueryResult] = useState<QueryResult>(initialQueryResult);
   const [searchInput, setSearchInput] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -203,6 +206,39 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
     return query.substring(0, maxLength) + '...';
   }, [currentQueryResult.originalQuery, isQueryExpanded]);
 
+  const handleEditQuery = useCallback(() => {
+    if (currentQueryResult.originalQuery) {
+      try {
+        const formattedQuery = format(currentQueryResult.originalQuery, {
+          language: 'mysql',
+          indent: '  ',
+          linesBetweenQueries: 2,
+        });
+        addTab({
+          title: "SQL Editor",
+          type: "sql-editor",
+          closable: true,
+          sqlQueryContent: formattedQuery,
+        });
+        removeTab(activeTabId); // Close the current query result tab
+      } catch (error) {
+        console.error('Error formatting query for editor:', error);
+        toast({
+          title: "Error opening SQL Editor",
+          description: "Failed to format query. Opening editor with unformatted query.",
+          variant: "destructive"
+        });
+        addTab({
+          title: "SQL Editor",
+          type: "sql-editor",
+          closable: true,
+          sqlQueryContent: currentQueryResult.originalQuery,
+        });
+        removeTab(activeTabId); // Close the current query result tab
+      }
+    }
+  }, [currentQueryResult.originalQuery, addTab, removeTab, activeTabId, toast]);
+
   if (isLoadingData) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -235,6 +271,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                 )}
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={handleEditQuery} className="ml-2">
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Query
+            </Button>
           </div>
         )}
       </div>
@@ -265,6 +305,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                 )}
               </Button>
             )}
+            <Button variant="outline" size="sm" onClick={handleEditQuery} className="ml-2">
+              <Edit className="h-4 w-4 mr-2" />
+              Edit Query
+            </Button>
           </div>
         )}
       </div>
@@ -292,21 +336,27 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                 Consulta levou {(currentQueryResult.executionTime / 1000).toFixed(4)} segundos.)
               </div>
               {currentQueryResult.originalQuery && (
-                <div className="font-mono text-xs bg-muted p-2 rounded">
-                  {displayedQuery}
-                  {currentQueryResult.originalQuery.length > 300 && (
-                    <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
-                      {isQueryExpanded ? (
-                        <>
-                          <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
-                        </>
-                      ) : (
-                        <>
-                          <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
-                        </>
-                      )}
-                    </Button>
-                  )}
+                <div className="font-mono text-xs bg-muted p-2 rounded flex items-center justify-between">
+                  <div>
+                    {displayedQuery}
+                    {currentQueryResult.originalQuery.length > 300 && (
+                      <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
+                        {isQueryExpanded ? (
+                          <>
+                            <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleEditQuery} className="ml-2">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Query
+                  </Button>
                 </div>
               )}
             </div>
