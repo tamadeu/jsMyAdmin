@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { apiService, TableData } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import InsertRowDialog from "@/components/InsertRowDialog"; // Import the new dialog
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -66,8 +67,9 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set()); // Corrigido aqui
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
+  const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false); // State for InsertRowDialog
 
   // Debounce the search input (wait 500ms after user stops typing)
   const debouncedSearchTerm = useDebounce(searchInput, 500);
@@ -483,7 +485,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   Export
                 </Button>
                 {hasPrivilege("INSERT") && (
-                  <Button size="sm">
+                  <Button size="sm" onClick={() => setIsInsertRowDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Insert Row
                   </Button>
@@ -797,6 +799,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        )}
+
+        {/* Insert Row Dialog */}
+        {isInsertRowDialogOpen && tableData && (
+          <InsertRowDialog
+            open={isInsertRowDialogOpen}
+            onOpenChange={setIsInsertRowDialogOpen}
+            database={database}
+            table={table}
+            columns={tableData.columns}
+            onRowInserted={loadTableData} // Refresh data after successful insert
+          />
         )}
       </div>
     </div>
