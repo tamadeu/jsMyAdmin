@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2 } from "lucide-react";
+import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
