@@ -8,7 +8,7 @@ import { useAuth } from './AuthContext'; // Importando o hook de autenticação
 export interface AppTab {
   id: string;
   title: string;
-  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result' | 'users';
+  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result' | 'users' | 'database-tables-list';
   params?: { database?: string; table?: string; };
   closable: boolean;
   queryResult?: QueryResult;
@@ -19,7 +19,7 @@ export interface AppTab {
 interface PersistedTab {
   id: string;
   title: string;
-  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result' | 'users';
+  type: 'dashboard' | 'sql-editor' | 'table' | 'config' | 'query-result' | 'users' | 'database-tables-list';
   params?: { database?: string; table?: string; };
   closable: boolean;
   sqlQueryContent?: string;

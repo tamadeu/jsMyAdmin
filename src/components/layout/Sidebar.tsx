@@ -48,7 +48,7 @@ const Sidebar = () => {
     if (!activeTab) return false;
 
     if (activeTab.type === type) {
-      if (type === 'table') {
+      if (type === 'table' || type === 'database-tables-list') {
         return activeTab.params?.database === params?.database && activeTab.params?.table === params?.table;
       }
       return true; // For dashboard, sql-editor, config, just type match is enough
@@ -65,17 +65,19 @@ const Sidebar = () => {
   useEffect(() => {
     const activeTab = getTabById(activeTabId);
 
-    if (activeTab && activeTab.type === 'table' && activeTab.params?.database) {
+    if (activeTab && (activeTab.type === 'table' || activeTab.type === 'database-tables-list') && activeTab.params?.database) {
       let targetExpandedDatabases: string[] = [activeTab.params.database];
       let targetExpandedSections: string[] = [];
 
-      if (activeTab.params.table) {
+      if (activeTab.type === 'table' && activeTab.params.table) {
         // Find the database from the current `databases` state
         const db = databases.find(d => d.name === activeTab.params?.database);
         if (db) {
           const isView = db.views.some(view => view.name === activeTab.params?.table);
           targetExpandedSections = [`${activeTab.params.database}-${isView ? 'views' : 'tables'}`];
         }
+      } else if (activeTab.type === 'database-tables-list') {
+        targetExpandedSections = [`${activeTab.params.database}-tables`]; // Expand tables section for the list view
       }
 
       // Only update state if the new value is different from the current state
@@ -331,98 +333,86 @@ const Sidebar = () => {
                         onValueChange={setExpandedSections}
                       >
                         {/* Tables Section */}
-                        {db.totalTables > 0 && (
+                        {(db.totalTables > 0 || db.totalViews > 0) && ( // Show this section if there are any tables or views
                           <AccordionItem value={`${db.name}-tables`} className="border-none">
-                            <AccordionTrigger className="hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs">
+                            <AccordionTrigger 
+                              className={`hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs ${
+                                isSidebarItemActive("database-tables-list", { database: db.name }) 
+                                  ? "bg-secondary hover:bg-secondary/80" 
+                                  : ""
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent parent accordion from closing
+                                addTab({ 
+                                  title: `Tables: ${db.name}`, 
+                                  type: "database-tables-list", 
+                                  params: { database: db.name },
+                                  closable: true
+                                });
+                              }}
+                            >
                               <div className="flex items-center gap-2">
                                 <Table className="h-3 w-3" />
-                                <span className="text-foreground">Tables ({db.totalTables})</span>
+                                <span className="text-foreground">Tables ({db.totalTables + db.totalViews})</span>
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pb-1">
                               <div className="ml-4 space-y-1">
-                                {db.tables.length === 0 ? (
+                                {db.tables.length === 0 && db.views.length === 0 ? (
                                   <div className="text-xs text-muted-foreground p-2">
-                                    No tables found
+                                    No tables or views found
                                   </div>
                                 ) : (
-                                  db.tables.map((table) => (
-                                    <div 
-                                      key={table.name} 
-                                      className={`p-2 rounded-md cursor-pointer transition-colors ${
-                                        isSidebarItemActive("table", { database: db.name, table: table.name }) 
-                                          ? "bg-secondary hover:bg-secondary/80" 
-                                          : "hover:bg-accent"
-                                      }`}
-                                      onClick={() => addTab({ 
-                                        title: table.name, 
-                                        type: "table", 
-                                        params: { database: db.name, table: table.name },
-                                        closable: true
-                                      })}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <Table className="h-3 w-3" />
-                                        <span className="text-sm text-foreground">{table.name}</span>
+                                  <>
+                                    {db.tables.map((table) => (
+                                      <div 
+                                        key={table.name} 
+                                        className={`p-2 rounded-md cursor-pointer transition-colors ${
+                                          isSidebarItemActive("table", { database: db.name, table: table.name }) 
+                                            ? "bg-secondary hover:bg-secondary/80" 
+                                            : "hover:bg-accent"
+                                        }`}
+                                        onClick={() => addTab({ 
+                                          title: table.name, 
+                                          type: "table", 
+                                          params: { database: db.name, table: table.name },
+                                          closable: true
+                                        })}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <Table className="h-3 w-3" />
+                                          <span className="text-sm text-foreground">{table.name}</span>
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-
-                        {/* Views Section */}
-                        {db.totalViews > 0 && (
-                          <AccordionItem value={`${db.name}-views`} className="border-none">
-                            <AccordionTrigger className="hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs">
-                              <div className="flex items-center gap-2">
-                                <Eye className="h-3 w-3" />
-                                <span className="text-foreground">Views ({db.totalViews})</span>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent className="pb-1">
-                              <div className="ml-4 space-y-1">
-                                {db.views.length === 0 ? (
-                                  <div className="text-xs text-muted-foreground p-2">
-                                    No views found
-                                  </div>
-                                ) : (
-                                  db.views.map((view) => (
-                                    <div 
-                                      key={view.name} 
-                                      className={`p-2 rounded-md cursor-pointer transition-colors ${
-                                        isSidebarItemActive("table", { database: db.name, table: view.name }) 
-                                          ? "bg-secondary hover:bg-secondary/80" 
-                                          : "hover:bg-accent"
-                                      }`}
-                                      onClick={() => addTab({ 
-                                        title: view.name, 
-                                        type: "table", 
-                                        params: { database: db.name, table: view.name },
-                                        closable: true
-                                      })}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <Eye className="h-3 w-3" />
-                                        <span className="text-sm text-foreground">{view.name}</span>
+                                    ))}
+                                    {db.views.map((view) => (
+                                      <div 
+                                        key={view.name} 
+                                        className={`p-2 rounded-md cursor-pointer transition-colors ${
+                                          isSidebarItemActive("table", { database: db.name, table: view.name }) 
+                                            ? "bg-secondary hover:bg-secondary/80" 
+                                            : "hover:bg-accent"
+                                        }`}
+                                        onClick={() => addTab({ 
+                                          title: view.name, 
+                                          type: "table", 
+                                          params: { database: db.name, table: view.name },
+                                          closable: true
+                                        })}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <Eye className="h-3 w-3" />
+                                          <span className="text-sm text-foreground">{view.name}</span>
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))
+                                    ))}
+                                  </>
                                 )}
                               </div>
                             </AccordionContent>
                           </AccordionItem>
                         )}
                       </Accordion>
-
-                      {/* Empty state when no tables or views */}
-                      {db.totalTables === 0 && db.totalViews === 0 && (
-                        <div className="text-xs text-muted-foreground p-2">
-                          No tables or views found
-                        </div>
-                      )}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
