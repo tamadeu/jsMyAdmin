@@ -201,7 +201,7 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!isLoading) { onOpenChange(o); resetForm(); } }}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Table className="h-5 w-5" /> Create New Table in "{database}"
@@ -233,7 +233,7 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
           <div className="space-y-4">
             {columns.map((col, index) => (
               <div key={col.id} className="grid grid-cols-12 gap-2 items-center border p-3 rounded-md relative">
-                <div className="col-span-3 space-y-1">
+                <div className="col-span-2 space-y-1"> {/* Adjusted from col-span-3 */}
                   <Label htmlFor={`col-name-${col.id}`} className="text-xs">Name</Label>
                   <Input
                     id={`col-name-${col.id}`}
@@ -243,7 +243,7 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
                     className={`h-8 text-sm ${error && error.includes("Column name") && error.includes(`'${col.name}'`) ? "border-red-500" : ""}`}
                   />
                 </div>
-                <div className="col-span-2 space-y-1">
+                <div className="col-span-1 space-y-1"> {/* Adjusted from col-span-2 */}
                   <Label htmlFor={`col-type-${col.id}`} className="text-xs">Type</Label>
                   <Select value={col.type} onValueChange={(value) => handleColumnChange(col.id, "type", value)}>
                     <SelectTrigger id={`col-type-${col.id}`} className="h-8 text-sm">
@@ -257,7 +257,7 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
                   </Select>
                 </div>
                 {['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(col.type) && (
-                  <div className="col-span-1 space-y-1">
+                  <div className="col-span-2 space-y-1"> {/* Adjusted from col-span-1 */}
                     <Label htmlFor={`col-length-${col.id}`} className="text-xs">Length</Label>
                     <Input
                       id={`col-length-${col.id}`}
@@ -268,7 +268,7 @@ const CreateTableDialog = ({ open, onOpenChange, database, onTableCreated }: Cre
                     />
                   </div>
                 )}
-                <div className="col-span-2 space-y-1">
+                <div className="col-span-3 space-y-1"> {/* Adjusted from col-span-2 */}
                   <Label htmlFor={`col-default-${col.id}`} className="text-xs">Default Value</Label>
                   <Input
                     id={`col-default-${col.id}`}
