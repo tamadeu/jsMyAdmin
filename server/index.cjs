@@ -40,6 +40,23 @@ function decrypt(encryptedText) {
 app.use(cors());
 app.use(express.json());
 
+// Variável para armazenar a configuração do servidor em memória
+let serverConfig = null;
+
+// Função para carregar a configuração do servidor uma vez
+async function loadServerConfig() {
+  try {
+    const configPath = path.join(__dirname, '../database-config.json');
+    const configData = await fs.readFile(configPath, 'utf8');
+    serverConfig = JSON.parse(configData);
+    console.log('Server configuration loaded successfully.');
+  } catch (error) {
+    console.error('Error loading server config at startup:', error);
+    serverConfig = null; // Garante que seja nulo se o carregamento falhar
+    throw error; // Re-lança o erro para que a inicialização do servidor falhe se a config não puder ser carregada
+  }
+}
+
 // Helper function to convert JavaScript dates to MySQL format
 function convertDateForMySQL(value) {
   if (value === null || value === undefined) {
@@ -84,37 +101,24 @@ function processDataForMySQL(data) {
   return processedData;
 }
 
-async function loadConfig() {
-  try {
-    const configPath = path.join(__dirname, '../database-config.json');
-    const configData = await fs.readFile(configPath, 'utf8');
-    return JSON.parse(configData);
-  } catch (error) {
-    console.error('Error loading config:', error);
-    return null;
-  }
-}
-
-// Helper function to create a connection using the root credentials from the config file
+// Helper function to create a connection using the root credentials from the in-memory config
 async function createRootConnection() {
-  const config = await loadConfig();
-  if (!config) {
-    throw new Error('Server configuration file not found.');
+  if (!serverConfig) {
+    throw new Error('Server configuration not available. Please ensure it is loaded at startup.');
   }
-  // Use the credentials from the config file, not from the request
   return mysql.createConnection({
-    host: config.database.host,
-    port: config.database.port,
-    user: config.database.username,
-    password: config.database.password,
+    host: serverConfig.database.host,
+    port: serverConfig.database.port,
+    user: serverConfig.database.username,
+    password: serverConfig.database.password,
     timezone: '+00:00'
   });
 }
 
+// Helper function to create a connection using credentials from the request and in-memory server config
 async function createConnectionFromRequest(req) {
-  const baseConfig = await loadConfig();
-  if (!baseConfig) {
-    throw new Error('Server configuration file not found.');
+  if (!serverConfig) {
+    throw new Error('Server configuration not available. Please ensure it is loaded at startup.');
   }
 
   if (!req.dbCredentials) {
@@ -124,17 +128,17 @@ async function createConnectionFromRequest(req) {
   const { user, password } = req.dbCredentials;
 
   const userConfig = {
-    host: baseConfig.database.host,
-    port: baseConfig.database.port,
+    host: serverConfig.database.host, // Usa a configuração em memória
+    port: serverConfig.database.port, // Usa a configuração em memória
     user: user,
     password: password,
-    charset: baseConfig.database.charset,
-    ssl: baseConfig.database.ssl ? {
-      ca: baseConfig.database.sslCA || undefined,
-      cert: baseConfig.database.sslCertificate || undefined,
-      key: baseConfig.database.sslKey || undefined,
+    charset: serverConfig.database.charset,
+    ssl: serverConfig.database.ssl ? {
+      ca: serverConfig.database.sslCA || undefined,
+      cert: serverConfig.database.sslCertificate || undefined,
+      key: serverConfig.database.sslKey || undefined,
     } : false,
-    multipleStatements: baseConfig.security.allowMultipleStatements,
+    multipleStatements: serverConfig.security.allowMultipleStatements,
     timezone: '+00:00'
   };
 
@@ -199,6 +203,9 @@ app.post('/api/login', async (req, res) => {
     config.database.username = username;
     config.database.password = password;
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+
+    // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
+    serverConfig = config;
 
     // 2. Connect with provided credentials
     connection = await mysql.createConnection({
@@ -405,6 +412,8 @@ app.post('/api/save-config', async (req, res) => {
     const config = req.body;
     const configPath = path.join(__dirname, '../database-config.json');
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+    // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
+    serverConfig = config;
     res.json({ success: true, message: 'Configuration saved successfully' });
   } catch (error) {
     console.error('Error saving config:', error);
@@ -857,10 +866,21 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api`);
-});
+// Inicializa a configuração do servidor e então inicia o servidor
+async function startServer() {
+  try {
+    await loadServerConfig();
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      console.log(`API available at http://localhost:${PORT}/api`);
+    });
+  } catch (error) {
+    console.error('Failed to start server due to configuration error:', error);
+    process.exit(1); // Sai do processo se a configuração inicial falhar
+  }
+}
+
+startServer();
 
 process.on('SIGINT', async () => {
   console.log('Shutting down server...');
