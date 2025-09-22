@@ -650,6 +650,8 @@ app.delete('/api/databases/:database/tables/:table/data', authMiddleware, async 
 
     await connection.query(`USE \`${database}\``);
     await connection.query(`TRUNCATE TABLE \`${table}\``);
+    // Adiciona ANALYZE TABLE para forçar a atualização das estatísticas no information_schema
+    await connection.query(`ANALYZE TABLE \`${table}\``);
     
     res.json({ success: true, message: `Table '${table}' truncated successfully.` });
   } catch (error) {
