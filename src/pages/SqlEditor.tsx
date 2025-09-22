@@ -198,12 +198,12 @@ const SqlEditor = () => {
       </div>
 
       {/* Query Editor Area */}
-      <div className="flex-1 min-h-[150px]">
+      <div className="flex-1 min-h-[300px]"> {/* Increased min-height */}
         <Textarea
           value={sqlQuery}
           onChange={(e) => setSqlQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="h-full font-mono text-sm resize-none"
+          className="h-full font-mono text-xs resize-none" {/* Changed text-sm to text-xs */}
           placeholder="SELECT * FROM your_table;"
         />
       </div>
