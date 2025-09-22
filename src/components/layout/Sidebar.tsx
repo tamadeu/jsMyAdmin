@@ -43,7 +43,7 @@ const Sidebar = () => {
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
   // Determine if a sidebar item corresponds to the active tab
-  const isSidebarItemActive = (type: AppTab['type'], params?: AppTab['params']) => {
+  const isSidebarItemActive = (type: AppTab['type'], params?: AppTab['params'], filterType?: AppTab['filterType']) => {
     const activeTab = getTabById(activeTabId);
     if (!activeTab) return false;
 
@@ -52,7 +52,7 @@ const Sidebar = () => {
         return activeTab.params?.database === params?.database && activeTab.params?.table === params?.table;
       }
       if (type === 'database-tables-list') {
-        return activeTab.params?.database === params?.database; // Only check database for the list view
+        return activeTab.params?.database === params?.database && activeTab.filterType === filterType;
       }
       return true; // For dashboard, sql-editor, config, users, just type match is enough
     }
@@ -80,8 +80,13 @@ const Sidebar = () => {
           targetExpandedSections = [`${activeTab.params.database}-${isView ? 'views' : 'tables'}`];
         }
       } else if (activeTab.type === 'database-tables-list') {
-        // If the active tab is the database-tables-list, expand both tables and views sections
-        targetExpandedSections = [`${activeTab.params.database}-tables`, `${activeTab.params.database}-views`];
+        // If the active tab is the database-tables-list, expand the relevant section
+        if (activeTab.filterType === 'tables' || activeTab.filterType === 'all') {
+          targetExpandedSections.push(`${activeTab.params.database}-tables`);
+        }
+        if (activeTab.filterType === 'views' || activeTab.filterType === 'all') {
+          targetExpandedSections.push(`${activeTab.params.database}-views`);
+        }
       }
 
       // Only update state if the new value is different from the current state
@@ -313,8 +318,22 @@ const Sidebar = () => {
               {filteredDatabases.map((db) => (
                 <AccordionItem key={db.name} value={db.name} className="border-none">
                   <AccordionTrigger 
-                    className="hover:no-underline py-2 px-2 rounded-md hover:bg-accent"
-                    onClick={() => handleDatabaseToggle(db.name)}
+                    className={`hover:no-underline py-2 px-2 rounded-md hover:bg-accent ${
+                      isSidebarItemActive("database-tables-list", { database: db.name }, 'all') 
+                        ? "bg-secondary hover:bg-secondary/80" 
+                        : ""
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent default accordion toggle
+                      handleDatabaseToggle(db.name); // Toggle accordion state
+                      addTab({ 
+                        title: `Tables & Views: ${db.name}`, 
+                        type: "database-tables-list", 
+                        params: { database: db.name },
+                        filterType: 'all', // Show all by default for database name click
+                        closable: true
+                      });
+                    }}
                   >
                     <div className="flex items-center gap-2 flex-1">
                       <Database className="h-4 w-4" />
@@ -341,7 +360,7 @@ const Sidebar = () => {
                           <AccordionItem value={`${db.name}-tables`} className="border-none">
                             <AccordionTrigger 
                               className={`hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs ${
-                                isSidebarItemActive("database-tables-list", { database: db.name }) 
+                                isSidebarItemActive("database-tables-list", { database: db.name }, 'tables') 
                                   ? "bg-secondary hover:bg-secondary/80" 
                                   : ""
                               }`}
@@ -351,6 +370,7 @@ const Sidebar = () => {
                                   title: `Tables: ${db.name}`, 
                                   type: "database-tables-list", 
                                   params: { database: db.name },
+                                  filterType: 'tables', // Show only tables
                                   closable: true
                                 });
                               }}
@@ -393,7 +413,7 @@ const Sidebar = () => {
                           <AccordionItem value={`${db.name}-views`} className="border-none">
                             <AccordionTrigger 
                               className={`hover:no-underline py-1 px-2 rounded-md hover:bg-accent text-xs ${
-                                isSidebarItemActive("database-tables-list", { database: db.name }) 
+                                isSidebarItemActive("database-tables-list", { database: db.name }, 'views') 
                                   ? "bg-secondary hover:bg-secondary/80" 
                                   : ""
                               }`}
@@ -403,6 +423,7 @@ const Sidebar = () => {
                                   title: `Views: ${db.name}`, 
                                   type: "database-tables-list", 
                                   params: { database: db.name },
+                                  filterType: 'views', // Show only views
                                   closable: true
                                 });
                               }}

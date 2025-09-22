@@ -37,7 +37,7 @@ const TabsDisplay = () => {
         return <UsersPage />;
       case 'database-tables-list': // New case for tables list
         if (tab.params?.database) {
-          return <DatabaseTablesList database={tab.params.database} />;
+          return <DatabaseTablesList database={tab.params.database} filterType={tab.filterType} />;
         }
         return <div className="p-4 text-red-500">Error: Missing database parameter for tables list.</div>;
       default:

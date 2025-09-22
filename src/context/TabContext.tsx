@@ -14,6 +14,7 @@ export interface AppTab {
   queryResult?: QueryResult;
   sqlQueryContent?: string;
   originalQuery?: string;
+  filterType?: 'all' | 'tables' | 'views'; // Adicionado filterType
 }
 
 interface PersistedTab {
@@ -24,6 +25,7 @@ interface PersistedTab {
   closable: boolean;
   sqlQueryContent?: string;
   originalQuery?: string;
+  filterType?: 'all' | 'tables' | 'views'; // Adicionado filterType
 }
 
 interface TabContextType {
@@ -85,6 +87,9 @@ export function TabProvider({ children }: TabProviderProps) {
       if (tab.type === 'query-result' && tab.originalQuery) {
         pTab.originalQuery = tab.originalQuery;
       }
+      if (tab.type === 'database-tables-list' && tab.filterType) { // Salvar filterType
+        pTab.filterType = tab.filterType;
+      }
       return pTab;
     });
     localStorage.setItem(tabsKey, JSON.stringify(persistedTabs));
@@ -143,7 +148,8 @@ export function TabProvider({ children }: TabProviderProps) {
       if (newTab.type !== 'query-result') {
         const existingTab = prevTabs.find(tab =>
           tab.type === newTab.type &&
-          JSON.stringify(tab.params) === JSON.stringify(newTab.params)
+          JSON.stringify(tab.params) === JSON.stringify(newTab.params) &&
+          tab.filterType === newTab.filterType // Comparar filterType também
         );
         if (existingTab) {
           setActiveTab(existingTab.id);

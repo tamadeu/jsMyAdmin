@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,14 @@ import { useTabs } from "@/context/TabContext";
 
 interface DatabaseTablesListProps {
   database: string;
+  filterType?: 'all' | 'tables' | 'views'; // Adicionado filterType
 }
 
-const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
+const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesListProps) => {
   const { toast } = useToast();
   const { addTab } = useTabs();
-  const [tables, setTables] = useState<TableInfo[]>([]);
-  const [views, setViews] = useState<TableInfo[]>([]);
+  const [allTables, setAllTables] = useState<TableInfo[]>([]); // Armazena todas as tabelas
+  const [allViews, setAllViews] = useState<TableInfo[]>([]);   // Armazena todas as views
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -28,8 +29,8 @@ const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
       setIsLoading(true);
       setError(null);
       const data = await apiService.getTables(database);
-      setTables(data.tables);
-      setViews(data.views);
+      setAllTables(data.tables);
+      setAllViews(data.views);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to load tables and views";
       setError(errorMessage);
@@ -47,13 +48,19 @@ const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
     loadTablesAndViews();
   }, [loadTablesAndViews]);
 
-  const filteredTables = tables.filter(table =>
-    table.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredItems = useMemo(() => {
+    let items: TableInfo[] = [];
+    if (filterType === 'tables' || filterType === 'all') {
+      items = items.concat(allTables);
+    }
+    if (filterType === 'views' || filterType === 'all') {
+      items = items.concat(allViews);
+    }
 
-  const filteredViews = views.filter(view =>
-    view.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    return items.filter(item =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [allTables, allViews, searchTerm, filterType]);
 
   const handleOpenTable = (tableName: string) => {
     addTab({
@@ -62,6 +69,22 @@ const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
       params: { database, table: tableName },
       closable: true,
     });
+  };
+
+  const getTitle = () => {
+    switch (filterType) {
+      case 'tables': return `Tables: ${database}`;
+      case 'views': return `Views: ${database}`;
+      default: return `Tables & Views: ${database}`;
+    }
+  };
+
+  const getDescription = () => {
+    switch (filterType) {
+      case 'tables': return `Browse all tables in the "${database}" database.`;
+      case 'views': return `Browse all views in the "${database}" database.`;
+      default: return `Browse all tables and views in the "${database}" database.`;
+    }
   };
 
   if (isLoading) {
@@ -89,14 +112,14 @@ const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
     );
   }
 
-  const hasContent = filteredTables.length > 0 || filteredViews.length > 0;
+  const hasContent = filteredItems.length > 0;
 
   return (
     <div className="p-6 space-y-6 h-full overflow-y-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Tables & Views: {database}</h1>
-          <p className="text-muted-foreground">Browse all tables and views in the "{database}" database.</p>
+          <h1 className="text-2xl font-bold">{getTitle()}</h1>
+          <p className="text-muted-foreground">{getDescription()}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={loadTablesAndViews}>
@@ -138,19 +161,19 @@ const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
         <div className="text-center py-8">
           <Table className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <p className="text-muted-foreground">
-            {searchTerm ? 'No tables or views found matching your search.' : 'No tables or views in this database.'}
+            {searchTerm ? 'No items found matching your search.' : `No ${filterType === 'tables' ? 'tables' : filterType === 'views' ? 'views' : 'tables or views'} in this database.`}
           </p>
         </div>
       )}
 
-      {filteredTables.length > 0 && (
+      {filteredItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Table className="h-5 w-5" />
-              Tables ({filteredTables.length})
+              {filterType === 'tables' ? 'Tables' : filterType === 'views' ? 'Views' : 'Items'} ({filteredItems.length})
             </CardTitle>
-            <CardDescription>List of tables in the "{database}" database.</CardDescription>
+            <CardDescription>List of {filterType === 'tables' ? 'tables' : filterType === 'views' ? 'views' : 'items'} in the "{database}" database.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-hidden">
@@ -158,6 +181,7 @@ const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead> {/* Adicionado Type */}
                     <TableHead>Rows</TableHead>
                     <TableHead>Size</TableHead>
                     <TableHead>Engine</TableHead>
@@ -166,60 +190,16 @@ const DatabaseTablesList = ({ database }: DatabaseTablesListProps) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTables.map((table) => (
-                    <TableRow key={table.name}>
-                      <TableCell className="font-medium">{table.name}</TableCell>
-                      <TableCell>{table.rows.toLocaleString()}</TableCell>
-                      <TableCell>{table.size}</TableCell>
-                      <TableCell>{table.engine}</TableCell>
-                      <TableCell>{table.collation}</TableCell>
+                  {filteredItems.map((item) => (
+                    <TableRow key={item.name}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>{allTables.some(t => t.name === item.name) ? 'Table' : 'View'}</TableCell> {/* Determina o tipo */}
+                      <TableCell>{item.rows.toLocaleString()}</TableCell>
+                      <TableCell>{item.size}</TableCell>
+                      <TableCell>{item.engine}</TableCell>
+                      <TableCell>{item.collation}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenTable(table.name)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Browse
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </ShadcnTable>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {filteredViews.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Eye className="h-5 w-5" />
-              Views ({filteredViews.length})
-            </CardTitle>
-            <CardDescription>List of views in the "{database}" database.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="border rounded-lg overflow-hidden">
-              <ShadcnTable>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Rows</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Engine</TableHead>
-                    <TableHead>Collation</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredViews.map((view) => (
-                    <TableRow key={view.name}>
-                      <TableCell className="font-medium">{view.name}</TableCell>
-                      <TableCell>{view.rows.toLocaleString()}</TableCell>
-                      <TableCell>{view.size}</TableCell>
-                      <TableCell>{view.engine}</TableCell>
-                      <TableCell>{view.collation}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenTable(view.name)}>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenTable(item.name)}>
                           <Eye className="h-4 w-4 mr-2" />
                           Browse
                         </Button>
