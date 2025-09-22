@@ -108,6 +108,11 @@ async function getRootPooledConnection() {
   if (!dbPool || !serverConfig) {
     throw new Error('Database connection pool or server configuration not initialized.');
   }
+  if (!serverConfig.database.username || !serverConfig.database.password) {
+    console.error("FATAL: System user credentials (username/password) are missing in serverConfig.database. Please check database-config.json.");
+    throw new Error("System user credentials missing for internal operations.");
+  }
+
   const connection = await dbPool.getConnection();
   try {
     await connection.changeUser({
@@ -208,14 +213,16 @@ app.post('/api/login', async (req, res) => {
   try {
     const { host, port, username, password } = req.body;
 
-    // 1. Update config file with new host, port, AND credentials
+    // 1. Update config file with new host, port. Keep system user credentials.
     const configPath = path.join(__dirname, '../database-config.json');
     const configData = await fs.readFile(configPath, 'utf8');
     const config = JSON.parse(configData);
+    
+    // Only update host and port from login request, keep system user credentials
     config.database.host = host;
     config.database.port = parseInt(port, 10);
-    config.database.username = username;
-    config.database.password = password;
+    // DO NOT update config.database.username and config.database.password here
+    
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 
     // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
@@ -440,10 +447,25 @@ app.post('/api/save-config', async (req, res) => {
   try {
     const config = req.body;
     const configPath = path.join(__dirname, '../database-config.json');
-    await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+    const existingConfigData = await fs.readFile(configPath, 'utf8');
+    const existingConfig = JSON.parse(existingConfigData);
+
+    // Update only host and port from the new config, preserve system user credentials
+    existingConfig.database.host = config.database.host;
+    existingConfig.database.port = config.database.port;
+    // Preserve existing username and password for the system user
+    // existingConfig.database.username = config.database.username; // REMOVIDO
+    // existingConfig.database.password = config.database.password; // REMOVIDO
+    
+    // Also update other application/security settings
+    existingConfig.application = config.application;
+    existingConfig.security = config.security;
+
+    await fs.writeFile(configPath, JSON.stringify(existingConfig, null, 2));
+
     // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
-    serverConfig = config;
-    // Se o pool já existe, ele precisa ser reconfigurado ou recriado para usar o novo host/port
+    serverConfig = existingConfig;
+    // Se o host ou a porta mudaram, recria o pool
     if (dbPool) {
       await dbPool.end(); // Fecha o pool existente
       console.log('Existing database connection pool closed.');
