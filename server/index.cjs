@@ -660,6 +660,17 @@ app.delete('/api/databases/:database/tables/:table/data', authMiddleware, async 
   }
 });
 
+// Update table structure (placeholder for now)
+app.put('/api/databases/:database/tables/:table/structure', authMiddleware, async (req, res) => {
+  console.log(`Received request to update structure for ${req.params.database}.${req.params.table}`);
+  console.log('New columns:', req.body.columns);
+  // TODO: Implement actual ALTER TABLE logic here
+  // This would involve comparing the old structure (fetched from DB) with the new structure (req.body.columns)
+  // and generating appropriate ALTER TABLE statements (ADD COLUMN, DROP COLUMN, MODIFY COLUMN).
+  // This is a complex task and will be implemented in a future iteration.
+  res.json({ success: true, message: 'Table structure update request received. (Backend logic to be implemented)' });
+});
+
 // Get table data
 app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (req, res) => {
   let connection;
@@ -837,7 +848,7 @@ app.post('/api/query', authMiddleware, async (req, res) => {
     if (database) await connection.query(`USE \`${database}\``);
 
     const [rows, fields] = await connection.query(query);
-    const executionTime = Date.now() - startTime;
+    const executionTime = Date.Now() - startTime;
 
     if (query.trim().toLowerCase().startsWith('select')) {
       res.json({

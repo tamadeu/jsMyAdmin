@@ -347,6 +347,27 @@ class ApiService {
     return response.json();
   }
 
+  async updateTableStructure(
+    database: string,
+    tableName: string,
+    columns: TableColumnDefinition[]
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(tableName)}/structure`,
+      {
+        method: "PUT",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ columns }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to update table structure");
+    }
+    return response.json();
+  }
+
   async getTableData(
     database: string,
     table: string,
