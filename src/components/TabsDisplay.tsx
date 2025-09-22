@@ -11,7 +11,8 @@ import Configuration from "@/pages/Configuration";
 import DatabaseBrowser from "@/pages/DatabaseBrowser";
 import QueryResultTable from "@/components/QueryResultTable";
 import UsersPage from "@/pages/Users";
-import DatabaseTablesList from "@/components/DatabaseTablesList"; // Import the new component
+import DatabaseTablesList from "@/components/DatabaseTablesList";
+import TableStructure from "@/pages/TableStructure"; // Import the new component
 
 const TabsDisplay = () => {
   const { tabs, activeTabId, setActiveTab, removeTab, getTabById } = useTabs();
@@ -35,11 +36,16 @@ const TabsDisplay = () => {
         return <QueryResultTable queryResult={tab.queryResult || { success: false, originalQuery: tab.originalQuery, executionTime: 0 }} database={tab.params?.database} />;
       case 'users':
         return <UsersPage />;
-      case 'database-tables-list': // New case for tables list
+      case 'database-tables-list':
         if (tab.params?.database) {
           return <DatabaseTablesList database={tab.params.database} filterType={tab.filterType} />;
         }
         return <div className="p-4 text-red-500">Error: Missing database parameter for tables list.</div>;
+      case 'table-structure': // New case for table structure
+        if (tab.params?.database && tab.params?.table) {
+          return <TableStructure database={tab.params.database} table={tab.params.table} />;
+        }
+        return <div className="p-4 text-red-500">Error: Missing database or table parameters for table structure.</div>;
       default:
         return <div className="p-4 text-muted-foreground">Unknown tab type.</div>;
     }

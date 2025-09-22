@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus, Trash2, Eraser } from "lucide-react";
+import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus, Trash2, Eraser, LayoutPanelTop } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +73,15 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
     addTab({
       title: tableName,
       type: "table",
+      params: { database, table: tableName },
+      closable: true,
+    });
+  };
+
+  const handleOpenTableStructure = (tableName: string) => {
+    addTab({
+      title: `Structure: ${tableName}`,
+      type: "table-structure",
       params: { database, table: tableName },
       closable: true,
     });
@@ -254,6 +263,10 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                           <Button variant="ghost" size="sm" onClick={() => handleOpenTable(item.name)}>
                             <Eye className="h-4 w-4 mr-2" />
                             Browse
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenTableStructure(item.name)}>
+                            <LayoutPanelTop className="h-4 w-4 mr-2" />
+                            Structure
                           </Button>
                           {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && ( // Only for tables, not views
                             <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="text-orange-500 hover:text-orange-600">
