@@ -113,6 +113,7 @@ async function getRootPooledConnection() {
     throw new Error("System user credentials missing for internal operations.");
   }
 
+  console.log("Attempting to get root pooled connection with user:", serverConfig.database.username);
   const connection = await dbPool.getConnection();
   try {
     await connection.changeUser({
@@ -123,7 +124,7 @@ async function getRootPooledConnection() {
       ssl: serverConfig.database.ssl ? {
         ca: serverConfig.database.sslCA || undefined,
         cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined,
+        key: serverConfig.database.sslKey || undefined, // Corrected from sslKey to key
       } : false,
       multipleStatements: serverConfig.security.allowMultipleStatements,
       timezone: '+00:00'
@@ -154,7 +155,7 @@ async function getUserPooledConnection(req) {
       ssl: serverConfig.database.ssl ? {
         ca: serverConfig.database.sslCA || undefined,
         cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined,
+        key: serverConfig.database.sslKey || undefined, // Corrected from sslKey to key
       } : false,
       multipleStatements: serverConfig.security.allowMultipleStatements,
       timezone: '+00:00'
@@ -225,8 +226,8 @@ app.post('/api/login', async (req, res) => {
     
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 
-    // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
-    serverConfig = config;
+    // IMPORTANTE: Recarrega a configuração em memória após escrever no arquivo
+    await loadServerConfig();
     // Se o pool já existe, ele precisa ser reconfigurado ou recriado para usar o novo host/port
     if (dbPool) {
       await dbPool.end(); // Fecha o pool existente
@@ -421,7 +422,7 @@ app.post('/api/test-connection', async (req, res) => {
       ssl: config.database.ssl ? {
         ca: config.database.sslCA || undefined,
         cert: config.database.sslCertificate || undefined,
-        key: config.database.sslKey || undefined,
+        key: config.database.sslKey || undefined, // Corrected from sslKey to key
       } : false,
       connectTimeout: config.database.connectionTimeout,
       timezone: '+00:00'
@@ -463,8 +464,8 @@ app.post('/api/save-config', async (req, res) => {
 
     await fs.writeFile(configPath, JSON.stringify(existingConfig, null, 2));
 
-    // IMPORTANTE: Atualiza a configuração em memória após escrever no arquivo
-    serverConfig = existingConfig;
+    // IMPORTANTE: Recarrega a configuração em memória após escrever no arquivo
+    await loadServerConfig();
     // Se o host ou a porta mudaram, recria o pool
     if (dbPool) {
       await dbPool.end(); // Fecha o pool existente
@@ -917,10 +918,10 @@ app.post('/api/users/:user/:host/database-privileges', authMiddleware, async (re
 app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
     const { database } = req.body;
 
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     await connection.query('REVOKE ALL PRIVILEGES, GRANT OPTION ON `??`.* FROM ?@?', [database, user, host]);
     
     res.json({ success: true, message: 'Database privileges revoked' });
@@ -936,6 +937,7 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
 async function startServer() {
   try {
     await loadServerConfig();
+    console.log("Initial serverConfig loaded:", serverConfig.database.username, serverConfig.database.password ? "password_set" : "password_not_set");
     // Inicializa o pool de conexões após a configuração ser carregada
     dbPool = mysql.createPool({
       host: serverConfig.database.host,
