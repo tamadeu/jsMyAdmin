@@ -461,8 +461,8 @@ app.post('/api/save-config', async (req, res) => {
       user: serverConfig.database.username, // Adicionado user
       password: serverConfig.database.password, // Adicionado password
       waitForConnections: true,
-      connectionLimit: serverConfig.database.maxConnections || 10,
-      queueLimit: 0,
+      connectionLimit: serverConfig.database.maxConnections || 10, // Usar maxConnections da config
+      queueLimit: 0, // Sem limite na fila de requisições
       timezone: '+00:00'
     });
     console.log('Database connection pool re-initialized with new config.');
@@ -490,6 +490,40 @@ app.get('/api/databases', authMiddleware, async (req, res) => {
     res.status(500).json({ error: error.message });
   } finally {
     if (connection) connection.release(); // Liberar conexão de volta para o pool
+  }
+});
+
+// Create new database
+app.post('/api/databases', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getUserPooledConnection(req);
+    const { databaseName, charset, collation } = req.body;
+
+    if (!databaseName) {
+      return res.status(400).json({ success: false, error: 'Database name is required.' });
+    }
+
+    // Basic sanitization for database name
+    if (!/^[a-zA-Z0-9_]+$/.test(databaseName)) {
+      return res.status(400).json({ success: false, error: 'Invalid database name. Only alphanumeric characters and underscores are allowed.' });
+    }
+
+    let createQuery = `CREATE DATABASE \`${databaseName}\``;
+    if (charset) {
+      createQuery += ` CHARACTER SET ${connection.escapeId(charset)}`;
+    }
+    if (collation) {
+      createQuery += ` COLLATE ${connection.escapeId(collation)}`;
+    }
+
+    await connection.query(createQuery);
+    res.json({ success: true, message: `Database '${databaseName}' created successfully.` });
+  } catch (error) {
+    console.error('Error creating database:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
   }
 });
 

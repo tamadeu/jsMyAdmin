@@ -228,9 +228,7 @@ class ApiService {
   ): Promise<{ success: boolean; message: string }> {
     const response = await fetch(`${this.baseUrl}/save-config`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: this.getHeaders(),
       body: JSON.stringify(config),
     });
 
@@ -243,6 +241,24 @@ class ApiService {
     });
     if (!response.ok) {
       throw new Error("Failed to fetch databases");
+    }
+    return response.json();
+  }
+
+  async createDatabase(
+    databaseName: string,
+    charset: string,
+    collation: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/databases`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify({ databaseName, charset, collation }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to create database");
     }
     return response.json();
   }

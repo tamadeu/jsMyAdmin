@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle, Wrench, Users } from "lucide-react";
+import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle, Wrench, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,6 +12,7 @@ import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs, AppTab } from "@/context/TabContext"; // Import useTabs and AppTab
 import { useAuth } from "@/context/AuthContext";
+import CreateDatabaseDialog from "@/components/CreateDatabaseDialog"; // Import the new dialog
 
 interface DatabaseInfo {
   name: string;
@@ -41,6 +42,7 @@ const Sidebar = () => {
   const [error, setError] = useState<string | null>(null);
   const [expandedDatabases, setExpandedDatabases] = useState<string[]>([]);
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
+  const [isCreateDbDialogOpen, setIsCreateDbDialogOpen] = useState(false); // State for the new dialog
 
   // Determine if a sidebar item corresponds to the active tab
   const isSidebarItemActive = (type: AppTab['type'], params?: AppTab['params'], filterType?: AppTab['filterType']) => {
@@ -258,6 +260,16 @@ const Sidebar = () => {
             >
               <Users className="h-4 w-4 mr-2" />
               Users
+            </Button>
+          )}
+          {hasPrivilege("CREATE") && ( // Check for CREATE privilege
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => setIsCreateDbDialogOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Database
             </Button>
           )}
         </div>
@@ -487,6 +499,12 @@ const Sidebar = () => {
           <ThemeToggle />
         </div>
       </div>
+
+      <CreateDatabaseDialog
+        open={isCreateDbDialogOpen}
+        onOpenChange={setIsCreateDbDialogOpen}
+        onDatabaseCreated={loadDatabases} // Refresh the database list after creation
+      />
     </div>
   );
 };
