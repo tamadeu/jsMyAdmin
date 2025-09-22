@@ -308,6 +308,45 @@ class ApiService {
     return response.json();
   }
 
+  async deleteTable(
+    database: string,
+    tableName: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(tableName)}`,
+      {
+        method: "DELETE",
+        headers: this.getHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to delete table");
+    }
+    return response.json();
+  }
+
+  async truncateTable(
+    database: string,
+    tableName: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${this.baseUrl}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(tableName)}/data`,
+      {
+        method: "DELETE",
+        headers: this.getHeaders(),
+        body: JSON.stringify({ truncate: true }), // Indicate truncate action
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to truncate table");
+    }
+    return response.json();
+  }
+
   async getTableData(
     database: string,
     table: string,

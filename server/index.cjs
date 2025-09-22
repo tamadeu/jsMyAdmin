@@ -137,7 +137,7 @@ async function getUserPooledConnection(req) {
       ssl: serverConfig.database.ssl ? {
         ca: serverConfig.database.sslCA || undefined,
         cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined,
+        key: serverConfig.database.key || undefined, // Corrigido de sslKey para key
       } : false,
       multipleStatements: serverConfig.security.allowMultipleStatements,
       timezone: '+00:00'
@@ -616,6 +616,44 @@ app.post('/api/databases/:database/tables', authMiddleware, async (req, res) => 
     res.json({ success: true, message: `Table '${tableName}' created successfully.` });
   } catch (error) {
     console.error('Error creating table:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Delete table
+app.delete('/api/databases/:database/tables/:table', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getUserPooledConnection(req);
+    const { database, table } = req.params;
+
+    await connection.query(`USE \`${database}\``);
+    await connection.query(`DROP TABLE \`${table}\``);
+    
+    res.json({ success: true, message: `Table '${table}' deleted successfully.` });
+  } catch (error) {
+    console.error('Error deleting table:', error);
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Truncate table data
+app.delete('/api/databases/:database/tables/:table/data', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getUserPooledConnection(req);
+    const { database, table } = req.params;
+
+    await connection.query(`USE \`${database}\``);
+    await connection.query(`TRUNCATE TABLE \`${table}\``);
+    
+    res.json({ success: true, message: `Table '${table}' truncated successfully.` });
+  } catch (error) {
+    console.error('Error truncating table:', error);
     res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();

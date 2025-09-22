@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus } from "lucide-react";
+import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus, Trash2, Eraser } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,24 +9,27 @@ import { Table as ShadcnTable, TableBody, TableCell, TableHead, TableHeader, Tab
 import { apiService, TableInfo } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
-import { useAuth } from "@/context/AuthContext"; // Import useAuth
-import CreateTableDialog from "@/components/CreateTableDialog"; // Import the new dialog
+import { useAuth } from "@/context/AuthContext";
+import CreateTableDialog from "@/components/CreateTableDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface DatabaseTablesListProps {
   database: string;
-  filterType?: 'all' | 'tables' | 'views'; // Adicionado filterType
+  filterType?: 'all' | 'tables' | 'views';
 }
 
 const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesListProps) => {
   const { toast } = useToast();
   const { addTab } = useTabs();
-  const { hasPrivilege } = useAuth(); // Use hasPrivilege
-  const [allTables, setAllTables] = useState<TableInfo[]>([]); // Armazena todas as tabelas
-  const [allViews, setAllViews] = useState<TableInfo[]>([]);   // Armazena todas as views
+  const { hasPrivilege } = useAuth();
+  const [allTables, setAllTables] = useState<TableInfo[]>([]);
+  const [allViews, setAllViews] = useState<TableInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isCreateTableDialogOpen, setIsCreateTableDialogOpen] = useState(false); // State for the new dialog
+  const [isCreateTableDialogOpen, setIsCreateTableDialogOpen] = useState(false);
+  const [deleteTableConfirm, setDeleteTableConfirm] = useState<string | null>(null);
+  const [truncateTableConfirm, setTruncateTableConfirm] = useState<string | null>(null);
 
   const loadTablesAndViews = useCallback(async () => {
     try {
@@ -75,6 +78,44 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
     });
   };
 
+  const handleDeleteTable = async (tableName: string) => {
+    try {
+      await apiService.deleteTable(database, tableName);
+      toast({
+        title: "Table Deleted",
+        description: `Table '${tableName}' deleted successfully.`,
+      });
+      loadTablesAndViews(); // Refresh the list
+    } catch (err) {
+      toast({
+        title: "Error Deleting Table",
+        description: err instanceof Error ? err.message : "Failed to delete table.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteTableConfirm(null); // Close dialog
+    }
+  };
+
+  const handleTruncateTable = async (tableName: string) => {
+    try {
+      await apiService.truncateTable(database, tableName);
+      toast({
+        title: "Table Truncated",
+        description: `All data from table '${tableName}' has been removed.`,
+      });
+      loadTablesAndViews(); // Refresh the list (rows count will be 0)
+    } catch (err) {
+      toast({
+        title: "Error Truncating Table",
+        description: err instanceof Error ? err.message : "Failed to truncate table.",
+        variant: "destructive",
+      });
+    } finally {
+      setTruncateTableConfirm(null); // Close dialog
+    }
+  };
+
   const getTitle = () => {
     switch (filterType) {
       case 'tables': return `Tables: ${database}`;
@@ -87,7 +128,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
     switch (filterType) {
       case 'tables': return `Browse all tables in the "${database}" database.`;
       case 'views': return `Browse all views in the "${database}" database.`;
-      default: return `Browse all tables and views in the "${database}" database.`;
+      default: return `Browse all tables and views in the "${database}" database.`
     }
   };
 
@@ -130,7 +171,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          {hasPrivilege("CREATE") && filterType !== 'views' && ( // Only allow creating tables, not views
+          {hasPrivilege("CREATE") && filterType !== 'views' && (
             <Button size="sm" onClick={() => setIsCreateTableDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create Table
@@ -191,7 +232,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead> {/* Adicionado Type */}
+                    <TableHead>Type</TableHead>
                     <TableHead>Rows</TableHead>
                     <TableHead>Size</TableHead>
                     <TableHead>Engine</TableHead>
@@ -203,16 +244,30 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                   {filteredItems.map((item) => (
                     <TableRow key={item.name}>
                       <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{allTables.some(t => t.name === item.name) ? 'Table' : 'View'}</TableCell> {/* Determina o tipo */}
+                      <TableCell>{allTables.some(t => t.name === item.name) ? 'Table' : 'View'}</TableCell>
                       <TableCell>{item.rows.toLocaleString()}</TableCell>
                       <TableCell>{item.size}</TableCell>
                       <TableCell>{item.engine}</TableCell>
                       <TableCell>{item.collation}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenTable(item.name)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Browse
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenTable(item.name)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            Browse
+                          </Button>
+                          {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && ( // Only for tables, not views
+                            <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="text-orange-500 hover:text-orange-600">
+                              <Eraser className="h-4 w-4 mr-2" />
+                              Empty
+                            </Button>
+                          )}
+                          {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && ( // Only for tables, not views
+                            <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="text-red-500 hover:text-red-600">
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -229,6 +284,55 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         database={database}
         onTableCreated={loadTablesAndViews}
       />
+
+      {/* Delete Table Confirmation Dialog */}
+      {deleteTableConfirm && (
+        <AlertDialog open={!!deleteTableConfirm} onOpenChange={setDeleteTableConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the table{" "}
+                <span className="font-bold text-foreground">"{deleteTableConfirm}"</span>{" "}
+                and all its data from the database{" "}
+                <span className="font-bold text-foreground">"{database}"</span>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => handleDeleteTable(deleteTableConfirm)} className="bg-red-500 hover:bg-red-600">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Table
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Truncate Table Confirmation Dialog */}
+      {truncateTableConfirm && (
+        <AlertDialog open={!!truncateTableConfirm} onOpenChange={setTruncateTableConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently remove ALL rows from the table{" "}
+                <span className="font-bold text-foreground">"{truncateTableConfirm}"</span>{" "}
+                in the database{" "}
+                <span className="font-bold text-foreground">"{database}"</span>.
+                The table structure will remain.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => handleTruncateTable(truncateTableConfirm)} className="bg-orange-500 hover:bg-orange-600">
+                <Eraser className="h-4 w-4 mr-2" />
+                Empty Table
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 };
