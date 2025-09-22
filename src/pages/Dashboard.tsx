@@ -1,5 +1,7 @@
+"use client";
+
 import { useState, useEffect } from "react";
-import { Database, Table, Server, Users, Play, Loader2, AlertCircle } from "lucide-react";
+import { Database, Table, Server, Users, Play, Loader2, AlertCircle, Info } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -7,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext"; // Import useAuth
 
 interface DatabaseStats {
   totalDatabases: number;
@@ -16,16 +19,17 @@ interface DatabaseStats {
   activeConnections: number;
 }
 
-interface DatabaseInfo {
-  name: string;
-  totalTables: number;
-  totalSize: string;
+interface ServerStatus {
+  version: string;
+  uptime: string;
+  connections: number;
   status: string;
 }
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth(); // Get authenticated user
   const [stats, setStats] = useState<DatabaseStats>({
     totalDatabases: 0,
     totalTables: 0,
@@ -33,7 +37,7 @@ const Dashboard = () => {
     storagePercent: 0,
     activeConnections: 0
   });
-  const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
+  const [serverStatus, setServerStatus] = useState<ServerStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,60 +56,32 @@ const Dashboard = () => {
       setIsLoading(true);
       setError(null);
 
-      // Load databases
+      // Load databases to calculate total tables and storage
       const databaseNames = await apiService.getDatabases();
       
-      // Load detailed information for each database
-      const databasesWithInfo = await Promise.all(
-        databaseNames.map(async (dbName) => {
-          try {
-            const { tables, totalTables } = await apiService.getTables(dbName); // Desestruturando a resposta
-            
-            // Calculate total size (simplified calculation)
-            const totalSizeMB = tables.reduce((acc, table) => {
-              const sizeStr = table.size.replace(' MB', '').replace(' GB', '');
-              const size = parseFloat(sizeStr);
-              return acc + (table.size.includes('GB') ? size * 1024 : size);
-            }, 0);
+      let totalTables = 0;
+      let totalSizeMB = 0;
 
-            return {
-              name: dbName,
-              totalTables: totalTables, // Usando totalTables do objeto retornado
-              totalSize: totalSizeMB > 1024 
-                ? `${(totalSizeMB / 1024).toFixed(1)} GB` 
-                : `${totalSizeMB.toFixed(1)} MB`,
-              status: "active"
-            };
-          } catch (error) {
-            console.error(`Error loading info for ${dbName}:`, error);
-            return {
-              name: dbName,
-              totalTables: 0,
-              totalSize: "0 MB",
-              status: "error"
-            };
-          }
-        })
-      );
+      // Fetch tables for each database to calculate total tables and size
+      const dbPromises = databaseNames.map(async (dbName) => {
+        try {
+          const { tables, views } = await apiService.getTables(dbName);
+          const allItems = [...tables, ...views];
+          totalTables += allItems.length;
+          allItems.forEach(item => {
+            const sizeStr = item.size.replace(' MB', '').replace(' GB', '');
+            const size = parseFloat(sizeStr);
+            totalSizeMB += (item.size.includes('GB') ? size * 1024 : size);
+          });
+        } catch (error) {
+          console.warn(`Error loading tables for ${dbName}:`, error);
+        }
+      });
+      await Promise.all(dbPromises);
 
-      setDatabases(databasesWithInfo);
-
-      // Calculate overall statistics
-      const totalTables = databasesWithInfo.reduce((acc, db) => acc + db.totalTables, 0);
-      const totalSizeMB = databasesWithInfo.reduce((acc, db) => {
-        const sizeStr = db.totalSize.replace(' MB', '').replace(' GB', '');
-        const size = parseFloat(sizeStr);
-        return acc + (db.totalSize.includes('GB') ? size * 1024 : size);
-      }, 0);
-
-      // Try to get server status
-      let connections = 0;
-      try {
-        const serverStatus = await apiService.getServerStatus();
-        connections = serverStatus.connections;
-      } catch (error) {
-        console.warn('Could not fetch server status:', error);
-      }
+      // Get server status
+      const currentServerStatus = await apiService.getServerStatus();
+      setServerStatus(currentServerStatus);
 
       setStats({
         totalDatabases: databaseNames.length,
@@ -114,7 +90,7 @@ const Dashboard = () => {
           ? `${(totalSizeMB / 1024).toFixed(1)} GB` 
           : `${totalSizeMB.toFixed(1)} MB`,
         storagePercent: Math.min((totalSizeMB / 1024 / 15) * 100, 100), // Assuming 15GB limit
-        activeConnections: connections
+        activeConnections: currentServerStatus.connections
       });
 
     } catch (error) {
@@ -219,38 +195,41 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Databases */}
+        {/* Database Server Information */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
-              <CardTitle>Databases</CardTitle>
+              <Server className="h-5 w-5" />
+              <CardTitle>Database Server</CardTitle>
             </div>
-            <CardDescription>Manage your database instances</CardDescription>
+            <CardDescription>General information about the connected MySQL server.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {databases.length === 0 ? (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground">No databases found</p>
-              </div>
-            ) : (
-              databases.map((db) => (
-                <div key={db.name} className="flex items-center justify-between p-3 bg-accent rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      db.status === 'active' ? 'bg-green-500' : 'bg-red-500'
-                    }`}></div>
-                    <div>
-                      <div className="font-medium">{db.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {db.totalTables} {db.totalTables === 1 ? 'table' : 'tables'} • {db.totalSize}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">utf8mb4_unicode_ci</div>
-                </div>
-              ))
-            )}
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between"><span>Server:</span> <span className="font-medium">{user?.host || 'N/A'}</span></div>
+            <div className="flex justify-between"><span>Server type:</span> <span className="font-medium">MySQL</span></div>
+            <div className="flex justify-between"><span>Server connection:</span> <span className="font-medium">No SSL is being used</span></div> {/* Placeholder for SSL status */}
+            <div className="flex justify-between"><span>Server version:</span> <span className="font-medium">{serverStatus?.version || 'N/A'}</span></div>
+            <div className="flex justify-between"><span>Uptime:</span> <span className="font-medium">{serverStatus?.uptime || 'N/A'} seconds</span></div>
+            <div className="flex justify-between"><span>User:</span> <span className="font-medium">{user?.username || 'N/A'}@{user?.host || 'N/A'}</span></div>
+            <div className="flex justify-between"><span>Server charset:</span> <span className="font-medium">UTF-8 Unicode (utf8mb4)</span></div> {/* Placeholder for charset */}
+          </CardContent>
+        </Card>
+
+        {/* Application Information */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              <CardTitle>Application Information</CardTitle>
+            </div>
+            <CardDescription>Details about this jsMyAdmin application.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between"><span>jsMyAdmin Version:</span> <span className="font-medium">1.0.0</span></div>
+            <div className="flex justify-between"><span>Frontend:</span> <span className="font-medium">React, TypeScript, Tailwind CSS</span></div>
+            <div className="flex justify-between"><span>Backend:</span> <span className="font-medium">Node.js, Express</span></div>
+            <div className="flex justify-between"><span>Database Driver:</span> <span className="font-medium">mysql2</span></div>
+            <div className="flex justify-between"><span>Documentation:</span> <a href="https://www.dyad.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Dyad.sh</a></div>
           </CardContent>
         </Card>
 
@@ -269,20 +248,26 @@ const Dashboard = () => {
             <CardDescription>Latest SQL operations</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {queryHistory.map((query, index) => (
-              <div key={index} className="p-3 bg-accent rounded-lg">
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                  <div className="flex-1">
-                    <div className="text-sm font-mono">{query.query}</div>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span>{query.timestamp}</span>
-                      <span>{query.time}</span>
+            {queryHistory.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-muted-foreground">No recent queries.</p>
+              </div>
+            ) : (
+              queryHistory.map((query, index) => (
+                <div key={index} className="p-3 bg-accent rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div className="flex-1">
+                      <div className="text-sm font-mono">{query.query}</div>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span>{query.timestamp}</span>
+                        <span>{query.time}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
