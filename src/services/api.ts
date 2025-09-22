@@ -133,9 +133,12 @@ export interface TableColumnDefinition {
   defaultValue: string | null;
 }
 
+const QUERY_HISTORY_CACHE_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutos em milissegundos
+
 class ApiService {
   private baseUrl = "http://localhost:3001/api";
   private sessionToken: string | null = null;
+  private currentUserProfile: UserProfile | null = null;
 
   constructor() {
     this.loadToken();
@@ -151,6 +154,7 @@ class ApiService {
       localStorage.setItem('sessionToken', token);
     } else {
       localStorage.removeItem('sessionToken');
+      this.currentUserProfile = null; // Clear user profile on logout
     }
   }
 
@@ -162,6 +166,11 @@ class ApiService {
       headers["Authorization"] = `Bearer ${this.sessionToken}`;
     }
     return headers;
+  }
+
+  private getHistoryCacheKey(): string | null {
+    if (!this.currentUserProfile) return null;
+    return `jsmyadmin-query-history-cache-${this.currentUserProfile.username}@${this.currentUserProfile.host}`;
   }
 
   async getSystemStatus(): Promise<SystemStatusResponse> {
@@ -196,7 +205,12 @@ class ApiService {
       },
       body: JSON.stringify(credentials),
     });
-    return response.json();
+    const result: LoginResponse = await response.json();
+    if (result.success && result.token && result.user) {
+      this.setToken(result.token);
+      this.currentUserProfile = result.user;
+    }
+    return result;
   }
 
   async logout(): Promise<void> {
@@ -210,6 +224,7 @@ class ApiService {
       console.error("Logout failed:", error);
     } finally {
       this.setToken(null);
+      this.currentUserProfile = null; // Ensure profile is cleared
     }
   }
 
@@ -220,7 +235,9 @@ class ApiService {
     if (!response.ok) {
       throw new Error("Session is not valid");
     }
-    return response.json();
+    const userProfile: UserProfile = await response.json();
+    this.currentUserProfile = userProfile; // Set current user profile
+    return userProfile;
   }
 
   async testConnection(
@@ -537,11 +554,12 @@ class ApiService {
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        console.error('Failed to save query history. Status:', response.status);
-        return response.json();
+      const result = await response.json();
+      if (result.success) {
+        // Invalidate local cache after successful save
+        this.refreshQueryHistoryCache();
       }
-      return response.json();
+      return result;
     } catch (error) {
       console.error('Network error while saving query history:', error);
       return { success: false, message: error instanceof Error ? error.message : 'Network error' };
@@ -549,13 +567,48 @@ class ApiService {
   }
 
   async getQueryHistory(): Promise<QueryHistoryPayload[]> {
+    const cacheKey = this.getHistoryCacheKey();
+    if (cacheKey) {
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        try {
+          const parsedCache = JSON.parse(cachedData);
+          if (Date.now() - parsedCache.timestamp < QUERY_HISTORY_CACHE_EXPIRATION_TIME) {
+            return parsedCache.data;
+          }
+        } catch (e) {
+          console.error("Error parsing query history cache:", e);
+          localStorage.removeItem(cacheKey); // Corrupt cache, remove it
+        }
+      }
+    }
+
+    // If no valid cache, fetch from API
     const response = await fetch(`${this.baseUrl}/query-history`, {
       headers: this.getHeaders(),
     });
     if (!response.ok) {
       throw new Error("Failed to fetch query history");
     }
-    return response.json();
+    const history: QueryHistoryPayload[] = await response.json();
+
+    // Store in cache
+    if (cacheKey) {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        timestamp: Date.now(),
+        data: history
+      }));
+    }
+    return history;
+  }
+
+  // Method to explicitly refresh the query history cache
+  refreshQueryHistoryCache() {
+    const cacheKey = this.getHistoryCacheKey();
+    if (cacheKey) {
+      localStorage.removeItem(cacheKey);
+    }
+    // The next call to getQueryHistory will fetch fresh data
   }
 
   async getServerStatus(): Promise<{
