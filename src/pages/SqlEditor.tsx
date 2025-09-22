@@ -62,7 +62,7 @@ const SqlEditor = () => {
         setSqlQuery("SELECT * FROM your_table;");
       }
     }
-  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]); // sqlQuery is NOT a dependency here
+  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]);
 
   // Effect to push local sqlQuery state to context when it changes (e.g., user typing)
   useEffect(() => {
@@ -198,7 +198,7 @@ const SqlEditor = () => {
       </div>
 
       {/* Query Editor Area */}
-      <div className="flex-1 min-h-[300px]">
+      <div className="flex-1 min-h-[500px]"> {/* Aumentado min-h para 500px */}
         <Textarea
           value={sqlQuery}
           onChange={(e) => setSqlQuery(e.target.value)}
