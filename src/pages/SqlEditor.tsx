@@ -12,7 +12,7 @@ import { format } from "sql-formatter";
 
 const SqlEditor = () => {
   const { toast } = useToast();
-  const { addTab, activeTabId, getTabById, updateTabContent } = useTabs();
+  const { addTab, activeTabId, getTabById, updateTabContent, removeTab } = useTabs();
   
   const activeTab = getTabById(activeTabId);
 
@@ -76,6 +76,10 @@ const SqlEditor = () => {
             queryResult: { ...result, originalQuery: sqlQuery },
             closable: true,
           });
+          // Close the current SQL Editor tab if it's closable
+          if (activeTab?.type === 'sql-editor' && activeTab.closable) {
+            removeTab(activeTabId);
+          }
         } else {
           toast({
             title: "Query executed",
@@ -117,7 +121,7 @@ const SqlEditor = () => {
         });
       }
     }
-  }, [sqlQuery, addTab, toast, fetchQueryHistory]);
+  }, [sqlQuery, addTab, toast, fetchQueryHistory, activeTab, activeTabId, removeTab]);
 
   const saveQuery = () => {
     toast({
