@@ -16,9 +16,10 @@ const SqlEditor = () => {
   
   const activeTab = getTabById(activeTabId);
 
-  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM your_table;"); 
+  // Initialize sqlQuery from activeTab.sqlQueryContent or default
+  const [sqlQuery, setSqlQuery] = useState(() => activeTab?.sqlQueryContent || "SELECT * FROM your_table;"); 
   const [isExecuting, setIsExecuting] = useState(false);
-  const [queryHistory, setQueryHistory] = useState<QueryHistoryPayload[]>([]); // Now stores fetched history
+  const [queryHistory, setQueryHistory] = useState<QueryHistoryPayload[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
@@ -41,21 +42,34 @@ const SqlEditor = () => {
     }
   }, [toast]);
 
+  // Effect to synchronize local sqlQuery state with activeTab.sqlQueryContent when activeTab changes
   useEffect(() => {
     if (activeTab?.type === 'sql-editor') {
-      const tabContent = activeTab.sqlQueryContent || "SELECT * FROM your_table;";
-      if (sqlQuery !== tabContent) {
-        setSqlQuery(tabContent);
-      }
-      fetchQueryHistory(); // Fetch history when SQL Editor tab becomes active
-    } else {
-      setSqlQuery("SELECT * FROM your_table;");
-    }
-  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]);
+      const tabContentFromContext = activeTab.sqlQueryContent;
+      const defaultQuery = "SELECT * FROM your_table;";
+      
+      // If context has content, use it. Otherwise, use default.
+      const newSqlQueryValue = tabContentFromContext !== undefined ? tabContentFromContext : defaultQuery;
 
+      // Only update local state if it's different from the new source of truth
+      if (sqlQuery !== newSqlQueryValue) {
+        setSqlQuery(newSqlQueryValue);
+      }
+      fetchQueryHistory();
+    } else {
+      // If not an SQL editor tab, reset local state to default if it's not already
+      if (sqlQuery !== "SELECT * FROM your_table;") {
+        setSqlQuery("SELECT * FROM your_table;");
+      }
+    }
+  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]); // sqlQuery is NOT a dependency here
+
+  // Effect to push local sqlQuery state to context when it changes (e.g., user typing)
   useEffect(() => {
     if (activeTabId && activeTab?.type === 'sql-editor') {
-      if (sqlQuery !== (activeTab.sqlQueryContent || "SELECT * FROM your_table;")) {
+      const tabContentFromContext = activeTab.sqlQueryContent;
+      // Only update context if local state is different from context state
+      if (sqlQuery !== tabContentFromContext) {
         updateTabContent(activeTabId, { sqlQueryContent: sqlQuery });
       }
     }

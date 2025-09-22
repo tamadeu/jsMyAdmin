@@ -197,6 +197,15 @@ export function TabProvider({ children }: TabProviderProps) {
 
   const updateTabContent = useCallback((tabId: string, content: { sqlQueryContent?: string }) => {
     setTabs(prevTabs => {
+      const targetTabIndex = prevTabs.findIndex(tab => tab.id === tabId);
+      if (targetTabIndex === -1) return prevTabs;
+
+      const targetTab = prevTabs[targetTabIndex];
+      // Only update if the sqlQueryContent is actually different
+      if (content.sqlQueryContent === targetTab.sqlQueryContent) {
+        return prevTabs; // No change needed, return previous state to prevent re-render
+      }
+
       const updatedTabs = prevTabs.map(tab =>
         tab.id === tabId ? { ...tab, ...content } : tab
       );
