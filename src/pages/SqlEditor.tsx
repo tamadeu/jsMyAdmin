@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw, Edit } from "lucide-react";
+import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw, Edit, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiService, QueryResult, QueryHistoryPayload } from "@/services/api";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
 import { format } from "sql-formatter";
 import SqlCodeEditor from "@/components/SqlCodeEditor";
+import SqlAgent from "@/components/SqlAgent"; // Import the new SqlAgent component
 import { useTranslation } from "react-i18next"; // Import useTranslation
 
 const SqlEditor = () => {
@@ -176,6 +177,13 @@ const SqlEditor = () => {
     }
   }, [executeQuery]);
 
+  const handleAiGeneratedSql = useCallback((generatedSql: string) => {
+    setSqlQuery(generatedSql);
+  }, []);
+
+  // Determine the current database context for the AI agent
+  const currentDatabaseContext = activeTab?.params?.database;
+
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -198,6 +206,9 @@ const SqlEditor = () => {
           </Button>
         </div>
       </div>
+
+      {/* AI Agent Section */}
+      <SqlAgent onGenerateSql={handleAiGeneratedSql} currentDatabase={currentDatabaseContext} />
 
       {/* Query Editor Area */}
       <div className="flex-1">

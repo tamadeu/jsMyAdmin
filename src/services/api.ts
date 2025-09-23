@@ -65,7 +65,7 @@ export interface DatabaseConfig {
     language: string;
     queryTimeout: number;
     maxQueryResults: number;
-    autoRefresh: boolean;
+    autoRefresh: false;
     refreshInterval: number;
   };
   security: {
@@ -718,6 +718,24 @@ class ApiService {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || "Failed to revoke database privileges");
+    }
+    return response.json();
+  }
+
+  async generateSqlWithAi(
+    prompt: string,
+    model: string,
+    database?: string
+  ): Promise<{ success: boolean; sql: string; message?: string }> {
+    const response = await fetch(`${this.baseUrl}/ai/generate-sql`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify({ prompt, model, database }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to generate SQL with AI");
     }
     return response.json();
   }

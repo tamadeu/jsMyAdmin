@@ -484,5 +484,23 @@
   },
   "databaseBrowser": {
     "structure": "Structure"
+  },
+  "sqlAgent": {
+    "title": "AI SQL Agent",
+    "description": "Describe the SQL query you want to generate in natural language.",
+    "promptPlaceholder": "e.g., 'Select all users from the 'users' table where age is greater than 30'",
+    "selectAiModel": "Select AI Model",
+    "generateSql": "Generate SQL",
+    "generatingSql": "Generating SQL...",
+    "promptRequired": "Prompt Required",
+    "pleaseEnterPrompt": "Please enter a description for the SQL query.",
+    "apiKeysMissing": "AI API Keys Missing",
+    "configureApiKeys": "Please configure your AI API keys in the Configuration page.",
+    "apiKeyMissingForModel": "API Key Missing for {{model}}",
+    "configureApiKeyForSelectedModel": "Please configure the API key for the selected AI model ({{model}}) in the Configuration page.",
+    "sqlGenerated": "SQL Generated",
+    "sqlGeneratedSuccessfully": "SQL query generated successfully by AI.",
+    "errorGeneratingSql": "Error Generating SQL",
+    "failedToGenerateSql": "Failed to generate SQL with AI."
   }
 }

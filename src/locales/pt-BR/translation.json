@@ -484,5 +484,23 @@
   },
   "databaseBrowser": {
     "structure": "Estrutura"
+  },
+  "sqlAgent": {
+    "title": "Agente SQL de IA",
+    "description": "Descreva a consulta SQL que você deseja gerar em linguagem natural.",
+    "promptPlaceholder": "ex: 'Selecione todos os usuários da tabela 'users' onde a idade é maior que 30'",
+    "selectAiModel": "Selecionar Modelo de IA",
+    "generateSql": "Gerar SQL",
+    "generatingSql": "Gerando SQL...",
+    "promptRequired": "Prompt Obrigatório",
+    "pleaseEnterPrompt": "Por favor, insira uma descrição para a consulta SQL.",
+    "apiKeysMissing": "Chaves de API de IA Ausentes",
+    "configureApiKeys": "Por favor, configure suas chaves de API de IA na página de Configuração.",
+    "apiKeyMissingForModel": "Chave de API Ausente para {{model}}",
+    "configureApiKeyForSelectedModel": "Por favor, configure a chave de API para o modelo de IA selecionado ({{model}}) na página de Configuração.",
+    "sqlGenerated": "SQL Gerado",
+    "sqlGeneratedSuccessfully": "Consulta SQL gerada com sucesso pela IA.",
+    "errorGeneratingSql": "Erro ao Gerar SQL",
+    "failedToGenerateSql": "Falha ao gerar SQL com IA."
   }
 }

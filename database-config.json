@@ -26,8 +26,8 @@
     "requireSSL": false
   },
   "ai": {
-    "geminiApiKey": "",
-    "openAIApiKey": "",
-    "anthropicApiKey": ""
+    "geminiApiKey": "***REMOVED***",
+    "openAIApiKey": "***REMOVED***",
+    "anthropicApiKey": "***REMOVED***"
   }
 }
