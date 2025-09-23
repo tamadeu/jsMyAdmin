@@ -91,7 +91,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
     } catch (err) {
       toast({
         title: t("databaseTablesList.errorDeletingTable"),
-        description: err instanceof Error ? err.message : t("databaseTablesList.failedToDeleteTable"),
+        description: err instanceof Error ? err.message : t("databaseTablesList.failedToToDeleteTable"),
         variant: "destructive",
       });
     } finally {
@@ -248,7 +248,14 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                 <TableBody>
                   {filteredItems.map((item) => (
                     <TableRow key={item.name}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <span 
+                          className="cursor-pointer text-blue-600 hover:underline" 
+                          onClick={() => handleOpenTable(item.name)}
+                        >
+                          {item.name}
+                        </span>
+                      </TableCell>
                       <TableCell>{allTables.some(t => t.name === item.name) ? t("databaseTablesList.table") : t("databaseTablesList.view")}</TableCell>
                       <TableCell>{item.rows.toLocaleString()}</TableCell>
                       <TableCell>{item.size}</TableCell>
@@ -256,10 +263,6 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                       <TableCell>{item.collation}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenTable(item.name)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            {t("databaseTablesList.browse")}
-                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleOpenTableStructure(item.name)}>
                             <LayoutPanelTop className="h-4 w-4 mr-2" />
                             {t("databaseTablesList.structure")}
