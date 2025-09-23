@@ -193,6 +193,7 @@
     "databaseServer": "Servidor de Banco de Dados",
     "application": "Aplicação",
     "security": "Segurança",
+    "ai": "Configurações de IA",
     "system": "Sistema",
     "connectionSettings": "Configurações de Conexão",
     "connectionSettingsDescription": "Configure os parâmetros de conexão do seu servidor de banco de dados MySQL. O endereço do servidor é definido no login.",
@@ -220,6 +221,14 @@
     "allowLocalInfileDescription": "Permitir declarações LOAD DATA LOCAL INFILE",
     "requireSsl": "Exigir SSL",
     "requireSslDescription": "Forçar apenas conexões SSL",
+    "aiSettings": "Configurações de Integração de IA",
+    "aiSettingsDescription": "Configure as chaves de API para vários serviços de IA para habilitar recursos alimentados por IA.",
+    "geminiApiKey": "Chave de API do Google Gemini",
+    "geminiApiKeyPlaceholder": "Insira sua Chave de API do Google Gemini",
+    "openAIApiKey": "Chave de API da OpenAI",
+    "openAIApiKeyPlaceholder": "Insira sua Chave de API da OpenAI",
+    "anthropicApiKey": "Chave de API da Anthropic (Claude)",
+    "anthropicApiKeyPlaceholder": "Insira sua Chave de API da Anthropic (Claude)",
     "systemSetup": "Configuração do Sistema",
     "systemSetupDescription": "Crie as tabelas necessárias para recursos do sistema como histórico de consultas e favoritos.",
     "checkingStatus": "Verificando status...",
@@ -472,5 +481,8 @@
     "addAutoIncrement": "Adicionar AUTO_INCREMENT",
     "preparingExport": "Preparando exportação...",
     "failedToFetchDataForExport": "Falha ao buscar dados para exportação."
+  },
+  "databaseBrowser": {
+    "structure": "Estrutura"
   }
 }

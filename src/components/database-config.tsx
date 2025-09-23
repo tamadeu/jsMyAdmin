@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Database, Shield, Save, AlertCircle, CheckCircle, Wrench, Loader2 } from "lucide-react";
+import { Settings, Database, Shield, Save, AlertCircle, CheckCircle, Wrench, Loader2, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,10 @@ const DatabaseConfigComponent = () => {
       const savedConfig = localStorage.getItem('database-config');
       if (savedConfig) {
         const parsedConfig = JSON.parse(savedConfig);
+        // Ensure AI section exists and has default values if not present
+        if (!parsedConfig.ai) {
+          parsedConfig.ai = { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" };
+        }
         parsedConfig.database.username = ""; 
         parsedConfig.database.password = "";
         setConfig(parsedConfig);
@@ -43,7 +47,8 @@ const DatabaseConfigComponent = () => {
         setConfig({
           database: { host: "localhost", port: 3306, username: "", password: "", defaultDatabase: "mysql", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", connectionTimeout: 10000, maxConnections: 10, ssl: false, sslCertificate: "", sslKey: "", sslCA: "" },
           application: { theme: "dark", language: "en", queryTimeout: 30000, maxQueryResults: 1000, autoRefresh: false, refreshInterval: 30000 },
-          security: { allowMultipleStatements: false, allowLocalInfile: false, requireSSL: false }
+          security: { allowMultipleStatements: false, allowLocalInfile: false, requireSSL: false },
+          ai: { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" } // Default AI config
         });
       }
     } catch (error) {
@@ -72,7 +77,8 @@ const DatabaseConfigComponent = () => {
           sslCA: config.database.sslCA,
         },
         application: config.application,
-        security: config.security
+        security: config.security,
+        ai: config.ai // Include AI config
       };
 
       const result = await apiService.saveConfig(configToSave);
@@ -176,6 +182,7 @@ const DatabaseConfigComponent = () => {
           <TabsTrigger value="database">{t("configurationPage.databaseServer")}</TabsTrigger>
           <TabsTrigger value="application">{t("configurationPage.application")}</TabsTrigger>
           <TabsTrigger value="security">{t("configurationPage.security")}</TabsTrigger>
+          <TabsTrigger value="ai">{t("configurationPage.ai")}</TabsTrigger> {/* New AI Tab Trigger */}
           <TabsTrigger value="system">{t("configurationPage.system")}</TabsTrigger>
         </TabsList>
 
@@ -226,7 +233,49 @@ const DatabaseConfigComponent = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.allowMultipleStatements")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.allowMultipleStatementsDescription")}</p></div><Switch checked={config.security.allowMultipleStatements} onCheckedChange={(checked) => updateConfig('security', 'allowMultipleStatements', checked)} /></div>
                 <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.allowLocalInfile")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.allowLocalInfileDescription")}</p></div><Switch checked={config.security.allowLocalInfile} onCheckedChange={(checked) => updateConfig('security', 'allowLocalInfile', checked)} /></div>
-                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.requireSsl")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.requireSslDescription")}</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSSL', checked)} /></div>
+                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.requireSsl")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.requireSslDescription")}</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSsl', checked)} /></div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* New AI Tab Content */}
+        <TabsContent value="ai" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5" />{t("configurationPage.aiSettings")}</CardTitle>
+              <CardDescription>{t("configurationPage.aiSettingsDescription")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="geminiApiKey">{t("configurationPage.geminiApiKey")}</Label>
+                <Input 
+                  id="geminiApiKey" 
+                  type="password" 
+                  value={config.ai.geminiApiKey} 
+                  onChange={(e) => updateConfig('ai', 'geminiApiKey', e.target.value)} 
+                  placeholder={t("configurationPage.geminiApiKeyPlaceholder")} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="openAIApiKey">{t("configurationPage.openAIApiKey")}</Label>
+                <Input 
+                  id="openAIApiKey" 
+                  type="password" 
+                  value={config.ai.openAIApiKey} 
+                  onChange={(e) => updateConfig('ai', 'openAIApiKey', e.target.value)} 
+                  placeholder={t("configurationPage.openAIApiKeyPlaceholder")} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="anthropicApiKey">{t("configurationPage.anthropicApiKey")}</Label>
+                <Input 
+                  id="anthropicApiKey" 
+                  type="password" 
+                  value={config.ai.anthropicApiKey} 
+                  onChange={(e) => updateConfig('ai', 'anthropicApiKey', e.target.value)} 
+                  placeholder={t("configurationPage.anthropicApiKeyPlaceholder")} 
+                />
               </div>
             </CardContent>
           </Card>

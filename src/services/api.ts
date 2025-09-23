@@ -73,6 +73,11 @@ export interface DatabaseConfig {
     allowLocalInfile: boolean;
     requireSSL: boolean;
   };
+  ai: { // New AI configuration section
+    geminiApiKey: string;
+    openAIApiKey: string;
+    anthropicApiKey: string;
+  };
 }
 
 export interface LoginCredentials {

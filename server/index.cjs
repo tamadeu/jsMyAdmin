@@ -431,6 +431,7 @@ app.post('/api/save-config', async (req, res) => {
     // Also update other application/security settings
     existingConfig.application = config.application;
     existingConfig.security = config.security;
+    existingConfig.ai = config.ai; // Save AI configuration
 
     await fs.writeFile(configPath, JSON.stringify(existingConfig, null, 2));
 
