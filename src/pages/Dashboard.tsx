@@ -120,7 +120,6 @@ const Dashboard = () => {
             <div className="flex justify-between"><span>{t("dashboard.frontend")}:</span> <span className="font-medium">React, TypeScript, Tailwind CSS</span></div>
             <div className="flex justify-between"><span>{t("dashboard.backend")}:</span> <span className="font-medium">Node.js, Express</span></div>
             <div className="flex justify-between"><span>{t("dashboard.databaseDriver")}:</span> <span className="font-medium">mysql2</span></div>
-            <div className="flex justify-between"><span>{t("dashboard.documentation")}:</span> <a href="https://www.dyad.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Dyad.sh</a></div>
           </CardContent>
         </Card>
       </div>
