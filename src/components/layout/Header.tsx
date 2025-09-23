@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Wifi, Bell, User, LogOut, Keyboard, Globe } from "lucide-react"; // Added Globe icon
-import { Badge } from "@/components/ui/badge";
+import { User, LogOut, Keyboard, Globe } from "lucide-react"; // Removed Wifi and Bell icons
+import { Badge } from "@/components/ui/badge"; // Keep Badge import for now, might be used elsewhere
 import { useTabs } from "@/context/TabContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileSidebar } from "./MobileSidebar";
@@ -15,18 +15,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog";
-import { useTranslation } from "react-i18next"; // Import useTranslation
-import i18n from "@/i18n"; // Import i18n instance
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 
 const Header = () => {
-  const { t } = useTranslation(); // Initialize useTranslation
+  const { t } = useTranslation();
   const { activeTabId, getTabById } = useTabs();
-  const { logout, user } = useAuth(); // Obter o objeto 'user' do contexto de autenticação
+  const { logout, user } = useAuth();
   const activeTab = getTabById(activeTabId);
   const isMobile = useIsMobile();
   const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false);
 
-  let headerTitle = t("sidebar.title"); // Default title from translation
+  let headerTitle = t("sidebar.title");
   let headerSubtitle: string | undefined = undefined;
 
   if (activeTab) {
@@ -56,7 +56,7 @@ const Header = () => {
         headerSubtitle = t("header.usersSubtitle");
         break;
       case "database-tables-list":
-        headerTitle = activeTab.title; // This title is already translated/dynamic
+        headerTitle = activeTab.title;
         headerSubtitle = t("header.databaseTablesListSubtitle", { databaseName: activeTab.params?.database });
         break;
       case "table-structure":
@@ -98,12 +98,7 @@ const Header = () => {
             <Keyboard className="h-4 w-4" />
             <span className="sr-only">{t("header.keyboardShortcuts")}</span>
           </Button>
-          <div className="flex items-center gap-2">
-            <Wifi className="h-4 w-4 text-green-500" />
-            <Badge variant="outline" className="text-green-500 border-green-500">
-              {t("header.connected")}
-            </Badge>
-          </div>
+          {/* Removed Wifi icon and 'Connected' badge */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 px-0">
@@ -120,12 +115,12 @@ const Header = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Bell className="h-4 w-4 text-muted-foreground" />
+          {/* Removed Bell icon */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 bg-accent px-3 py-1 rounded-md cursor-pointer">
                 <User className="h-4 w-4" />
-                <span className="text-sm">{user?.username || 'AD'}</span> {/* Exibe o nome de usuário */}
+                <span className="text-sm">{user?.username || 'AD'}</span>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
