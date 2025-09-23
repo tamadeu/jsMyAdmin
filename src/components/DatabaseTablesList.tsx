@@ -256,18 +256,18 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                             {item.name}
                           </span>
                           <div className="flex gap-1 mt-1 text-[11px] opacity-0 group-hover:opacity-100 transition-opacity duration-200"> {/* Adjusted font size and added hover effect */}
-                            <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handleOpenTableStructure(item.name)}>
+                            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={() => handleOpenTableStructure(item.name)}>
                               <LayoutPanelTop className="h-3 w-3 mr-1" />
                               {t("databaseTablesList.structure")}
                             </Button>
                             {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
-                              <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="h-6 px-2 text-orange-500 hover:text-orange-600">
+                              <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="h-6 px-2 text-[11px] text-orange-500 hover:bg-accent hover:text-orange-600">
                                 <Eraser className="h-3 w-3 mr-1" />
                                 {t("databaseTablesList.empty")}
                               </Button>
                             )}
                             {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && (
-                              <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="h-6 px-2 text-red-500 hover:bg-red-600">
+                              <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="h-6 px-2 text-[11px] text-red-500 hover:bg-accent hover:text-red-600">
                                 <Trash2 className="h-3 w-3 mr-1" />
                                 {t("databaseTablesList.delete")}
                               </Button>
