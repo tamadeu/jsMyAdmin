@@ -16,6 +16,10 @@ A modern web-based MySQL administration tool built with React, TypeScript, and N
 - 🏗️ **Table Structure Editor**: View and modify table structures, including adding, removing, and reordering columns.
 - 📤 **Data Export**: Export table data in various formats (CSV, JSON, SQL).
 
+![Descrição da imagem](gh-images/tables.png)
+
+![Descrição da imagem](gh-images/records.png)
+
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
