@@ -77,7 +77,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
-  const [selectedRows, setSelectedRows] = new Set<number>();
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set()); // Corrigido aqui
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
   const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false); // State for export dialog
@@ -351,13 +351,15 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   };
 
   const handleRowSelect = (rowIndex: number, checked: boolean) => {
-    const newSelection = new Set(selectedRows);
-    if (checked) {
-      newSelection.add(rowIndex);
-    } else {
-      newSelection.delete(rowIndex);
-    }
-    setSelectedRows(newSelection);
+    setSelectedRows(prev => {
+      const newSelection = new Set(prev);
+      if (checked) {
+        newSelection.add(rowIndex);
+      } else {
+        newSelection.delete(rowIndex);
+      }
+      return newSelection;
+    });
   };
 
   const handleSelectAll = (checked: boolean) => {

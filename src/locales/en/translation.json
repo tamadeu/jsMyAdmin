@@ -115,6 +115,7 @@
     "serverFiltered": "Server filtered",
     "editableHasPk": "Editable (has PK)",
     "refresh": "Refresh",
+    "retry": "Retry",
     "export": "Export",
     "searchInResults": "Search in results...",
     "searchInDatabase": "Search in database...",
@@ -337,7 +338,8 @@
     "deleteTable": "Delete Table",
     "emptyTable": "Empty Table",
     "loadingTablesAndViews": "Loading tables and views for \"{{databaseName}}\"...",
-    "failedToLoadTablesAndViews": "Failed to load tables and views for \"{{databaseName}}\""
+    "failedToLoadTablesAndViews": "Failed to load tables and views for \"{{databaseName}}\"",
+    "loadingTableData": "Loading data for table \"{{tableName}}\"..."
   },
   "tableStructurePage": {
     "title": "Table Structure: {{tableName}}",

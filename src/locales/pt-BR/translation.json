@@ -337,7 +337,8 @@
     "deleteTable": "Excluir Tabela",
     "emptyTable": "Esvaziar Tabela",
     "loadingTablesAndViews": "Carregando tabelas e views para \"{{databaseName}}\"...",
-    "failedToLoadTablesAndViews": "Falha ao carregar tabelas e views para \"{{databaseName}}\""
+    "failedToLoadTablesAndViews": "Falha ao carregar tabelas e views para \"{{databaseName}}\"",
+    "loadingTableData": "Carregando dados da tabela \"{{tableName}}\"..."
   },
   "tableStructurePage": {
     "title": "Estrutura da Tabela: {{tableName}}",
