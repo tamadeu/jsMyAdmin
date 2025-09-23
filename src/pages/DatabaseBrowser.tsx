@@ -75,7 +75,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set()); // FIX: Correct initialization
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
   const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false); // State for export dialog
@@ -468,7 +468,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
               <div>
                 <CardTitle>{t("queryResultTable.browseData")}</CardTitle>
                 <CardDescription>
-                  {tableData ? t("queryResultTable.totalRows", { total: tableData.total.toLocaleString() }) : t("queryResultTable.noData")}
+                  {tableData ? `${tableData.total.toLocaleString()} ${t("queryResultTable.totalRows")}` : t("queryResultTable.noData")}
                   {hasAnyFilters && ` • ${t("queryResultTable.serverFiltered")}`}
                   {hasPrimaryKey && ` • ${t("queryResultTable.editableHasPk")}`}
                 </CardDescription>
@@ -823,14 +823,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
         )}
 
         {/* Export Data Dialog */}
-        {isExportDialogOpen && tableData && (
+        {isExportDialogOpen && tableData && tableInfo && (
           <ExportDataDialog
             open={isExportDialogOpen}
             onOpenChange={setIsExportDialogOpen}
             database={database}
             table={table}
             columns={tableData.columns}
-            dataToExport={tableData.data} // Pass the currently loaded data for export
+            tableEngine={tableInfo.engine}
+            tableCollation={tableInfo.collation}
+            currentSearchTerm={debouncedSearchTerm}
+            currentColumnFilters={debouncedColumnFilters}
+            totalRowsAvailable={tableData.total}
           />
         )}
       </div>

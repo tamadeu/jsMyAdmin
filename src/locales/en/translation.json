@@ -448,10 +448,17 @@
     "noData": "No Data",
     "noDataToExport": "There is no data to export.",
     "exportSuccessful": "Export Successful",
-    "dataExportedSuccessfully": "Data exported successfully as {{format}}."
-  },
-  "notFoundPage": {
-    "oopsPageNotFound": "Oops! Page not found",
-    "returnToHome": "Return to Home"
+    "dataExportedSuccessfully": "Data exported successfully as {{format}}.",
+    "records": "Records",
+    "dumpAllRows": "Dump all rows",
+    "dumpCustomRows": "Dump custom rows",
+    "numberOfRows": "Number of rows",
+    "startAtRow": "Start at row",
+    "sqlOptions": "SQL Options",
+    "addDropTable": "Add DROP TABLE statement",
+    "addCreateTable": "Add CREATE TABLE statement",
+    "addAutoIncrement": "Add AUTO_INCREMENT",
+    "preparingExport": "Preparing export...",
+    "failedToFetchDataForExport": "Failed to fetch data for export."
   }
 }
