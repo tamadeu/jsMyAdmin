@@ -246,7 +246,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                 </TableHeader>
                 <TableBody>
                   {filteredItems.map((item) => (
-                    <TableRow key={item.name}>
+                    <TableRow key={item.name} className="group"> {/* Add group class here */}
                       <TableCell className="font-medium">
                         <div className="flex flex-col">
                           <span 
@@ -255,7 +255,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                           >
                             {item.name}
                           </span>
-                          <div className="flex gap-1 mt-1 text-xs">
+                          <div className="flex gap-1 mt-1 text-[11px] opacity-0 group-hover:opacity-100 transition-opacity duration-200"> {/* Adjusted font size and added hover effect */}
                             <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handleOpenTableStructure(item.name)}>
                               <LayoutPanelTop className="h-3 w-3 mr-1" />
                               {t("databaseTablesList.structure")}
