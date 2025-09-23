@@ -117,6 +117,7 @@
     "refresh": "Refresh",
     "export": "Export",
     "searchInResults": "Search in results...",
+    "searchInDatabase": "Search in database...",
     "clearAll": "Clear All",
     "rows": "rows",
     "searching": "Searching...",

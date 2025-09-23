@@ -117,6 +117,7 @@
     "refresh": "Atualizar",
     "export": "Exportar",
     "searchInResults": "Buscar nos resultados...",
+    "searchInDatabase": "Buscar no banco de dados...",
     "clearAll": "Limpar Tudo",
     "rows": "linhas",
     "searching": "Buscando...",
