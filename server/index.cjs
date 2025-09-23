@@ -6,6 +6,11 @@ const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
 
+// Import AI SDKs
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -1333,6 +1338,111 @@ app.post('/api/system/initialize', async (req, res) => { // Removed authMiddlewa
   } catch (error) {
     console.error('Error initializing system tables:', error);
     res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// --- AI SQL Generation Endpoint ---
+app.post('/api/ai/generate-sql', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    const { prompt, model, database } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ success: false, message: 'Prompt is required.' });
+    }
+
+    if (!serverConfig || !serverConfig.ai) {
+      return res.status(500).json({ success: false, message: 'AI configuration not loaded.' });
+    }
+
+    let schemaContext = '';
+    if (database) {
+      connection = await getUserPooledConnection(req);
+      const [tablesAndViews] = await connection.execute(`
+        SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ?
+        ORDER BY TABLE_NAME, ORDINAL_POSITION
+      `, [database]);
+
+      const schema = {};
+      tablesAndViews.forEach(col => {
+        if (!schema[col.TABLE_NAME]) {
+          schema[col.TABLE_NAME] = [];
+        }
+        schema[col.TABLE_NAME].push({
+          column_name: col.COLUMN_NAME,
+          data_type: col.DATA_TYPE,
+          is_nullable: col.IS_NULLABLE === 'YES',
+          column_key: col.COLUMN_KEY,
+          column_default: col.COLUMN_DEFAULT,
+          extra: col.EXTRA
+        });
+      });
+
+      schemaContext = `\n\nConsider the following database schema for '${database}':\n`;
+      for (const tableName in schema) {
+        schemaContext += `Table \`${tableName}\`:\n`;
+        schema[tableName].forEach(col => {
+          schemaContext += `  - \`${col.column_name}\` ${col.data_type}`;
+          if (col.column_key) schemaContext += ` (${col.column_key})`;
+          if (!col.is_nullable) schemaContext += ` NOT NULL`;
+          if (col.column_default !== null) schemaContext += ` DEFAULT '${col.column_default}'`;
+          if (col.extra) schemaContext += ` ${col.extra}`;
+          schemaContext += `\n`;
+        });
+      }
+    }
+
+    let generatedSql = '';
+    let fullPrompt = `Generate a MySQL SQL query based on the following request: "${prompt}". ${schemaContext}\n\nProvide only the SQL query, without any additional text or explanations.`;
+
+    if (model === 'gemini') {
+      const apiKey = serverConfig.ai.geminiApiKey;
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Gemini API Key is not configured.' });
+      }
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const geminiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const result = await geminiModel.generateContent(fullPrompt);
+      const response = await result.response;
+      generatedSql = response.text();
+    } else if (model === 'openai') {
+      const apiKey = serverConfig.ai.openAIApiKey;
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'OpenAI API Key is not configured.' });
+      }
+      const openai = new OpenAI({ apiKey: apiKey });
+      const chatCompletion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: fullPrompt }],
+      });
+      generatedSql = chatCompletion.choices[0].message.content;
+    } else if (model === 'anthropic') {
+      const apiKey = serverConfig.ai.anthropicApiKey;
+      if (!apiKey) {
+        return res.status(400).json({ success: false, message: 'Anthropic API Key is not configured.' });
+      }
+      const anthropic = new Anthropic({ apiKey: apiKey });
+      const msg = await anthropic.messages.create({
+        model: "claude-3-opus-20240229", // Or another suitable Claude model
+        max_tokens: 1024,
+        messages: [{ role: "user", content: fullPrompt }],
+      });
+      generatedSql = msg.content[0].text;
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid AI model selected.' });
+    }
+
+    // Clean up the generated SQL (remove markdown, extra text)
+    generatedSql = generatedSql.replace(/```sql\n?|```/g, '').trim();
+    
+    res.json({ success: true, sql: generatedSql });
+  } catch (error) {
+    console.error('Error generating SQL with AI:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to generate SQL with AI.' });
   } finally {
     if (connection) connection.release();
   }
