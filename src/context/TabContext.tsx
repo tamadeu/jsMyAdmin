@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, ReactNode, useCallback, use
 import { v4 as uuidvv4 } from 'uuid';
 import { QueryResult } from "@/services/api";
 import { useAuth } from './AuthContext';
+import { getTabPath } from '@/utils/tabUtils'; // Import the new utility
 
 export interface AppTab {
   id: string;
@@ -42,9 +43,10 @@ const TabContext = createContext<TabContextType | undefined>(undefined);
 
 interface TabProviderProps {
   children: ReactNode;
+  navigate: (path: string) => void; // Add navigate prop
 }
 
-export function TabProvider({ children }: TabProviderProps) {
+export function TabProvider({ children, navigate }: TabProviderProps) {
   const { user } = useAuth();
   const [tabs, setTabs] = useState<AppTab[]>([]);
   const [activeTabId, _setActiveTabId] = useState<string>('');
@@ -57,7 +59,11 @@ export function TabProvider({ children }: TabProviderProps) {
   const setActiveTab = useCallback((id: string) => {
     _setActiveTabId(id);
     activeTabIdRef.current = id;
-  }, []);
+    const newActiveTab = tabs.find(tab => tab.id === id);
+    if (newActiveTab) {
+      navigate(getTabPath(newActiveTab));
+    }
+  }, [tabs, navigate]);
 
   const getTabsKey = useCallback(() => {
     if (!user) return null;
@@ -120,21 +126,24 @@ export function TabProvider({ children }: TabProviderProps) {
           setActiveTab(hydratedTabs[0].id);
         } else {
           const dashboardTab: AppTab = { id: uuidvv4(), title: 'Dashboard', type: 'dashboard', closable: false };
-          setTabs([dashboardTab]);
+          const updatedTabs = [dashboardTab];
+          saveTabsToLocalStorage(updatedTabs);
           setActiveTab(dashboardTab.id);
         }
       } else {
         const dashboardTab: AppTab = { id: uuidvv4(), title: 'Dashboard', type: 'dashboard', closable: false };
-        setTabs([dashboardTab]);
+        const updatedTabs = [dashboardTab];
+        saveTabsToLocalStorage(updatedTabs);
         setActiveTab(dashboardTab.id);
       }
     } catch (error) {
       console.error("Failed to load tabs from localStorage:", error);
       const dashboardTab: AppTab = { id: uuidvv4(), title: 'Dashboard', type: 'dashboard', closable: false };
-      setTabs([dashboardTab]);
+      const updatedTabs = [dashboardTab];
+      saveTabsToLocalStorage(updatedTabs);
       setActiveTab(dashboardTab.id);
     }
-  }, [getTabsKey, getActiveTabKey, setActiveTab]);
+  }, [getTabsKey, getActiveTabKey, saveTabsToLocalStorage]); // Removed setActiveTab from deps to prevent infinite loop
 
   useEffect(() => {
     const activeTabKey = getActiveTabKey();
@@ -166,10 +175,11 @@ export function TabProvider({ children }: TabProviderProps) {
 
       const updatedTabs = [...prevTabs, tabToAdd];
       saveTabsToLocalStorage(updatedTabs);
-      setActiveTab(id);
+      _setActiveTabId(id); // Directly set active tab ID
+      navigate(getTabPath(tabToAdd)); // Navigate to the new tab's path
       return updatedTabs;
     });
-  }, [saveTabsToLocalStorage, setActiveTab]);
+  }, [saveTabsToLocalStorage, navigate]);
 
   const removeTab = useCallback((tabId: string) => {
     setTabs(prevTabs => {
@@ -181,19 +191,22 @@ export function TabProvider({ children }: TabProviderProps) {
       if (activeTabIdRef.current === tabId) {
         if (newTabs.length > 0) {
           const newActiveIndex = Math.max(0, tabIndex - 1);
-          setActiveTab(newTabs[newActiveIndex].id);
+          const newActiveTab = newTabs[newActiveIndex];
+          _setActiveTabId(newActiveTab.id); // Directly set active tab ID
+          navigate(getTabPath(newActiveTab)); // Navigate to the new active tab's path
         } else {
           const dashboardTab: AppTab = { id: uuidvv4(), title: 'Dashboard', type: 'dashboard', closable: false };
           const updatedTabs = [dashboardTab];
           saveTabsToLocalStorage(updatedTabs);
-          setActiveTab(dashboardTab.id);
+          _setActiveTabId(dashboardTab.id); // Directly set active tab ID
+          navigate(getTabPath(dashboardTab)); // Navigate to dashboard
           return updatedTabs;
         }
       }
       saveTabsToLocalStorage(newTabs);
       return newTabs;
     });
-  }, [saveTabsToLocalStorage, setActiveTab]);
+  }, [saveTabsToLocalStorage, navigate]);
 
   const updateTabContent = useCallback((tabId: string, content: { sqlQueryContent?: string }) => {
     setTabs(prevTabs => {
