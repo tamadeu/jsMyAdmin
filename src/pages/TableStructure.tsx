@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Table as TableIcon, Loader2, AlertCircle, RefreshCw, Edit, Plus, Trash2, Save, XCircle, GripVertical } from "lucide-react";
+import { Table as TableIcon, Loader2, AlertCircle, RefreshCw, Edit, Plus, Trash2, Save, XCircle, GripVertical, Copy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -242,6 +242,32 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
     setError(null);
   };
 
+  const handleCopyStructureAsJson = async () => {
+    try {
+      const columnsToCopy = isEditing ? editableColumns : originalColumns.map(col => ({
+        name: col.name,
+        type: col.type,
+        nullable: col.null,
+        isPrimaryKey: col.key === 'PRI',
+        isAutoIncrement: col.extra.includes('auto_increment'),
+        defaultValue: col.default,
+      }));
+      const jsonString = JSON.stringify(columnsToCopy, null, 2);
+      await navigator.clipboard.writeText(jsonString);
+      toast({
+        title: t("tableStructurePage.structureCopied"),
+        description: t("tableStructurePage.structureCopiedSuccessfully"),
+      });
+    } catch (err) {
+      console.error('Error copying structure as JSON:', err);
+      toast({
+        title: t("tableStructurePage.errorCopyingStructure"),
+        description: err instanceof Error ? err.message : t("tableStructurePage.failedToCopyStructure"),
+        variant: "destructive",
+      });
+    }
+  };
+
   const onDragEnd = (result: any) => {
     if (!result.destination) {
       return;
@@ -295,14 +321,20 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{t("tableStructurePage.title", { tableName: table })}</h1>
-          <p className="text-muted-foreground">{t("tableStructurePage.subtitle", { tableName: table, databaseName: database })}</p>
+          <p className="text-muted-foreground">{t("tableStructurePage.subtitle", { databaseName: database, tableName: table })}</p>
         </div>
         <div className="flex gap-2">
           {!isEditing && (
-            <Button variant="outline" size="sm" onClick={loadTableStructure}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              {t("tableStructurePage.refresh")}
-            </Button>
+            <>
+              <Button variant="outline" size="sm" onClick={loadTableStructure}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                {t("tableStructurePage.refresh")}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCopyStructureAsJson}>
+                <Copy className="h-4 w-4 mr-2" />
+                {t("tableStructurePage.copyStructure")}
+              </Button>
+            </>
           )}
           {hasPrivilege("ALTER") && (
             isEditing ? (

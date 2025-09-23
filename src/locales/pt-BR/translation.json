@@ -375,7 +375,12 @@
     "aiColumnMustBeInt": "A coluna de auto-incremento '{{columnName}}' deve ser do tipo inteiro.",
     "aiColumnMustBePk": "A coluna de auto-incremento '{{columnName}}' também deve ser uma chave primária.",
     "lengthRequired": "O comprimento é obrigatório e deve ser maior que 0 para a coluna {{type}} '{{columnName}}'.",
-    "nonNullableDefaultValue": "A coluna não nula '{{columnName}}' deve ter um valor padrão."
+    "nonNullableDefaultValue": "A coluna não nula '{{columnName}}' deve ter um valor padrão.",
+    "tableMustHavePk": "Uma tabela deve ter pelo menos uma chave primária.",
+    "structureCopied": "Estrutura Copiada",
+    "structureCopiedSuccessfully": "Estrutura da tabela copiada para a área de transferência como JSON.",
+    "errorCopyingStructure": "Erro ao Copiar Estrutura",
+    "failedToCopyStructure": "Falha ao copiar a estrutura da tabela."
   },
   "usersPage": {
     "title": "Usuários MySQL",

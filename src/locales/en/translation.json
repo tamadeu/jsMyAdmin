@@ -375,7 +375,12 @@
     "aiColumnMustBeInt": "Auto-increment column '{{columnName}}' must be an integer type.",
     "aiColumnMustBePk": "Auto-increment column '{{columnName}}' must also be a primary key.",
     "lengthRequired": "Length is required and must be greater than 0 for {{type}} column '{{columnName}}'.",
-    "nonNullableDefaultValue": "Non-nullable column '{{columnName}}' must have a default value."
+    "nonNullableDefaultValue": "Non-nullable column '{{columnName}}' must have a default value.",
+    "tableMustHavePk": "A table must have at least one primary key.",
+    "structureCopied": "Structure Copied",
+    "structureCopiedSuccessfully": "Table structure copied to clipboard as JSON.",
+    "errorCopyingStructure": "Error Copying Structure",
+    "failedToCopyStructure": "Failed to copy table structure."
   },
   "usersPage": {
     "title": "MySQL Users",
