@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus, Trash2, Eraser, LayoutPanelTop, Play } from "lucide-react";
+import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus, Trash2, Eraser, LayoutPanelTop } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -242,45 +242,44 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                     <TableHead>{t("databaseTablesList.size")}</TableHead>
                     <TableHead>{t("databaseTablesList.engine")}</TableHead>
                     <TableHead>{t("databaseTablesList.collation")}</TableHead>
-                    <TableHead className="text-right">{t("databaseTablesList.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredItems.map((item) => (
                     <TableRow key={item.name}>
                       <TableCell className="font-medium">
-                        <span 
-                          className="cursor-pointer text-blue-600 hover:underline" 
-                          onClick={() => handleOpenTable(item.name)}
-                        >
-                          {item.name}
-                        </span>
+                        <div className="flex flex-col">
+                          <span 
+                            className="cursor-pointer text-blue-600 hover:underline" 
+                            onClick={() => handleOpenTable(item.name)}
+                          >
+                            {item.name}
+                          </span>
+                          <div className="flex gap-1 mt-1 text-xs">
+                            <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => handleOpenTableStructure(item.name)}>
+                              <LayoutPanelTop className="h-3 w-3 mr-1" />
+                              {t("databaseTablesList.structure")}
+                            </Button>
+                            {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
+                              <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="h-6 px-2 text-orange-500 hover:text-orange-600">
+                                <Eraser className="h-3 w-3 mr-1" />
+                                {t("databaseTablesList.empty")}
+                              </Button>
+                            )}
+                            {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && (
+                              <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="h-6 px-2 text-red-500 hover:bg-red-600">
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                {t("databaseTablesList.delete")}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>{allTables.some(t => t.name === item.name) ? t("databaseTablesList.table") : t("databaseTablesList.view")}</TableCell>
                       <TableCell>{item.rows.toLocaleString()}</TableCell>
                       <TableCell>{item.size}</TableCell>
                       <TableCell>{item.engine}</TableCell>
                       <TableCell>{item.collation}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenTableStructure(item.name)}>
-                            <LayoutPanelTop className="h-4 w-4 mr-2" />
-                            {t("databaseTablesList.structure")}
-                          </Button>
-                          {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
-                            <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="text-orange-500 hover:text-orange-600">
-                              <Eraser className="h-4 w-4 mr-2" />
-                              {t("databaseTablesList.empty")}
-                            </Button>
-                          )}
-                          {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && (
-                            <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="text-red-500 hover:bg-red-600">
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              {t("databaseTablesList.delete")}
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
