@@ -182,7 +182,8 @@
     "browse": "Browse",
     "copyRow": "Copy Row",
     "deleteRowAction": "Delete Row",
-    "editRowAction": "Edit Row"
+    "editRowAction": "Edit Row",
+    "loadingTableData": "Loading data for table..."
   },
   "configurationPage": {
     "title": "Application Configuration",
@@ -338,8 +339,7 @@
     "deleteTable": "Delete Table",
     "emptyTable": "Empty Table",
     "loadingTablesAndViews": "Loading tables and views for \"{{databaseName}}\"...",
-    "failedToLoadTablesAndViews": "Failed to load tables and views for \"{{databaseName}}\"",
-    "loadingTableData": "Loading data for table \"{{tableName}}\"..."
+    "failedToLoadTablesAndViews": "Failed to load tables and views for \"{{databaseName}}\""
   },
   "tableStructurePage": {
     "title": "Table Structure: {{tableName}}",

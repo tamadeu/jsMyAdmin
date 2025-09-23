@@ -115,6 +115,7 @@
     "serverFiltered": "Filtrado pelo servidor",
     "editableHasPk": "Editável (tem PK)",
     "refresh": "Atualizar",
+    "retry": "Tentar Novamente",
     "export": "Exportar",
     "searchInResults": "Buscar nos resultados...",
     "searchInDatabase": "Buscar no banco de dados...",
@@ -181,7 +182,8 @@
     "browse": "Navegar",
     "copyRow": "Copiar Linha",
     "deleteRowAction": "Excluir Linha",
-    "editRowAction": "Editar Linha"
+    "editRowAction": "Editar Linha",
+    "loadingTableData": "Carregando dados da tabela..."
   },
   "configurationPage": {
     "title": "Configuração da Aplicação",
@@ -337,8 +339,7 @@
     "deleteTable": "Excluir Tabela",
     "emptyTable": "Esvaziar Tabela",
     "loadingTablesAndViews": "Carregando tabelas e views para \"{{databaseName}}\"...",
-    "failedToLoadTablesAndViews": "Falha ao carregar tabelas e views para \"{{databaseName}}\"",
-    "loadingTableData": "Carregando dados da tabela \"{{tableName}}\"..."
+    "failedToLoadTablesAndViews": "Falha ao carregar tabelas e views para \"{{databaseName}}\""
   },
   "tableStructurePage": {
     "title": "Estrutura da Tabela: {{tableName}}",
