@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useDatabaseCache } from "@/context/DatabaseCacheContext";
 import InsertRowDialog from "@/components/InsertRowDialog";
+import ExportDataDialog from "@/components/ExportDataDialog"; // Import the new ExportDataDialog
 import { useTranslation } from "react-i18next"; // Import useTranslation
 
 // Custom hook for debouncing
@@ -77,6 +78,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
   const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false); // State for export dialog
 
   const debouncedSearchTerm = useDebounce(searchInput, 500);
   const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
@@ -480,7 +482,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   <RotateCcw className="h-4 w-4 mr-2" />
                   {t("queryResultTable.refresh")}
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)}> {/* Open export dialog */}
                   <Download className="h-4 w-4 mr-2" />
                   {t("queryResultTable.export")}
                 </Button>
@@ -817,6 +819,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
               loadTableData();
               refreshDatabases({ databaseName: database });
             }}
+          />
+        )}
+
+        {/* Export Data Dialog */}
+        {isExportDialogOpen && tableData && (
+          <ExportDataDialog
+            open={isExportDialogOpen}
+            onOpenChange={setIsExportDialogOpen}
+            database={database}
+            table={table}
+            columns={tableData.columns}
+            dataToExport={tableData.data} // Pass the currently loaded data for export
           />
         )}
       </div>

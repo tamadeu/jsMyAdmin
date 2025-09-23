@@ -434,5 +434,19 @@
     "editCell": "Edit cell (Data Browser)",
     "saveCellEdit": "Save cell edit (Data Browser)",
     "cancelCellEdit": "Cancel cell edit (Data Browser)"
+  },
+  "exportDataDialog": {
+    "title": "Export Data",
+    "description": "Select the format to export data from table '{{table}}' in database '{{database}}'.",
+    "format": "Export Format",
+    "insertStatements": "INSERT statements",
+    "cancel": "Cancel",
+    "export": "Export",
+    "error": "Error",
+    "invalidFormat": "Invalid export format selected.",
+    "noData": "No Data",
+    "noDataToExport": "There is no data to export.",
+    "exportSuccessful": "Export Successful",
+    "dataExportedSuccessfully": "Data exported successfully as {{format}}."
   }
 }

@@ -434,5 +434,19 @@
     "editCell": "Editar célula (Navegador de Dados)",
     "saveCellEdit": "Salvar edição de célula (Navegador de Dados)",
     "cancelCellEdit": "Cancelar edição de célula (Navegador de Dados)"
+  },
+  "exportDataDialog": {
+    "title": "Exportar Dados",
+    "description": "Selecione o formato para exportar os dados da tabela '{{table}}' no banco de dados '{{database}}'.",
+    "format": "Formato de Exportação",
+    "insertStatements": "Instruções INSERT",
+    "cancel": "Cancelar",
+    "export": "Exportar",
+    "error": "Erro",
+    "invalidFormat": "Formato de exportação inválido selecionado.",
+    "noData": "Sem Dados",
+    "noDataToExport": "Não há dados para exportar.",
+    "exportSuccessful": "Exportação Bem-Sucedida",
+    "dataExportedSuccessfully": "Dados exportados com sucesso como {{format}}."
   }
 }
