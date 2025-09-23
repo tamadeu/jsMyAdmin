@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
 import { Database, Table, Eye, Search, Settings, Play, Loader2, AlertCircle, Wrench, Users, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs, AppTab } from "@/context/TabContext";
@@ -357,17 +355,7 @@ const Sidebar = () => {
         </div>
       </ScrollArea>
 
-      {/* Footer with Theme Toggle (Fixed) */}
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Settings className="h-4 w-4" />
-            <span>{t("sidebar.version")}</span>
-          </div>
-          <ThemeToggle />
-        </div>
-      </div>
-
+      {/* Footer (Removed ThemeToggle and versioning) */}
       <CreateDatabaseDialog
         open={isCreateDbDialogOpen}
         onOpenChange={setIsCreateDbDialogOpen}

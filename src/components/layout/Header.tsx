@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { User, LogOut, Keyboard, Globe } from "lucide-react"; // Removed Wifi and Bell icons
-import { Badge } from "@/components/ui/badge"; // Keep Badge import for now, might be used elsewhere
+import { User, LogOut, Keyboard, Globe } from "lucide-react";
 import { useTabs } from "@/context/TabContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileSidebar } from "./MobileSidebar";
@@ -17,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
+import { ThemeToggle } from "@/components/theme-toggle"; // Import ThemeToggle
 
 const Header = () => {
   const { t } = useTranslation();
@@ -98,7 +98,6 @@ const Header = () => {
             <Keyboard className="h-4 w-4" />
             <span className="sr-only">{t("header.keyboardShortcuts")}</span>
           </Button>
-          {/* Removed Wifi icon and 'Connected' badge */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 px-0">
@@ -115,7 +114,7 @@ const Header = () => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Removed Bell icon */}
+          <ThemeToggle /> {/* Moved ThemeToggle here */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 bg-accent px-3 py-1 rounded-md cursor-pointer">
