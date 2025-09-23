@@ -60,11 +60,64 @@ const ExportDataDialog = ({ open, onOpenChange, database, table, columns, dataTo
 
     dataToExport.forEach(row => {
       const values = columns.map(col => {
-        const value = row[col.name];
-        if (value === null) return 'NULL';
-        if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`; // Escape single quotes
-        if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
-        return String(value);
+        const rawValue = row[col.name];
+        const columnType = col.type.toLowerCase().split('(')[0]; // e.g., "varchar", "int", "json", "datetime"
+
+        if (rawValue === null) {
+          return 'NULL';
+        }
+
+        if (columnType === 'json') {
+          let jsonString;
+          if (typeof rawValue === 'string') {
+            try {
+              // Tenta fazer o parse se for uma string que parece JSON, depois stringify para garantir o escape correto
+              jsonString = JSON.stringify(JSON.parse(rawValue));
+            } catch (e) {
+              // Se for uma string mas não um JSON válido, trata como string normal
+              jsonString = JSON.stringify(rawValue);
+            }
+          } else {
+            jsonString = JSON.stringify(rawValue);
+          }
+          return `'${jsonString.replace(/'/g, "''")}'`; // Escapa aspas simples na própria string JSON
+        }
+
+        if (['date', 'datetime', 'timestamp'].includes(columnType)) {
+          try {
+            const date = new Date(rawValue);
+            if (!isNaN(date.getTime())) {
+              // Formata para YYYY-MM-DD HH:MM:SS.ms (ou sem .ms se não houver)
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              const hours = String(date.getHours()).padStart(2, '0');
+              const minutes = String(date.getMinutes()).padStart(2, '0');
+              const seconds = String(date.getSeconds()).padStart(2, '0');
+              const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+
+              let formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+              if (milliseconds !== '000') { // Adiciona milissegundos apenas se não forem zero
+                formattedDate += `.${milliseconds}`;
+              }
+              return `'${formattedDate}'`;
+            }
+          } catch (e) {
+            // Fallback para tratar como string se o parse da data falhar
+            console.warn(`Could not parse date for column ${col.name}: ${rawValue}`);
+          }
+        }
+
+        if (['tinyint', 'boolean'].includes(columnType) && (typeof rawValue === 'boolean' || rawValue === 0 || rawValue === 1)) {
+          return rawValue ? '1' : '0';
+        }
+
+        if (typeof rawValue === 'string') {
+          return `'${rawValue.replace(/'/g, "''")}'`;
+        }
+        
+        // Para números e outros tipos
+        return String(rawValue);
       }).join(', ');
       insertStatements.push(`INSERT INTO \`${table}\` (${columnNames}) VALUES (${values});`);
     });
