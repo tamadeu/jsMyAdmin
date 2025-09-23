@@ -2,6 +2,8 @@
 
 A modern web-based MySQL administration tool built with React, TypeScript, and Node.js - a complete replacement for phpMyAdmin. This project aims to provide a user-friendly interface for managing your MySQL databases, tables, and data, executing SQL queries, and configuring server settings.
 
+![Descrição da imagem](gh-images/dashboard.png)
+
 ## Features
 
 - 🗄️ **Database Management**: Browse databases, tables, and data with ease.
