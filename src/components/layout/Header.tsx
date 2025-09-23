@@ -21,7 +21,7 @@ import i18n from "@/i18n"; // Import i18n instance
 const Header = () => {
   const { t } = useTranslation(); // Initialize useTranslation
   const { activeTabId, getTabById } = useTabs();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth(); // Obter o objeto 'user' do contexto de autenticação
   const activeTab = getTabById(activeTabId);
   const isMobile = useIsMobile();
   const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false);
@@ -125,7 +125,7 @@ const Header = () => {
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 bg-accent px-3 py-1 rounded-md cursor-pointer">
                 <User className="h-4 w-4" />
-                <span className="text-sm">AD</span>
+                <span className="text-sm">{user?.username || 'AD'}</span> {/* Exibe o nome de usuário */}
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
