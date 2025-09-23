@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { QueryResult, apiService, TableData } from "@/services/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp, Plus, Edit, Copy, Trash2, Save, XCircle } from "lucide-react";
+import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp, Plus, Edit, Copy, Trash2, Save, XCircle, LayoutPanelTop } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import { useDatabaseCache } from "@/context/DatabaseCacheContext";
 import InsertRowDialog from "@/components/InsertRowDialog";
 import ExportDataDialog from "@/components/ExportDataDialog"; // Import the new ExportDataDialog
 import { useTranslation } from "react-i18next"; // Import useTranslation
+import { useNavigate } from "react-router-dom"; // Import useNavigate
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -62,6 +63,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const { toast } = useToast();
   const { hasPrivilege } = useAuth();
   const { refreshDatabases } = useDatabaseCache();
+  const navigate = useNavigate(); // Initialize useNavigate
   const [searchInput, setSearchInput] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [tableData, setTableData] = useState<TableData | null>(null);
@@ -75,7 +77,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
-  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [selectedRows, setSelectedRows] = new Set<number>();
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
   const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false); // State for export dialog
@@ -405,6 +407,12 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     return query;
   };
 
+  const handleViewStructure = () => {
+    navigate(`/${database}/${table}/structure`);
+  };
+
+  const isTable = tableInfo?.table_type !== 'VIEW';
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -474,6 +482,12 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                 </CardDescription>
               </div>
               <div className="flex gap-2">
+                {isTable && hasPrivilege("ALTER") && (
+                  <Button variant="outline" size="sm" onClick={handleViewStructure}>
+                    <LayoutPanelTop className="h-4 w-4 mr-2" />
+                    {t("databaseBrowser.structure")}
+                  </Button>
+                )}
                 <Button 
                   variant="outline" 
                   size="sm" 

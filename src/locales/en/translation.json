@@ -470,5 +470,8 @@
     "addAutoIncrement": "Add AUTO_INCREMENT",
     "preparingExport": "Preparing export...",
     "failedToFetchDataForExport": "Failed to fetch data for export."
+  },
+  "databaseBrowser": {
+    "structure": "Structure"
   }
 }
