@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus, Trash2, Eraser, LayoutPanelTop } from "lucide-react";
+import { Table, Eye, Loader2, AlertCircle, RefreshCw, Search, X, Plus, Trash2, Eraser, LayoutPanelTop, Play } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,10 @@ import { apiService, TableInfo } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
+import { useDatabaseCache } from "@/context/DatabaseCacheContext";
 import CreateTableDialog from "@/components/CreateTableDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useTabs } from "@/context/TabContext"; // Import useTabs
 
 interface DatabaseTablesListProps {
   database: string;
@@ -23,7 +24,8 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   const { toast } = useToast();
   const navigate = useNavigate();
   const { hasPrivilege } = useAuth();
-  const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache(); // Use the hook
+  const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache();
+  const { addTab, removeTab, activeTabId } = useTabs(); // Use useTabs hook
 
   const [allTables, setAllTables] = useState<TableInfo[]>([]);
   const [allViews, setAllViews] = useState<TableInfo[]>([]);
@@ -65,6 +67,17 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
 
   const handleOpenTableStructure = (tableName: string) => {
     navigate(`/${database}/${tableName}/structure`);
+  };
+
+  const handleOpenSqlEditor = (tableName: string) => {
+    const query = `SELECT * FROM \`${database}\`.\`${tableName}\`;`;
+    addTab({
+      title: "SQL Editor",
+      type: "sql-editor",
+      closable: true,
+      sqlQueryContent: query,
+    });
+    removeTab(activeTabId); // Close the current tab
   };
 
   const handleDeleteTable = async (tableName: string) => {
@@ -247,6 +260,10 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                           <Button variant="ghost" size="sm" onClick={() => handleOpenTableStructure(item.name)}>
                             <LayoutPanelTop className="h-4 w-4 mr-2" />
                             Structure
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenSqlEditor(item.name)}>
+                            <Play className="h-4 w-4 mr-2" />
+                            SQL Editor
                           </Button>
                           {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
                             <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="text-orange-500 hover:text-orange-600">
