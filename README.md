@@ -204,3 +204,8 @@ We welcome contributions! If you'd like to contribute, please follow these steps
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Disclaimer from the author
+I hold phpMyAdmin in high regard and rely on it in every MySQL project I undertake. It is, without question, an outstanding database client and will likely remain a benchmark for a long time.
+
+jsMyAdmin is my initiative to explore a different approach while striving to build something equally valuable. Perhaps, in the future, it may evolve to the point where comparisons with phpMyAdmin become relevant. At this stage, however, the objective is not to compare, but to focus on improving jsMyAdmin and allowing it to develop its own identity.
