@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { apiService, DatabaseTablesResponse } from '@/services/api';
 import { useAuth } from './AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from 'react-i18next'; // Import useTranslation
 
 interface DatabaseInfo {
   name: string;
@@ -22,9 +23,10 @@ interface DatabaseCacheContextType {
 
 const DatabaseCacheContext = createContext<DatabaseCacheContextType | undefined>(undefined);
 
-const CACHE_EXPIRATION_TIME = 5 * 60 * 1000; // 5 minutos em milissegundos
+const CACHE_EXPIRATION_TIME = 5 * 60 * 1000;
 
 export function DatabaseCacheProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
@@ -80,35 +82,32 @@ export function DatabaseCacheProvider({ children }: { children: ReactNode }) {
       }
       setDatabases(databasesWithTablesAndViews);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load databases';
+      const errorMessage = error instanceof Error ? error.message : t('dashboard.failedToLoadDatabases');
       setDatabaseError(errorMessage);
       toast({
-        title: "Error loading databases",
-        description: "Please check your database connection in Configuration",
+        title: t("dashboard.errorLoadingDatabases"),
+        description: t("dashboard.checkConfig"),
         variant: "destructive"
       });
     } finally {
       setIsLoadingDatabases(false);
     }
-  }, [isAuthenticated, user, getCacheKey, toast]);
+  }, [isAuthenticated, user, getCacheKey, toast, t]);
 
   const refreshDatabases = useCallback(async (options?: { force?: boolean; databaseName?: string }) => {
     const cacheKey = getCacheKey();
     if (cacheKey) {
       if (options?.databaseName) {
-        // If a specific database is named, try to update only that part of the cache
         const cachedData = localStorage.getItem(cacheKey);
         if (cachedData) {
           const parsedCache = JSON.parse(cachedData);
           const existingDbIndex = parsedCache.data.findIndex((db: DatabaseInfo) => db.name === options.databaseName);
           if (existingDbIndex !== -1) {
-            // Temporarily remove the specific database from cache to force reload for it
             parsedCache.data.splice(existingDbIndex, 1);
             localStorage.setItem(cacheKey, JSON.stringify(parsedCache));
           }
         }
       } else {
-        // Invalidate entire cache
         localStorage.removeItem(cacheKey);
       }
     }
@@ -139,7 +138,7 @@ export function DatabaseCacheProvider({ children }: { children: ReactNode }) {
         }
       } catch (e) {
         console.error("Error parsing database cache:", e);
-        localStorage.removeItem(cacheKey); // Corrupt cache, remove it
+        localStorage.removeItem(cacheKey);
       }
     }
     loadDatabasesFromAPI();

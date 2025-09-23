@@ -9,17 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Plus, XCircle } from "lucide-react";
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
+import { useDatabaseCache } from "@/context/DatabaseCacheContext";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 interface CreateDatabaseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  // onDatabaseCreated: () => void; // Removed, now handled by context
 }
 
 const CreateDatabaseDialog = ({ open, onOpenChange }: CreateDatabaseDialogProps) => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
-  const { refreshDatabases } = useDatabaseCache(); // Use the hook
+  const { refreshDatabases } = useDatabaseCache();
   const [databaseName, setDatabaseName] = useState("");
   const [charset, setCharset] = useState("utf8mb4");
   const [collation, setCollation] = useState("utf8mb4_unicode_ci");
@@ -28,7 +29,7 @@ const CreateDatabaseDialog = ({ open, onOpenChange }: CreateDatabaseDialogProps)
 
   const handleCreateDatabase = async () => {
     if (!databaseName.trim()) {
-      setError("Database name cannot be empty.");
+      setError(t("createDatabaseDialog.databaseNameEmpty"));
       return;
     }
     setError(null);
@@ -38,21 +39,21 @@ const CreateDatabaseDialog = ({ open, onOpenChange }: CreateDatabaseDialogProps)
       const result = await apiService.createDatabase(databaseName, charset, collation);
       if (result.success) {
         toast({
-          title: "Database Created",
-          description: `Database '${databaseName}' created successfully.`,
+          title: t("createDatabaseDialog.databaseCreated"),
+          description: t("createDatabaseDialog.databaseCreatedSuccessfully", { databaseName: databaseName }),
         });
-        refreshDatabases({ force: true }); // Invalidate entire cache
-        onOpenChange(false); // Close dialog
-        setDatabaseName(""); // Reset form
+        refreshDatabases({ force: true });
+        onOpenChange(false);
+        setDatabaseName("");
       } else {
-        throw new Error(result.message || "Failed to create database.");
+        throw new Error(result.message || t("createDatabaseDialog.failedToCreateDatabase"));
       }
     } catch (err) {
       console.error("Error creating database:", err);
-      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+      setError(err instanceof Error ? err.message : t("createDatabaseDialog.unknownError"));
       toast({
-        title: "Error Creating Database",
-        description: err instanceof Error ? err.message : "Failed to create database.",
+        title: t("createDatabaseDialog.errorCreatingDatabase"),
+        description: err instanceof Error ? err.message : t("createDatabaseDialog.failedToCreateDatabase"),
         variant: "destructive",
       });
     } finally {
@@ -61,32 +62,32 @@ const CreateDatabaseDialog = ({ open, onOpenChange }: CreateDatabaseDialogProps)
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!isLoading) { onOpenChange(o); setDatabaseName(""); setError(null); } }}> {/* Reset form on close */}
+    <Dialog open={open} onOpenChange={(o) => { if (!isLoading) { onOpenChange(o); setDatabaseName(""); setError(null); } }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-5 w-5" /> Create New Database
+            <Plus className="h-5 w-5" /> {t("createDatabaseDialog.title")}
           </DialogTitle>
           <DialogDescription>
-            Enter the details for your new MySQL database.
+            {t("createDatabaseDialog.description")}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="databaseName">Database Name</Label>
+            <Label htmlFor="databaseName">{t("createDatabaseDialog.databaseName")}</Label>
             <Input
               id="databaseName"
               value={databaseName}
               onChange={(e) => setDatabaseName(e.target.value)}
-              placeholder="e.g., my_new_database"
+              placeholder={t("createDatabaseDialog.databaseNamePlaceholder")}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="charset">Charset</Label>
+            <Label htmlFor="charset">{t("createDatabaseDialog.charset")}</Label>
             <Select value={charset} onValueChange={setCharset}>
               <SelectTrigger id="charset">
-                <SelectValue placeholder="Select charset" />
+                <SelectValue placeholder={t("createDatabaseDialog.selectCharset")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="utf8mb4">utf8mb4</SelectItem>
@@ -96,10 +97,10 @@ const CreateDatabaseDialog = ({ open, onOpenChange }: CreateDatabaseDialogProps)
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="collation">Collation</Label>
+            <Label htmlFor="collation">{t("createDatabaseDialog.collation")}</Label>
             <Select value={collation} onValueChange={setCollation}>
               <SelectTrigger id="collation">
-                <SelectValue placeholder="Select collation" />
+                <SelectValue placeholder={t("createDatabaseDialog.selectCollation")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="utf8mb4_unicode_ci">utf8mb4_unicode_ci</SelectItem>
@@ -115,11 +116,11 @@ const CreateDatabaseDialog = ({ open, onOpenChange }: CreateDatabaseDialogProps)
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
             <XCircle className="h-4 w-4 mr-2" />
-            Cancel
+            {t("createDatabaseDialog.cancel")}
           </Button>
           <Button onClick={handleCreateDatabase} disabled={isLoading || !databaseName.trim()}>
             {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-            Create Database
+            {t("createDatabaseDialog.createDatabase")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -99,3 +99,111 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Prism.js theme customization for SQL */
+.prism-code {
+  background: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-radius: 0.5rem;
+  padding: 10px;
+  overflow: auto;
+  font-family: "Fira code", "Fira Mono", monospace;
+  font-size: 14px;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: hsl(var(--muted-foreground)); /* Gray for comments */
+}
+
+.token.punctuation {
+  color: hsl(var(--foreground));
+}
+
+.token.namespace {
+  opacity: 0.7;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #e06c75; /* Reddish for numbers, booleans, etc. */
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #98c379; /* Greenish for strings, selectors */
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #61afef; /* Blueish for operators, URLs */
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #c678dd; /* Purple for keywords, at-rules */
+}
+
+.token.function,
+.token.class-name {
+  color: #e6c07b; /* Yellowish for functions, class names */
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #56b6c2; /* Cyan for regex, variables */
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+
+/* Specific SQL tokens */
+.token.keyword.sql {
+  color: #c678dd; /* SQL keywords like SELECT, FROM, WHERE */
+}
+
+.token.function.sql {
+  color: #e6c07b; /* SQL functions like COUNT(), SUM() */
+}
+
+.token.string.sql {
+  color: #98c379; /* String literals in SQL */
+}
+
+.token.operator.sql {
+  color: #61afef; /* SQL operators like =, >, < */
+}
+
+.token.number.sql {
+  color: #e06c75; /* Numbers in SQL */
+}
+
+.token.comment.sql {
+  color: hsl(var(--muted-foreground)); /* SQL comments */
+}

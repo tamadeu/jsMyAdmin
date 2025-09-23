@@ -10,17 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiService, DatabaseConfig } from "@/services/api";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 const SYSTEM_DATABASE = "javascriptmyadmin_meta";
-const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"]; // No change needed here, backend checks for column
+const SYSTEM_TABLES = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"];
 
 const DatabaseConfigComponent = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const [config, setConfig] = useState<DatabaseConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // System Setup State
   const [systemStatus, setSystemStatus] = useState<'loading' | 'ready' | 'error' | 'initializing' | 'initialized'>('loading');
   const [existingTables, setExistingTables] = useState<string[]>([]);
   const [systemMessage, setSystemMessage] = useState<string>('');
@@ -35,7 +36,6 @@ const DatabaseConfigComponent = () => {
       const savedConfig = localStorage.getItem('database-config');
       if (savedConfig) {
         const parsedConfig = JSON.parse(savedConfig);
-        // Ensure username and password are not loaded from localStorage for display
         parsedConfig.database.username = ""; 
         parsedConfig.database.password = "";
         setConfig(parsedConfig);
@@ -47,7 +47,7 @@ const DatabaseConfigComponent = () => {
         });
       }
     } catch (error) {
-      toast({ title: "Error loading configuration", description: "Failed to load database configuration", variant: "destructive" });
+      toast({ title: t("configurationPage.errorLoadingConfig"), description: t("configurationPage.failedToLoadConfig"), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -57,8 +57,6 @@ const DatabaseConfigComponent = () => {
     if (!config) return;
     try {
       setIsSaving(true);
-      // When saving, we only send the relevant parts of the config.
-      // The backend's system user credentials are NOT part of this config object.
       const configToSave = {
         database: {
           host: config.database.host,
@@ -79,16 +77,15 @@ const DatabaseConfigComponent = () => {
 
       const result = await apiService.saveConfig(configToSave);
       if (result.success) {
-        // Save a version to localStorage without username/password
         const localStorageConfig = JSON.parse(JSON.stringify(configToSave));
         localStorage.setItem('database-config', JSON.stringify(localStorageConfig));
-        toast({ title: "Configuration saved", description: result.message || "Database configuration has been saved successfully" });
+        toast({ title: t("configurationPage.configurationSaved"), description: result.message || t("configurationPage.configurationSavedSuccessfully") });
       } else {
-        throw new Error(result.message || 'Failed to save configuration');
+        throw new Error(result.message || t('configurationPage.failedToSaveConfig'));
       }
     } catch (error) {
       console.error('Error saving config:', error);
-      toast({ title: "Error saving configuration", description: error instanceof Error ? error.message : "Failed to save database configuration", variant: "destructive" });
+      toast({ title: t("configurationPage.errorSavingConfig"), description: error instanceof Error ? error.message : t("configurationPage.failedToSaveConfig"), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -101,7 +98,7 @@ const DatabaseConfigComponent = () => {
 
   const checkSystemTables = async () => {
     setSystemStatus('loading');
-    setSystemMessage('Checking status...');
+    setSystemMessage(t('configurationPage.checkingStatus'));
     try {
       const statusResponse = await apiService.getSystemStatus();
       setSystemMessage(statusResponse.message);
@@ -110,34 +107,34 @@ const DatabaseConfigComponent = () => {
         const { tables } = await apiService.getTables(SYSTEM_DATABASE);
         setExistingTables(tables.map(t => t.name));
       } else {
-        setSystemStatus('ready'); // Needs initialization
+        setSystemStatus('ready');
         setExistingTables([]);
       }
     } catch (error) {
       console.error("Error checking system tables:", error);
       setSystemStatus('error');
-      setSystemMessage(error instanceof Error ? error.message : "Error checking system status.");
+      setSystemMessage(error instanceof Error ? error.message : t("configurationPage.errorCheckingSystemStatus"));
     }
   };
 
   const initializeSystem = async () => {
     setSystemStatus('initializing');
-    setSystemMessage('Initializing system tables...');
+    setSystemMessage(t('configurationPage.initializingSystemTables'));
     try {
       const result = await apiService.initializeSystem();
       if (result.success) {
-        toast({ title: "System Initialized", description: "System tables have been created/updated successfully." });
+        toast({ title: t("configurationPage.systemInitialized"), description: t("configurationPage.systemInitializedSuccess") });
         setSystemStatus('initialized');
         setSystemMessage(result.message);
-        await checkSystemTables(); // Re-check to update table list and status
+        await checkSystemTables();
       } else {
-        throw new Error(result.message || 'Failed to initialize system tables.');
+        throw new Error(result.message || t('configurationPage.failedToInitializeSystemTables'));
       }
     } catch (error) {
       console.error("Error initializing system:", error);
-      toast({ title: "Initialization Failed", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+      toast({ title: t("configurationPage.initializationFailed"), description: error instanceof Error ? error.message : t("configurationPage.unknownError"), variant: "destructive" });
       setSystemStatus('error');
-      setSystemMessage(error instanceof Error ? error.message : "An unknown error occurred during initialization.");
+      setSystemMessage(error instanceof Error ? error.message : t("configurationPage.unknownErrorDuringInitialization"));
     }
   };
 
@@ -153,7 +150,7 @@ const DatabaseConfigComponent = () => {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <Database className="h-8 w-8 animate-spin mx-auto mb-2" />
-          <p className="text-muted-foreground">Loading configuration...</p>
+          <p className="text-muted-foreground">{t("configurationPage.loadingConfiguration")}</p>
         </div>
       </div>
     );
@@ -163,44 +160,44 @@ const DatabaseConfigComponent = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Application Configuration</h2>
-          <p className="text-muted-foreground">Configure application and database server settings</p>
+          <h2 className="text-2xl font-bold">{t("configurationPage.title")}</h2>
+          <p className="text-muted-foreground">{t("configurationPage.subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={saveConfig} disabled={isSaving}>
             <Save className="h-4 w-4 mr-2" />
-            {isSaving ? 'Saving...' : 'Save Configuration'}
+            {isSaving ? t('configurationPage.saving') : t('configurationPage.saveConfiguration')}
           </Button>
         </div>
       </div>
 
       <Tabs defaultValue="database" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="database">Database Server</TabsTrigger>
-          <TabsTrigger value="application">Application</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
+          <TabsTrigger value="database">{t("configurationPage.databaseServer")}</TabsTrigger>
+          <TabsTrigger value="application">{t("configurationPage.application")}</TabsTrigger>
+          <TabsTrigger value="security">{t("configurationPage.security")}</TabsTrigger>
+          <TabsTrigger value="system">{t("configurationPage.system")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="database" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Database className="h-5 w-5" />Connection Settings</CardTitle>
-              <CardDescription>Configure your MySQL database server connection parameters. The server address is set at login.</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Database className="h-5 w-5" />{t("configurationPage.connectionSettings")}</CardTitle>
+              <CardDescription>{t("configurationPage.connectionSettingsDescription")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label htmlFor="defaultDatabase">Default Database</Label><Input id="defaultDatabase" value={config.database.defaultDatabase} onChange={(e) => updateConfig('database', 'defaultDatabase', e.target.value)} placeholder="mysql" /></div>
-                <div className="space-y-2"><Label htmlFor="charset">Charset</Label><Select value={config.database.charset} onValueChange={(value) => updateConfig('database', 'charset', value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="utf8mb4">utf8mb4</SelectItem><SelectItem value="utf8">utf8</SelectItem><SelectItem value="latin1">latin1</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label htmlFor="defaultDatabase">{t("configurationPage.defaultDatabase")}</Label><Input id="defaultDatabase" value={config.database.defaultDatabase} onChange={(e) => updateConfig('database', 'defaultDatabase', e.target.value)} placeholder="mysql" /></div>
+                <div className="space-y-2"><Label htmlFor="charset">{t("configurationPage.charset")}</Label><Select value={config.database.charset} onValueChange={(value) => updateConfig('database', 'charset', value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="utf8mb4">utf8mb4</SelectItem><SelectItem value="utf8">utf8</SelectItem><SelectItem value="latin1">latin1</SelectItem></SelectContent></Select></div>
               </div>
               <Separator />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label htmlFor="connectionTimeout">Connection Timeout (ms)</Label><Input id="connectionTimeout" type="number" value={config.database.connectionTimeout} onChange={(e) => updateConfig('database', 'connectionTimeout', parseInt(e.target.value))} /></div>
-                <div className="space-y-2"><Label htmlFor="maxConnections">Max Connections</Label><Input id="maxConnections" type="number" value={config.database.maxConnections} onChange={(e) => updateConfig('database', 'maxConnections', parseInt(e.target.value))} /></div>
+                <div className="space-y-2"><Label htmlFor="connectionTimeout">{t("configurationPage.connectionTimeout")}</Label><Input id="connectionTimeout" type="number" value={config.database.connectionTimeout} onChange={(e) => updateConfig('database', 'connectionTimeout', parseInt(e.target.value))} /></div>
+                <div className="space-y-2"><Label htmlFor="maxConnections">{t("configurationPage.maxConnections")}</Label><Input id="maxConnections" type="number" value={config.database.maxConnections} onChange={(e) => updateConfig('database', 'maxConnections', parseInt(e.target.value))} /></div>
               </div>
               <div className="space-y-4">
-                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Enable SSL</Label><p className="text-sm text-muted-foreground">Use SSL encryption for database connections</p></div><Switch checked={config.database.ssl} onCheckedChange={(checked) => updateConfig('database', 'ssl', checked)} /></div>
-                {config.database.ssl && (<div className="space-y-4 pl-4 border-l-2 border-muted"><div className="space-y-2"><Label htmlFor="sslCertificate">SSL Certificate Path</Label><Input id="sslCertificate" value={config.database.sslCertificate} onChange={(e) => updateConfig('database', 'sslCertificate', e.target.value)} placeholder="/path/to/client-cert.pem" /></div><div className="space-y-2"><Label htmlFor="sslKey">SSL Key Path</Label><Input id="sslKey" value={config.database.sslKey} onChange={(e) => updateConfig('database', 'sslKey', e.target.value)} placeholder="/path/to/client-key.pem" /></div><div className="space-y-2"><Label htmlFor="sslCA">SSL CA Path</Label><Input id="sslCA" value={config.database.sslCA} onChange={(e) => updateConfig('database', 'sslCA', e.target.value)} placeholder="/path/to/ca-cert.pem" /></div></div>)}
+                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.enableSsl")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.enableSslDescription")}</p></div><Switch checked={config.database.ssl} onCheckedChange={(checked) => updateConfig('database', 'ssl', checked)} /></div>
+                {config.database.ssl && (<div className="space-y-4 pl-4 border-l-2 border-muted"><div className="space-y-2"><Label htmlFor="sslCertificate">{t("configurationPage.sslCertificatePath")}</Label><Input id="sslCertificate" value={config.database.sslCertificate} onChange={(e) => updateConfig('database', 'sslCertificate', e.target.value)} placeholder="/path/to/client-cert.pem" /></div><div className="space-y-2"><Label htmlFor="sslKey">{t("configurationPage.sslKeyPath")}</Label><Input id="sslKey" value={config.database.sslKey} onChange={(e) => updateConfig('database', 'sslKey', e.target.value)} placeholder="/path/to/client-key.pem" /></div><div className="space-y-2"><Label htmlFor="sslCA">{t("configurationPage.sslCaPath")}</Label><Input id="sslCA" value={config.database.sslCA} onChange={(e) => updateConfig('database', 'sslCA', e.target.value)} placeholder="/path/to/ca-cert.pem" /></div></div>)}
               </div>
             </CardContent>
           </Card>
@@ -208,15 +205,15 @@ const DatabaseConfigComponent = () => {
 
         <TabsContent value="application" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5" />Application Settings</CardTitle><CardDescription>Configure application behavior and preferences</CardDescription></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5" />{t("configurationPage.applicationSettings")}</CardTitle><CardDescription>{t("configurationPage.applicationSettingsDescription")}</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><Label htmlFor="queryTimeout">Query Timeout (ms)</Label><Input id="queryTimeout" type="number" value={config.application.queryTimeout} onChange={(e) => updateConfig('application', 'queryTimeout', parseInt(e.target.value))} /></div>
-                <div className="space-y-2"><Label htmlFor="maxQueryResults">Max Query Results</Label><Input id="maxQueryResults" type="number" value={config.application.maxQueryResults} onChange={(e) => updateConfig('application', 'maxQueryResults', parseInt(e.target.value))} /></div>
+                <div className="space-y-2"><Label htmlFor="queryTimeout">{t("configurationPage.queryTimeout")}</Label><Input id="queryTimeout" type="number" value={config.application.queryTimeout} onChange={(e) => updateConfig('application', 'queryTimeout', parseInt(e.target.value))} /></div>
+                <div className="space-y-2"><Label htmlFor="maxQueryResults">{t("configurationPage.maxQueryResults")}</Label><Input id="maxQueryResults" type="number" value={config.application.maxQueryResults} onChange={(e) => updateConfig('application', 'maxQueryResults', parseInt(e.target.value))} /></div>
               </div>
               <div className="space-y-4">
-                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Auto Refresh</Label><p className="text-sm text-muted-foreground">Automatically refresh data at intervals</p></div><Switch checked={config.application.autoRefresh} onCheckedChange={(checked) => updateConfig('application', 'autoRefresh', checked)} /></div>
-                {config.application.autoRefresh && (<div className="space-y-2 pl-4 border-l-2 border-muted"><Label htmlFor="refreshInterval">Refresh Interval (ms)</Label><Input id="refreshInterval" type="number" value={config.application.refreshInterval} onChange={(e) => updateConfig('application', 'refreshInterval', parseInt(e.target.value))} /></div>)}
+                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.autoRefresh")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.autoRefreshDescription")}</p></div><Switch checked={config.application.autoRefresh} onCheckedChange={(checked) => updateConfig('application', 'autoRefresh', checked)} /></div>
+                {config.application.autoRefresh && (<div className="space-y-2 pl-4 border-l-2 border-muted"><Label htmlFor="refreshInterval">{t("configurationPage.refreshInterval")}</Label><Input id="refreshInterval" type="number" value={config.application.refreshInterval} onChange={(e) => updateConfig('application', 'refreshInterval', parseInt(e.target.value))} /></div>)}
               </div>
             </CardContent>
           </Card>
@@ -224,12 +221,12 @@ const DatabaseConfigComponent = () => {
 
         <TabsContent value="security" className="space-y-4">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Security Settings</CardTitle><CardDescription>Configure security and safety options</CardDescription></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />{t("configurationPage.securitySettings")}</CardTitle><CardDescription>{t("configurationPage.securitySettingsDescription")}</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-4">
-                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Allow Multiple Statements</Label><p className="text-sm text-muted-foreground">Allow executing multiple SQL statements in one query</p></div><Switch checked={config.security.allowMultipleStatements} onCheckedChange={(checked) => updateConfig('security', 'allowMultipleStatements', checked)} /></div>
-                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Allow Local Infile</Label><p className="text-sm text-muted-foreground">Allow LOAD DATA LOCAL INFILE statements</p></div><Switch checked={config.security.allowLocalInfile} onCheckedChange={(checked) => updateConfig('security', 'allowLocalInfile', checked)} /></div>
-                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>Require SSL</Label><p className="text-sm text-muted-foreground">Force SSL connections only</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSSL', checked)} /></div>
+                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.allowMultipleStatements")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.allowMultipleStatementsDescription")}</p></div><Switch checked={config.security.allowMultipleStatements} onCheckedChange={(checked) => updateConfig('security', 'allowMultipleStatements', checked)} /></div>
+                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.allowLocalInfile")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.allowLocalInfileDescription")}</p></div><Switch checked={config.security.allowLocalInfile} onCheckedChange={(checked) => updateConfig('security', 'allowLocalInfile', checked)} /></div>
+                <div className="flex items-center justify-between"><div className="space-y-0.5"><Label>{t("configurationPage.requireSsl")}</Label><p className="text-sm text-muted-foreground">{t("configurationPage.requireSslDescription")}</p></div><Switch checked={config.security.requireSSL} onCheckedChange={(checked) => updateConfig('security', 'requireSSL', checked)} /></div>
               </div>
             </CardContent>
           </Card>
@@ -238,8 +235,8 @@ const DatabaseConfigComponent = () => {
         <TabsContent value="system" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5" />System Setup</CardTitle>
-              <CardDescription>Create necessary tables for system features like query history and favorites.</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5" />{t("configurationPage.systemSetup")}</CardTitle>
+              <CardDescription>{t("configurationPage.systemSetupDescription")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-4 bg-muted rounded-md">{renderSystemStatus()}</div>
@@ -250,14 +247,14 @@ const DatabaseConfigComponent = () => {
                       {existingTables.includes(table) ? <CheckCircle className="h-5 w-5 text-green-500" /> : <AlertCircle className="h-5 w-5 text-yellow-500" />}
                       <span className="font-mono text-sm">{table}</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">{existingTables.includes(table) ? "Exists" : "Missing"}</span>
+                    <span className="text-sm text-muted-foreground">{existingTables.includes(table) ? t("configurationPage.exists") : t("configurationPage.missing")}</span>
                   </li>
                 ))}
               </ul>
               <div className="pt-4">
                 <Button onClick={initializeSystem} disabled={systemStatus === 'loading' || systemStatus === 'initializing' || systemStatus === 'initialized'}>
                   {systemStatus === 'initializing' && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  {systemStatus === 'initializing' ? 'Initializing...' : 'Initialize System Tables'}
+                  {systemStatus === 'initializing' ? t('configurationPage.initializingSystemTables') : t('configurationPage.initializeSystemTables')}
                 </Button>
               </div>
             </CardContent>

@@ -12,9 +12,10 @@ import { Label } from "@/components/ui/label";
 import { apiService, TableData, TableColumnDefinition } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
+import { useDatabaseCache } from "@/context/DatabaseCacheContext";
 import { v4 as uuidv4 } from 'uuid';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 interface TableStructureProps {
   database: string;
@@ -27,9 +28,10 @@ const DATA_TYPES = [
 ];
 
 const TableStructure = ({ database, table }: TableStructureProps) => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const { hasPrivilege } = useAuth();
-  const { refreshDatabases } = useDatabaseCache(); // Use the hook
+  const { refreshDatabases } = useDatabaseCache();
   const [originalColumns, setOriginalColumns] = useState<TableData['columns']>([]);
   const [editableColumns, setEditableColumns] = useState<TableColumnDefinition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,11 +45,10 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
       setError(null);
       const data = await apiService.getTableData(database, table, { limit: 1, offset: 0 });
       setOriginalColumns(data.columns);
-      // Map TableData['columns'] to TableColumnDefinition for editing
       const mappedColumns: TableColumnDefinition[] = data.columns.map(col => ({
-        id: uuidv4(), // Assign a unique ID for React keys and internal management
+        id: uuidv4(),
         name: col.name,
-        type: col.type.split('(')[0].toUpperCase(), // Extract base type (e.g., VARCHAR(255) -> VARCHAR)
+        type: col.type.split('(')[0].toUpperCase(),
         length: col.type.includes('(') ? parseInt(col.type.split('(')[1].replace(')', '')) : undefined,
         nullable: col.null,
         isPrimaryKey: col.key === 'PRI',
@@ -56,17 +57,17 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
       }));
       setEditableColumns(mappedColumns);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load table structure";
+      const errorMessage = err instanceof Error ? err.message : t("tableStructurePage.failedToLoadStructure");
       setError(errorMessage);
       toast({
-        title: "Error loading table structure",
+        title: t("tableStructurePage.errorLoadingStructure"),
         description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [database, table, toast]);
+  }, [database, table, toast, t]);
 
   useEffect(() => {
     loadTableStructure();
@@ -88,51 +89,43 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
       if (col.id === id) {
         const updatedCol = { ...col, [field]: value };
 
-        // Logic for primary key and auto-increment
         if (field === 'isPrimaryKey' && value) {
-          updatedCol.nullable = false; // PK cannot be nullable
-          // Ensure only one PK
+          updatedCol.nullable = false;
           setEditableColumns(prevCols => prevCols.map(pCol => 
             pCol.id === id ? updatedCol : { ...pCol, isPrimaryKey: false, isAutoIncrement: false }
           ));
           return updatedCol;
         } else if (field === 'isPrimaryKey' && !value) {
-          updatedCol.isAutoIncrement = false; // If not PK, cannot be AI
+          updatedCol.isAutoIncrement = false;
         }
 
         if (field === 'isAutoIncrement' && value) {
-          updatedCol.isPrimaryKey = true; // AI must be PK
-          updatedCol.nullable = false; // AI must be NOT NULL
-          updatedCol.type = "INT"; // Force INT type for AI
-          // Ensure only one AI
+          updatedCol.isPrimaryKey = true;
+          updatedCol.nullable = false;
+          updatedCol.type = "INT";
           setEditableColumns(prevCols => prevCols.map(pCol => 
             pCol.id === id ? updatedCol : { ...pCol, isPrimaryKey: false, isAutoIncrement: false }
           ));
           return updatedCol;
         } else if (field === 'isAutoIncrement' && !value) {
-          // If unsetting auto-increment, keep PK status
         }
 
         if (field === 'type') {
-          // Reset length if type changes to one that doesn't use it
           if (!['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(value)) {
             updatedCol.length = undefined;
           } else if (value === 'VARCHAR' && updatedCol.length === undefined) {
-            updatedCol.length = 255; // Default for VARCHAR
+            updatedCol.length = 255;
           } else if (['INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT'].includes(value) && updatedCol.length === undefined) {
-            updatedCol.length = 11; // Default for INT types
+            updatedCol.length = 11;
           }
         }
         
-        // If nullable is set to false, and it's not a PK, ensure default is not null
         if (field === 'nullable' && value === false && !updatedCol.isPrimaryKey && updatedCol.defaultValue === null) {
-          updatedCol.defaultValue = ''; // Set to empty string or a sensible default
+          updatedCol.defaultValue = '';
         }
-        // If nullable is set to true, and default is empty string, set to null
         if (field === 'nullable' && value === true && updatedCol.defaultValue === '') {
           updatedCol.defaultValue = null;
         }
-
 
         return updatedCol;
       }
@@ -142,7 +135,7 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
 
   const validateColumns = useCallback(() => {
     if (editableColumns.length === 0) {
-      setError("At least one column is required.");
+      setError(t("tableStructurePage.atLeastOneColumnRequired"));
       return false;
     }
 
@@ -151,56 +144,55 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
 
     for (const col of editableColumns) {
       if (!col.name.trim()) {
-        setError("Column names cannot be empty.");
+        setError(t("tableStructurePage.columnNameEmpty"));
         return false;
       }
       if (!/^[a-zA-Z0-9_]+$/.test(col.name.trim())) {
-        setError(`Column name '${col.name}' contains invalid characters. Only alphanumeric and underscores are allowed.`);
+        setError(t("tableStructurePage.columnNameInvalidChars", { columnName: col.name }));
         return false;
       }
       if (columnNames.has(col.name.trim().toLowerCase())) {
-        setError(`Duplicate column name: '${col.name}'.`);
+        setError(t("tableStructurePage.duplicateColumnName", { columnName: col.name }));
         return false;
       }
       columnNames.add(col.name.trim().toLowerCase());
 
       if (col.isPrimaryKey) {
         if (hasPrimaryKey) {
-          setError("Only one primary key is allowed per table.");
+          setError(t("tableStructurePage.onlyOnePrimaryKey"));
           return false;
         }
         hasPrimaryKey = true;
       }
 
       if (col.isAutoIncrement && col.type !== 'INT' && !col.type.includes('INT')) {
-        setError(`Auto-increment column '${col.name}' must be an integer type.`);
+        setError(t("tableStructurePage.aiColumnMustBeInt", { columnName: col.name }));
         return false;
       }
       if (col.isAutoIncrement && !col.isPrimaryKey) {
-        setError(`Auto-increment column '${col.name}' must also be a primary key.`);
+        setError(t("tableStructurePage.aiColumnMustBePk", { columnName: col.name }));
         return false;
       }
       if (['VARCHAR', 'CHAR', 'DECIMAL'].includes(col.type) && (col.length === undefined || col.length <= 0)) {
-        setError(`Length is required and must be greater than 0 for ${col.type} column '${col.name}'.`);
+        setError(t("tableStructurePage.lengthRequired", { type: col.type, columnName: col.name }));
         return false;
       }
       if (!col.nullable && (col.defaultValue === null || col.defaultValue === '')) {
-        // If not nullable and no default value, it's an issue unless it's an auto-increment PK
         if (!col.isAutoIncrement) {
-          setError(`Non-nullable column '${col.name}' must have a default value.`);
+          setError(t("tableStructurePage.nonNullableDefaultValue", { columnName: col.name }));
           return false;
         }
       }
     }
 
     if (!hasPrimaryKey) {
-      setError("A table must have at least one primary key.");
+      setError(t("tableStructurePage.tableMustHavePk"));
       return false;
     }
 
     setError(null);
     return true;
-  }, [editableColumns]);
+  }, [editableColumns, t]);
 
   const handleSaveStructure = async () => {
     if (!validateColumns()) {
@@ -209,26 +201,24 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
 
     setIsSaving(true);
     try {
-      // Here we would send editableColumns to the backend
-      // For now, it's a placeholder API call
       const result = await apiService.updateTableStructure(database, table, editableColumns);
       if (result.success) {
         toast({
-          title: "Table Structure Updated",
-          description: `Structure for table '${table}' updated successfully.`,
+          title: t("tableStructurePage.tableStructureUpdated"),
+          description: t("tableStructurePage.tableStructureUpdatedSuccessfully", { tableName: table }),
         });
         setIsEditing(false);
-        refreshDatabases({ databaseName: database }); // Invalidate cache for this database
-        loadTableStructure(); // Reload original columns
+        refreshDatabases({ databaseName: database });
+        loadTableStructure();
       } else {
-        throw new Error(result.message || "Failed to update table structure.");
+        throw new Error(result.message || t("tableStructurePage.failedToUpdateStructure"));
       }
     } catch (err) {
       console.error("Error updating table structure:", err);
-      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+      setError(err instanceof Error ? err.message : t("tableStructurePage.unknownError"));
       toast({
-        title: "Error Updating Structure",
-        description: err instanceof Error ? err.message : "Failed to update table structure.",
+        title: t("tableStructurePage.errorUpdatingStructure"),
+        description: err instanceof Error ? err.message : t("tableStructurePage.failedToUpdateStructure"),
         variant: "destructive",
       });
     } finally {
@@ -238,7 +228,6 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    // Reset editable columns to original state
     const mappedColumns: TableColumnDefinition[] = originalColumns.map(col => ({
       id: uuidv4(),
       name: col.name,
@@ -270,20 +259,20 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading table structure for "{table}"...</p>
+          <p className="text-muted-foreground">{t("tableStructurePage.loadingStructure", { tableName: table })}</p>
         </div>
       </div>
     );
   }
 
-  if (error && !isEditing) { // Only show global error if not in editing mode
+  if (error && !isEditing) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
           <p className="text-red-500 mb-4">{error}</p>
           <Button onClick={loadTableStructure} variant="outline">
-            Retry
+            {t("tableStructurePage.retry")}
           </Button>
         </div>
       </div>
@@ -291,10 +280,10 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
   }
 
   const columnsToDisplay = isEditing ? editableColumns : originalColumns.map(col => ({
-    id: uuidv4(), // Temporary ID for display
+    id: uuidv4(),
     name: col.name,
     type: col.type,
-    length: undefined, // Not directly available in originalColumns type
+    length: undefined,
     nullable: col.null,
     isPrimaryKey: col.key === 'PRI',
     isAutoIncrement: col.extra.includes('auto_increment'),
@@ -305,14 +294,14 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
     <div className="p-6 space-y-6 h-full overflow-y-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Table Structure: {table}</h1>
-          <p className="text-muted-foreground">View and manage the column definitions for "{table}" in "{database}".</p>
+          <h1 className="text-2xl font-bold">{t("tableStructurePage.title", { tableName: table })}</h1>
+          <p className="text-muted-foreground">{t("tableStructurePage.subtitle", { tableName: table, databaseName: database })}</p>
         </div>
         <div className="flex gap-2">
           {!isEditing && (
             <Button variant="outline" size="sm" onClick={loadTableStructure}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+              {t("tableStructurePage.refresh")}
             </Button>
           )}
           {hasPrivilege("ALTER") && (
@@ -320,17 +309,17 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
               <>
                 <Button variant="outline" size="sm" onClick={handleCancelEdit} disabled={isSaving}>
                   <XCircle className="h-4 w-4 mr-2" />
-                  Cancel
+                  {t("tableStructurePage.cancel")}
                 </Button>
                 <Button size="sm" onClick={handleSaveStructure} disabled={isSaving}>
                   {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save Changes
+                  {t("tableStructurePage.saveChanges")}
                 </Button>
               </>
             ) : (
               <Button size="sm" onClick={() => setIsEditing(true)}>
                 <Edit className="h-4 w-4 mr-2" />
-                Edit Structure
+                {t("tableStructurePage.editStructure")}
               </Button>
             )
           )}
@@ -341,15 +330,15 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TableIcon className="h-5 w-5" />
-            Columns ({columnsToDisplay.length})
+            {t("tableStructurePage.columns")} ({columnsToDisplay.length})
           </CardTitle>
-          <CardDescription>Detailed definitions of each column in the table.</CardDescription>
+          <CardDescription>{t("tableStructurePage.columnsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {isEditing && (
             <div className="mb-4">
               <Button variant="outline" size="sm" onClick={handleAddColumn}>
-                <Plus className="h-4 w-4 mr-2" /> Add Column
+                <Plus className="h-4 w-4 mr-2" /> {t("tableStructurePage.addColumn")}
               </Button>
             </div>
           )}
@@ -358,15 +347,15 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {isEditing && <TableHead className="w-10"></TableHead>} {/* Drag handle column */}
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Length</TableHead>
-                    <TableHead>Null</TableHead>
-                    <TableHead>Key</TableHead>
-                    <TableHead>Default</TableHead>
-                    <TableHead>Extra</TableHead>
-                    {isEditing && <TableHead className="text-right">Actions</TableHead>}
+                    {isEditing && <TableHead className="w-10"></TableHead>}
+                    <TableHead>{t("tableStructurePage.name")}</TableHead>
+                    <TableHead>{t("tableStructurePage.type")}</TableHead>
+                    <TableHead>{t("tableStructurePage.length")}</TableHead>
+                    <TableHead>{t("tableStructurePage.null")}</TableHead>
+                    <TableHead>{t("tableStructurePage.key")}</TableHead>
+                    <TableHead>{t("tableStructurePage.default")}</TableHead>
+                    <TableHead>{t("tableStructurePage.extra")}</TableHead>
+                    {isEditing && <TableHead className="text-right">{t("tableStructurePage.actions")}</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <Droppable droppableId="columns">
@@ -424,7 +413,7 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
                                     className="h-8 text-sm w-20"
                                   />
                                 ) : (
-                                  col.length || <span className="italic text-muted-foreground">N/A</span>
+                                  col.length || <span className="italic text-muted-foreground">{t("tableStructurePage.na")}</span>
                                 )}
                               </TableCell>
                               <TableCell>
@@ -435,7 +424,7 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
                                     disabled={col.isPrimaryKey}
                                   />
                                 ) : (
-                                  col.nullable ? 'YES' : 'NO'
+                                  col.nullable ? t("userPrivilegesDialog.yes") : t("userPrivilegesDialog.no")
                                 )}
                               </TableCell>
                               <TableCell>
@@ -446,22 +435,22 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
                                       onCheckedChange={(checked) => handleColumnChange(col.id, "isPrimaryKey", !!checked)}
                                     />
                                   ) : (
-                                    col.isPrimaryKey ? 'PRI' : ''
+                                    col.isPrimaryKey ? t("tableStructurePage.pk") : ''
                                   )}
-                                  {isEditing && <Label className="text-xs">PK</Label>}
+                                  {isEditing && <Label className="text-xs">{t("tableStructurePage.pk")}</Label>}
                                 </div>
                               </TableCell>
                               <TableCell>
                                 {isEditing ? (
                                   <Input
-                                    value={col.defaultValue === null ? 'NULL' : String(col.defaultValue || '')}
-                                    onChange={(e) => handleColumnChange(col.id, "defaultValue", e.target.value === 'NULL' ? null : e.target.value)}
+                                    value={col.defaultValue === null ? t("tableStructurePage.null") : String(col.defaultValue || '')}
+                                    onChange={(e) => handleColumnChange(col.id, "defaultValue", e.target.value === t("tableStructurePage.null") ? null : e.target.value)}
                                     placeholder="NULL / 'value' / 0"
                                     className="h-8 text-sm"
                                     disabled={col.isAutoIncrement}
                                   />
                                 ) : (
-                                  col.defaultValue === null ? <span className="italic text-muted-foreground">NULL</span> : String(col.defaultValue)
+                                  col.defaultValue === null ? <span className="italic text-muted-foreground">{t("tableStructurePage.null")}</span> : String(col.defaultValue)
                                 )}
                               </TableCell>
                               <TableCell>
@@ -473,9 +462,9 @@ const TableStructure = ({ database, table }: TableStructureProps) => {
                                       disabled={!col.isPrimaryKey || !['INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT'].includes(col.type)}
                                     />
                                   ) : (
-                                    col.isAutoIncrement ? 'auto_increment' : ''
+                                    col.isAutoIncrement ? t("tableStructurePage.ai") : ''
                                   )}
-                                  {isEditing && <Label className="text-xs">AI</Label>}
+                                  {isEditing && <Label className="text-xs">{t("tableStructurePage.ai")}</Label>}
                                 </div>
                               </TableCell>
                               {isEditing && (

@@ -13,7 +13,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useDatabaseCache } from "@/context/DatabaseCacheContext";
 import CreateTableDialog from "@/components/CreateTableDialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useTabs } from "@/context/TabContext"; // Import useTabs
+import { useTabs } from "@/context/TabContext";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 interface DatabaseTablesListProps {
   database: string;
@@ -21,11 +22,12 @@ interface DatabaseTablesListProps {
 }
 
 const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesListProps) => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const navigate = useNavigate();
   const { hasPrivilege } = useAuth();
   const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache();
-  const { addTab, removeTab, activeTabId } = useTabs(); // Use useTabs hook
+  const { addTab, removeTab, activeTabId } = useTabs();
 
   const [allTables, setAllTables] = useState<TableInfo[]>([]);
   const [allViews, setAllViews] = useState<TableInfo[]>([]);
@@ -34,14 +36,12 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   const [deleteTableConfirm, setDeleteTableConfirm] = useState<string | null>(null);
   const [truncateTableConfirm, setTruncateTableConfirm] = useState<string | null>(null);
 
-  // This component now gets its data from the cache context
   useEffect(() => {
     const dbInfo = databases.find(db => db.name === database);
     if (dbInfo) {
       setAllTables(dbInfo.tables);
       setAllViews(dbInfo.views);
     } else {
-      // If database not found in cache, it might be loading or an error
       setAllTables([]);
       setAllViews([]);
     }
@@ -72,26 +72,26 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   const handleOpenSqlEditor = (tableName: string) => {
     const query = `SELECT * FROM \`${database}\`.\`${tableName}\`;`;
     addTab({
-      title: "SQL Editor",
+      title: t("header.sqlEditorTitle"),
       type: "sql-editor",
       closable: true,
       sqlQueryContent: query,
     });
-    removeTab(activeTabId); // Close the current tab
+    removeTab(activeTabId);
   };
 
   const handleDeleteTable = async (tableName: string) => {
     try {
       await apiService.deleteTable(database, tableName);
       toast({
-        title: "Table Deleted",
-        description: `Table '${tableName}' deleted successfully.`,
+        title: t("databaseTablesList.tableDeleted"),
+        description: t("databaseTablesList.tableDeletedSuccessfully", { tableName: tableName }),
       });
-      refreshDatabases({ databaseName: database }); // Invalidate cache for this database
+      refreshDatabases({ databaseName: database });
     } catch (err) {
       toast({
-        title: "Error Deleting Table",
-        description: err instanceof Error ? err.message : "Failed to delete table.",
+        title: t("databaseTablesList.errorDeletingTable"),
+        description: err instanceof Error ? err.message : t("databaseTablesList.failedToDeleteTable"),
         variant: "destructive",
       });
     } finally {
@@ -103,14 +103,14 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
     try {
       await apiService.truncateTable(database, tableName);
       toast({
-        title: "Table Truncated",
-        description: `All data from table '${tableName}' has been removed.`,
+        title: t("databaseTablesList.tableTruncated"),
+        description: t("databaseTablesList.tableTruncatedSuccessfully", { tableName: tableName }),
       });
-      refreshDatabases({ databaseName: database }); // Invalidate cache for this database
+      refreshDatabases({ databaseName: database });
     } catch (err) {
       toast({
-        title: "Error Truncating Table",
-        description: err instanceof Error ? err.message : "Failed to truncate table.",
+        title: t("databaseTablesList.errorTruncatingTable"),
+        description: err instanceof Error ? err.message : t("databaseTablesList.failedToTruncateTable"),
         variant: "destructive",
       });
     } finally {
@@ -120,39 +120,39 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
 
   const getTitle = () => {
     switch (filterType) {
-      case 'tables': return `Tables: ${database}`;
-      case 'views': return `Views: ${database}`;
-      default: return `Tables & Views: ${database}`;
+      case 'tables': return t("databaseTablesList.tablesTitle", { databaseName: database });
+      case 'views': return t("databaseTablesList.viewsTitle", { databaseName: database });
+      default: return t("databaseTablesList.tablesAndViewsTitle", { databaseName: database });
     }
   };
 
   const getDescription = () => {
     switch (filterType) {
-      case 'tables': return `Browse all tables in the "${database}" database.`;
-      case 'views': return `Browse all views in the "${database}" database.`;
-      default: return `Browse all tables and views in the "${database}" database.`
+      case 'tables': return t("databaseTablesList.tablesDescription", { databaseName: database });
+      case 'views': return t("databaseTablesList.viewsDescription", { databaseName: database });
+      default: return t("databaseTablesList.tablesAndViewsDescription", { databaseName: database });
     }
   };
 
-  if (isLoadingDatabases) { // Use isLoadingDatabases from context
+  if (isLoadingDatabases) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading tables and views for "{database}"...</p>
+          <p className="text-muted-foreground">{t("databaseTablesList.loadingTablesAndViews", { databaseName: database })}</p>
         </div>
       </div>
     );
   }
 
-  if (databaseError) { // Use databaseError from context
+  if (databaseError) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
           <p className="text-red-500 mb-4">{databaseError}</p>
           <Button onClick={() => refreshDatabases({ force: true })} variant="outline">
-            Retry
+            {t("databaseTablesList.retry")}
           </Button>
         </div>
       </div>
@@ -171,12 +171,12 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => refreshDatabases({ databaseName: database, force: true })}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+            {t("databaseTablesList.refresh")}
           </Button>
           {hasPrivilege("CREATE") && filterType !== 'views' && (
             <Button size="sm" onClick={() => setIsCreateTableDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Create Table
+              {t("databaseTablesList.createTable")}
             </Button>
           )}
         </div>
@@ -184,14 +184,14 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
 
       <Card>
         <CardHeader>
-          <CardTitle>Search & Filter</CardTitle>
-          <CardDescription>Search for tables or views by name.</CardDescription>
+          <CardTitle>{t("databaseTablesList.searchFilter")}</CardTitle>
+          <CardDescription>{t("databaseTablesList.searchFilterDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search tables or views..."
+              placeholder={t("databaseTablesList.searchPlaceholder")}
               className="pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -214,7 +214,10 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         <div className="text-center py-8">
           <Table className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <p className="text-muted-foreground">
-            {searchTerm ? 'No items found matching your search.' : `No ${filterType === 'tables' ? 'tables' : filterType === 'views' ? 'views' : 'tables or views'} in this database.`}
+            {searchTerm ? t("databaseTablesList.noItemsFound") : 
+              filterType === 'tables' ? t("databaseTablesList.noTablesInDb") : 
+              filterType === 'views' ? t("databaseTablesList.noViewsInDb") : 
+              t("databaseTablesList.noTablesOrViewsInDb")}
           </p>
         </div>
       )}
@@ -224,29 +227,29 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Table className="h-5 w-5" />
-              {filterType === 'tables' ? 'Tables' : filterType === 'views' ? 'Views' : 'Items'} ({filteredItems.length})
+              {filterType === 'tables' ? t("databaseTablesList.tables") : filterType === 'views' ? t("databaseTablesList.views") : t("databaseTablesList.items")} ({filteredItems.length})
             </CardTitle>
-            <CardDescription>List of {filterType === 'tables' ? 'tables' : filterType === 'views' ? 'views' : 'items'} in the "{database}" database.</CardDescription>
+            <CardDescription>{t("databaseTablesList.listOfItems", { type: filterType === 'tables' ? t("databaseTablesList.tables") : filterType === 'views' ? t("databaseTablesList.views") : t("databaseTablesList.items"), databaseName: database })}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-hidden">
               <ShadcnTable>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Rows</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Engine</TableHead>
-                    <TableHead>Collation</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("databaseTablesList.name")}</TableHead>
+                    <TableHead>{t("databaseTablesList.type")}</TableHead>
+                    <TableHead>{t("databaseTablesList.rows")}</TableHead>
+                    <TableHead>{t("databaseTablesList.size")}</TableHead>
+                    <TableHead>{t("databaseTablesList.engine")}</TableHead>
+                    <TableHead>{t("databaseTablesList.collation")}</TableHead>
+                    <TableHead className="text-right">{t("databaseTablesList.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredItems.map((item) => (
                     <TableRow key={item.name}>
                       <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{allTables.some(t => t.name === item.name) ? 'Table' : 'View'}</TableCell>
+                      <TableCell>{allTables.some(t => t.name === item.name) ? t("databaseTablesList.table") : t("databaseTablesList.view")}</TableCell>
                       <TableCell>{item.rows.toLocaleString()}</TableCell>
                       <TableCell>{item.size}</TableCell>
                       <TableCell>{item.engine}</TableCell>
@@ -255,26 +258,26 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => handleOpenTable(item.name)}>
                             <Eye className="h-4 w-4 mr-2" />
-                            Browse
+                            {t("databaseTablesList.browse")}
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleOpenTableStructure(item.name)}>
                             <LayoutPanelTop className="h-4 w-4 mr-2" />
-                            Structure
+                            {t("databaseTablesList.structure")}
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleOpenSqlEditor(item.name)}>
                             <Play className="h-4 w-4 mr-2" />
-                            SQL Editor
+                            {t("databaseTablesList.sqlEditor")}
                           </Button>
                           {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
                             <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="text-orange-500 hover:text-orange-600">
                               <Eraser className="h-4 w-4 mr-2" />
-                              Empty
+                              {t("databaseTablesList.empty")}
                             </Button>
                           )}
                           {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && (
                             <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="text-red-500 hover:bg-red-600">
                               <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
+                              {t("databaseTablesList.delete")}
                             </Button>
                           )}
                         </div>
@@ -292,7 +295,6 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         open={isCreateTableDialogOpen}
         onOpenChange={setIsCreateTableDialogOpen}
         database={database}
-        // onTableCreated prop is no longer needed here, as CreateTableDialog directly calls refreshDatabases
       />
 
       {/* Delete Table Confirmation Dialog */}
@@ -300,19 +302,16 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         <AlertDialog open={!!deleteTableConfirm} onOpenChange={setDeleteTableConfirm}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogTitle>{t("databaseTablesList.confirmDeleteTitle")}</AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete the table{" "}
-                <span className="font-bold text-foreground">"{deleteTableConfirm}"</span>{" "}
-                and all its data from the database{" "}
-                <span className="font-bold text-foreground">"{database}"</span>.
+                {t("databaseTablesList.confirmDeleteDescription", { tableName: deleteTableConfirm, databaseName: database })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t("databaseTablesList.cancel")}</AlertDialogCancel>
               <AlertDialogAction onClick={() => handleDeleteTable(deleteTableConfirm)} className="bg-red-500 hover:bg-red-600">
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete Table
+                {t("databaseTablesList.deleteTable")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -324,20 +323,16 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
         <AlertDialog open={!!truncateTableConfirm} onOpenChange={setTruncateTableConfirm}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogTitle>{t("databaseTablesList.confirmTruncateTitle")}</AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. This will permanently remove ALL rows from the table{" "}
-                <span className="font-bold text-foreground">"{truncateTableConfirm}"</span>{" "}
-                in the database{" "}
-                <span className="font-bold text-foreground">"{database}"</span>.
-                The table structure will remain.
+                {t("databaseTablesList.confirmTruncateDescription", { tableName: truncateTableConfirm, databaseName: database })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogCancel>{t("databaseTablesList.cancel")}</AlertDialogCancel>
               <AlertDialogAction onClick={() => handleTruncateTable(truncateTableConfirm)} className="bg-orange-500 hover:bg-orange-600">
                 <Eraser className="h-4 w-4 mr-2" />
-                Empty Table
+                {t("databaseTablesList.emptyTable")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

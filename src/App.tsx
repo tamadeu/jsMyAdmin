@@ -8,8 +8,10 @@ import Layout from "./components/layout/Layout";
 import LoginPage from "./pages/Login";
 import { TabProvider } from "./context/TabContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { DatabaseCacheProvider } from "./context/DatabaseCacheContext"; // New import
+import { DatabaseCacheProvider } from "./context/DatabaseCacheContext";
 import { Loader2 } from "lucide-react";
+import { I18nextProvider } from "react-i18next"; // Import I18nextProvider
+import i18n from "./i18n"; // Import i18n instance
 
 const queryClient = new QueryClient();
 
@@ -45,11 +47,13 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="dark" storageKey="phpmyadmin-theme">
       <AuthProvider>
-        <DatabaseCacheProvider> {/* Wrap with DatabaseCacheProvider */}
+        <DatabaseCacheProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            <AppContent />
+            <I18nextProvider i18n={i18n}> {/* Wrap AppContent with I18nextProvider */}
+              <AppContent />
+            </I18nextProvider>
           </TooltipProvider>
         </DatabaseCacheProvider>
       </AuthProvider>

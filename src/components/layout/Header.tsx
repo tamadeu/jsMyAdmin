@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wifi, Bell, User, LogOut, Keyboard } from "lucide-react";
+import { Wifi, Bell, User, LogOut, Keyboard, Globe } from "lucide-react"; // Added Globe icon
 import { Badge } from "@/components/ui/badge";
 import { useTabs } from "@/context/TabContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,58 +13,65 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button"; // Certifique-se de que Button está importado
-import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog"; // Importar o novo componente
+import { Button } from "@/components/ui/button";
+import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog";
+import { useTranslation } from "react-i18next"; // Import useTranslation
+import i18n from "@/i18n"; // Import i18n instance
 
 const Header = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { activeTabId, getTabById } = useTabs();
   const { logout } = useAuth();
   const activeTab = getTabById(activeTabId);
   const isMobile = useIsMobile();
-  const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false); // Estado para o modal de atalhos
+  const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false);
 
-  let headerTitle = "jsMyAdmin";
+  let headerTitle = t("sidebar.title"); // Default title from translation
   let headerSubtitle: string | undefined = undefined;
 
   if (activeTab) {
     switch (activeTab.type) {
       case "dashboard":
-        headerTitle = "Database Dashboard";
-        headerSubtitle = "Overview of your MySQL databases and recent activity";
+        headerTitle = t("header.dashboardTitle");
+        headerSubtitle = t("header.dashboardSubtitle");
         break;
       case "sql-editor":
-        headerTitle = "SQL Editor";
-        headerSubtitle = "Write and execute SQL queries";
+        headerTitle = t("header.sqlEditorTitle");
+        headerSubtitle = t("header.sqlEditorSubtitle");
         break;
       case "config":
-        headerTitle = "Database Configuration";
-        headerSubtitle = "Configure your MySQL database connection settings";
+        headerTitle = t("header.configTitle");
+        headerSubtitle = t("header.configSubtitle");
         break;
       case "table":
-        headerTitle = `Table: ${activeTab.params?.table}`;
-        headerSubtitle = `Databases / ${activeTab.params?.database} / ${activeTab.params?.table}`;
+        headerTitle = t("header.tableTitle", { tableName: activeTab.params?.table });
+        headerSubtitle = t("header.tableSubtitle", { databaseName: activeTab.params?.database, tableName: activeTab.params?.table });
         break;
       case "query-result":
-        headerTitle = activeTab.title;
-        headerSubtitle = "Results from your SQL query";
+        headerTitle = t("header.queryResultTitle", { time: new Date().toLocaleTimeString() });
+        headerSubtitle = t("header.queryResultSubtitle");
         break;
       case "users":
-        headerTitle = "User Accounts";
-        headerSubtitle = "Manage MySQL user accounts and privileges";
+        headerTitle = t("header.usersTitle");
+        headerSubtitle = t("header.usersSubtitle");
         break;
       case "database-tables-list":
-        headerTitle = activeTab.title; // e.g., "Tables: mydb"
-        headerSubtitle = `Databases / ${activeTab.params?.database}`;
+        headerTitle = activeTab.title; // This title is already translated/dynamic
+        headerSubtitle = t("header.databaseTablesListSubtitle", { databaseName: activeTab.params?.database });
         break;
       case "table-structure":
-        headerTitle = `Structure: ${activeTab.params?.table}`;
-        headerSubtitle = `Databases / ${activeTab.params?.database} / ${activeTab.params?.table} Structure`;
+        headerTitle = t("header.tableStructureTitle", { tableName: activeTab.params?.table });
+        headerSubtitle = t("header.tableStructureSubtitle", { databaseName: activeTab.params?.database, tableName: activeTab.params?.table });
         break;
       default:
         headerTitle = activeTab.title;
         break;
     }
   }
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+  };
 
   return (
     <header className="border-b border-border px-6 py-4 bg-card">
@@ -85,18 +92,34 @@ const Header = () => {
             variant="ghost" 
             size="icon" 
             className="h-8 w-8 px-0"
-            onClick={() => setIsShortcutsDialogOpen(true)} // Botão para abrir o modal
-            title="Atalhos de Teclado"
+            onClick={() => setIsShortcutsDialogOpen(true)}
+            title={t("header.keyboardShortcuts")}
           >
             <Keyboard className="h-4 w-4" />
-            <span className="sr-only">Atalhos de Teclado</span>
+            <span className="sr-only">{t("header.keyboardShortcuts")}</span>
           </Button>
           <div className="flex items-center gap-2">
             <Wifi className="h-4 w-4 text-green-500" />
             <Badge variant="outline" className="text-green-500 border-green-500">
-              Connected
+              {t("header.connected")}
             </Badge>
           </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 px-0">
+                <Globe className="h-[1.2rem] w-[1.2rem]" />
+                <span className="sr-only">Change language</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => changeLanguage('en')}>
+                <span>English</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => changeLanguage('pt-BR')}>
+                <span>Português (BR)</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Bell className="h-4 w-4 text-muted-foreground" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -108,7 +131,7 @@ const Header = () => {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={logout}>
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
+                <span>{t("header.logout")}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -12,16 +12,18 @@ import { apiService, DatabaseTablesResponse } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs, AppTab } from "@/context/TabContext";
 import { useAuth } from "@/context/AuthContext";
-import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
+import { useDatabaseCache } from "@/context/DatabaseCacheContext";
 import CreateDatabaseDialog from "@/components/CreateDatabaseDialog";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 const Sidebar = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   const { tabs, activeTabId, addTab, setActiveTab, getTabById } = useTabs();
   const { hasPrivilege } = useAuth();
-  const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache(); // Use the hook
+  const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedDatabases, setExpandedDatabases] = useState<string[]>([]);
@@ -103,7 +105,7 @@ const Sidebar = () => {
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Database className="h-6 w-6" />
-          <h2 className="text-lg font-semibold">jsMyAdmin</h2>
+          <h2 className="text-lg font-semibold">{t("sidebar.title")}</h2>
         </div>
       </div>
 
@@ -112,7 +114,7 @@ const Sidebar = () => {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Search databases..." 
+            placeholder={t("sidebar.searchPlaceholder")}
             className="pl-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -129,7 +131,7 @@ const Sidebar = () => {
             onClick={() => navigate('/')}
           >
             <Database className="h-4 w-4 mr-2" />
-            Dashboard
+            {t("sidebar.dashboard")}
           </Button>
           <Button 
             variant={isSidebarItemActive("sql-editor") ? "secondary" : "ghost"} 
@@ -137,7 +139,7 @@ const Sidebar = () => {
             onClick={() => navigate('/sql')}
           >
             <Play className="h-4 w-4 mr-2" />
-            SQL Editor
+            {t("sidebar.sqlEditor")}
           </Button>
           <Button 
             variant={isSidebarItemActive("config") ? "secondary" : "ghost"} 
@@ -145,7 +147,7 @@ const Sidebar = () => {
             onClick={() => navigate('/configuration')}
           >
             <Settings className="h-4 w-4 mr-2" />
-            Configuration
+            {t("sidebar.configuration")}
           </Button>
           {hasPrivilege("CREATE USER") && (
             <Button
@@ -154,7 +156,7 @@ const Sidebar = () => {
               onClick={() => navigate('/users')}
             >
               <Users className="h-4 w-4 mr-2" />
-              Users
+              {t("sidebar.users")}
             </Button>
           )}
           {hasPrivilege("CREATE") && (
@@ -164,7 +166,7 @@ const Sidebar = () => {
               onClick={() => setIsCreateDbDialogOpen(true)}
             >
               <Plus className="h-4 w-4 mr-2" />
-              Create Database
+              {t("sidebar.createDatabase")}
             </Button>
           )}
         </div>
@@ -174,11 +176,11 @@ const Sidebar = () => {
       <ScrollArea className="flex-1">
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm text-muted-foreground">Databases</div>
+            <div className="text-sm text-muted-foreground">{t("sidebar.databases")}</div>
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => refreshDatabases({ force: true })} // Force refresh
+              onClick={() => refreshDatabases({ force: true })}
               disabled={isLoadingDatabases}
               className="h-6 w-6 p-0"
             >
@@ -191,7 +193,7 @@ const Sidebar = () => {
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Loading databases...</p>
+                <p className="text-sm text-muted-foreground">{t("sidebar.loadingDatabases")}</p>
               </div>
             </div>
           )}
@@ -201,14 +203,14 @@ const Sidebar = () => {
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <AlertCircle className="h-6 w-6 mx-auto mb-2 text-red-500" />
-                <p className="text-sm text-red-500 mb-2">Failed to load databases</p>
+                <p className="text-sm text-red-500 mb-2">{t("sidebar.failedToLoadDatabases")}</p>
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => refreshDatabases({ force: true })} // Force refresh
+                  onClick={() => refreshDatabases({ force: true })}
                   className="text-xs"
                 >
-                  Retry
+                  {t("sidebar.retry")}
                 </Button>
               </div>
             </div>
@@ -241,8 +243,8 @@ const Sidebar = () => {
                       <div className="flex-1 text-left">
                         <div className="text-sm font-medium">{db.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {db.totalTables} {db.totalTables === 1 ? 'table' : 'tables'}
-                          {db.totalViews > 0 && `, ${db.totalViews} ${db.totalViews === 1 ? 'view' : 'views'}`}
+                          {db.totalTables} {db.totalTables === 1 ? t("sidebar.tables") : t("sidebar.tables")}
+                          {db.totalViews > 0 && `, ${db.totalViews} ${db.totalViews === 1 ? t("sidebar.views") : t("sidebar.views")}`}
                         </div>
                       </div>
                     </div>
@@ -271,7 +273,7 @@ const Sidebar = () => {
                             >
                               <div className="flex items-center gap-2">
                                 <Table className="h-3 w-3" />
-                                <span className="text-foreground">Tables ({db.totalTables})</span>
+                                <span className="text-foreground">{t("sidebar.tables")} ({db.totalTables})</span>
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pb-1">
@@ -313,7 +315,7 @@ const Sidebar = () => {
                             >
                               <div className="flex items-center gap-2">
                                 <Eye className="h-3 w-3" />
-                                <span className="text-foreground">Views ({db.totalViews})</span>
+                                <span className="text-foreground">{t("sidebar.views")} ({db.totalViews})</span>
                               </div>
                             </AccordionTrigger>
                             <AccordionContent className="pb-1">
@@ -349,7 +351,7 @@ const Sidebar = () => {
           {/* No databases found */}
           {!isLoadingDatabases && !databaseError && filteredDatabases.length === 0 && databases.length > 0 && (
             <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground">No databases match your search</p>
+              <p className="text-sm text-muted-foreground">{t("sidebar.noDatabasesMatchSearch")}</p>
             </div>
           )}
         </div>
@@ -360,7 +362,7 @@ const Sidebar = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Settings className="h-4 w-4" />
-            <span>v5.2.1</span>
+            <span>{t("sidebar.version")}</span>
           </div>
           <ThemeToggle />
         </div>
@@ -369,7 +371,7 @@ const Sidebar = () => {
       <CreateDatabaseDialog
         open={isCreateDbDialogOpen}
         onOpenChange={setIsCreateDbDialogOpen}
-        onDatabaseCreated={() => refreshDatabases({ force: true })} // Invalidate cache on new DB
+        onDatabaseCreated={() => refreshDatabases({ force: true })}
       />
     </div>
   );

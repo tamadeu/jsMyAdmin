@@ -12,9 +12,11 @@ import DatabaseBrowser from "@/pages/DatabaseBrowser";
 import QueryResultTable from "@/components/QueryResultTable";
 import UsersPage from "@/pages/Users";
 import DatabaseTablesList from "@/components/DatabaseTablesList";
-import TableStructure from "@/pages/TableStructure"; // Import the new component
+import TableStructure from "@/pages/TableStructure";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 const TabsDisplay = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { tabs, activeTabId, setActiveTab, removeTab, getTabById } = useTabs();
 
   const renderTabContent = (tab: AppTab) => {
@@ -29,10 +31,8 @@ const TabsDisplay = () => {
         if (tab.params?.database && tab.params?.table) {
           return <DatabaseBrowser database={tab.params.database} table={tab.params.table} />;
         }
-        return <div className="p-4 text-red-500">Error: Missing database or table parameters.</div>;
+        return <div className="p-4 text-red-500">{t("tabsDisplay.errorMissingDbOrTable")}</div>;
       case 'query-result':
-        // Pass the originalQuery and database context to QueryResultTable
-        // QueryResultTable will handle re-executing if data is missing
         return <QueryResultTable queryResult={tab.queryResult || { success: false, originalQuery: tab.originalQuery, executionTime: 0 }} database={tab.params?.database} />;
       case 'users':
         return <UsersPage />;
@@ -40,14 +40,14 @@ const TabsDisplay = () => {
         if (tab.params?.database) {
           return <DatabaseTablesList database={tab.params.database} filterType={tab.filterType} />;
         }
-        return <div className="p-4 text-red-500">Error: Missing database parameter for tables list.</div>;
-      case 'table-structure': // New case for table structure
+        return <div className="p-4 text-red-500">{t("tabsDisplay.errorMissingDbForTablesList")}</div>;
+      case 'table-structure':
         if (tab.params?.database && tab.params?.table) {
           return <TableStructure database={tab.params.database} table={tab.params.table} />;
         }
-        return <div className="p-4 text-red-500">Error: Missing database or table parameters for table structure.</div>;
+        return <div className="p-4 text-red-500">{t("tabsDisplay.errorMissingDbOrTableForStructure")}</div>;
       default:
-        return <div className="p-4 text-muted-foreground">Unknown tab type.</div>;
+        return <div className="p-4 text-muted-foreground">{t("tabsDisplay.unknownTabType")}</div>;
     }
   };
 
@@ -57,7 +57,7 @@ const TabsDisplay = () => {
       if (currentIndex === -1) return;
 
       if (event.key === 'X' || event.key === 'x') {
-        event.preventDefault(); // Prevent default browser behavior (e.g., selecting text)
+        event.preventDefault();
         const activeTab = getTabById(activeTabId);
         if (activeTab && activeTab.closable) {
           removeTab(activeTabId);
@@ -99,7 +99,7 @@ const TabsDisplay = () => {
                 size="sm"
                 className="h-auto p-1 ml-2 -mr-1"
                 onClick={(e) => {
-                  e.stopPropagation(); // Prevent activating the tab when closing
+                  e.stopPropagation();
                   removeTab(tab.id);
                 }}
                 asChild

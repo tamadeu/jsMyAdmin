@@ -9,6 +9,7 @@ import {
   useEffect,
 } from "react";
 import { apiService, LoginCredentials, UserProfile } from "@/services/api";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -21,7 +22,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider = ({ children }: { ReactNode }) => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -40,24 +42,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsAuthenticated(true);
         setUser(result.user);
       } else {
-        throw new Error(result.message || "Login falhou");
+        throw new Error(result.message || t("loginPage.connectionFailed"));
       }
     } catch (error) {
-      await logout(); // Garante que o estado seja limpo em caso de falha
-      throw error; // Re-lança para ser capturado pela UI
+      await logout();
+      throw error;
     }
-  }, [logout]);
+  }, [logout, t]);
 
   useEffect(() => {
     const validateSession = async () => {
       try {
-        // O construtor do apiService já carrega o token do localStorage
         const userProfile = await apiService.validateSession();
         setUser(userProfile);
         setIsAuthenticated(true);
       } catch (error) {
         console.error("Session validation failed, logging out.", error);
-        await apiService.logout(); // Limpa qualquer token inválido
+        await apiService.logout();
         setUser(null);
         setIsAuthenticated(false);
       } finally {
@@ -73,7 +74,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!user || !user.globalPrivileges) {
         return false;
       }
-      // Check for specific privilege or for 'ALL PRIVILEGES'
       return (
         user.globalPrivileges.includes(privilege.toUpperCase()) ||
         user.globalPrivileges.includes("ALL PRIVILEGES")

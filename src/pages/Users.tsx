@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { Users as UsersIcon, Loader2, AlertCircle, Plus, Edit, Trash2, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,9 +7,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { apiService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import UserPrivilegesDialog from "@/components/UserPrivilegesDialog"; // Import the dialog
+import UserPrivilegesDialog from "@/components/UserPrivilegesDialog";
 import { useAuth } from "@/context/AuthContext";
-import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
+import { useDatabaseCache } from "@/context/DatabaseCacheContext";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 interface MysqlUser {
   user: string;
@@ -15,13 +18,14 @@ interface MysqlUser {
 }
 
 const UsersPage = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const { hasPrivilege } = useAuth();
-  const { refreshDatabases } = useDatabaseCache(); // Use the hook
+  const { refreshDatabases } = useDatabaseCache();
   const [users, setUsers] = useState<MysqlUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingUser, setEditingUser] = useState<MysqlUser | null>(null); // State for dialog
+  const [editingUser, setEditingUser] = useState<MysqlUser | null>(null);
 
   const loadUsers = async () => {
     try {
@@ -30,10 +34,10 @@ const UsersPage = () => {
       const data = await apiService.getUsers();
       setUsers(data);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load users";
+      const errorMessage = err instanceof Error ? err.message : t("usersPage.failedToLoadUsers");
       setError(errorMessage);
       toast({
-        title: "Error loading users",
+        title: t("usersPage.errorLoadingUsers"),
         description: errorMessage,
         variant: "destructive",
       });
@@ -48,19 +52,19 @@ const UsersPage = () => {
 
   const handleAddUser = () => {
     toast({
-      title: "Not Implemented",
-      description: "Adding users will be implemented soon.",
+      title: t("usersPage.notImplemented"),
+      description: t("usersPage.addingUsersSoon"),
     });
   };
 
   const handleEditUser = (user: MysqlUser) => {
-    setEditingUser(user); // Open the dialog
+    setEditingUser(user);
   };
 
   const handleDeleteUser = (user: MysqlUser) => {
     toast({
-      title: "Not Implemented",
-      description: `Deleting user ${user.user}@${user.host} will be implemented soon.`,
+      title: t("usersPage.notImplemented"),
+      description: t("usersPage.deletingUserSoon", { user: user.user, host: user.host }),
     });
   };
 
@@ -69,7 +73,7 @@ const UsersPage = () => {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading users...</p>
+          <p className="text-muted-foreground">{t("usersPage.loadingUsers")}</p>
         </div>
       </div>
     );
@@ -82,7 +86,7 @@ const UsersPage = () => {
           <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
           <p className="text-red-500 mb-4">{error}</p>
           <Button onClick={loadUsers} variant="outline">
-            Retry
+            {t("usersPage.retry")}
           </Button>
         </div>
       </div>
@@ -96,7 +100,7 @@ const UsersPage = () => {
           user={editingUser.user}
           host={editingUser.host}
           onClose={() => setEditingUser(null)}
-          onPrivilegesUpdated={() => refreshDatabases({ force: true })} // Invalidate cache on privilege update
+          onPrivilegesUpdated={() => refreshDatabases({ force: true })}
         />
       )}
       <Card>
@@ -105,19 +109,19 @@ const UsersPage = () => {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <UsersIcon className="h-5 w-5" />
-                MySQL Users
+                {t("usersPage.title")}
               </CardTitle>
-              <CardDescription>Manage database users and their privileges.</CardDescription>
+              <CardDescription>{t("usersPage.subtitle")}</CardDescription>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={loadUsers}>
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
+                {t("usersPage.refresh")}
               </Button>
               {hasPrivilege("CREATE USER") && (
                 <Button size="sm" onClick={handleAddUser}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Add User
+                  {t("usersPage.addUser")}
                 </Button>
               )}
             </div>
@@ -127,9 +131,9 @@ const UsersPage = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Username</TableHead>
-                <TableHead>Host</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("usersPage.username")}</TableHead>
+                <TableHead>{t("usersPage.host")}</TableHead>
+                <TableHead className="text-right">{t("usersPage.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -146,7 +150,7 @@ const UsersPage = () => {
                         onClick={() => handleEditUser(user)}
                       >
                         <Edit className="h-4 w-4 mr-2" />
-                        Edit Privileges
+                        {t("usersPage.editPrivileges")}
                       </Button>
                     )}
                     {hasPrivilege("CREATE USER") && (
@@ -157,7 +161,7 @@ const UsersPage = () => {
                         onClick={() => handleDeleteUser(user)}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
+                        {t("usersPage.delete")}
                       </Button>
                     )}
                   </TableCell>

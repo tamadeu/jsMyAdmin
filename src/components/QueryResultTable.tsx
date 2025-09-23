@@ -10,8 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useTabs } from "@/context/TabContext"; // Import useTabs
-import { format } from "sql-formatter"; // Import sql-formatter
+import { useTabs } from "@/context/TabContext";
+import { format } from "sql-formatter";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -48,27 +49,26 @@ const useDebounceObject = (value: Record<string, string>, delay: number) => {
 };
 
 interface QueryResultTableProps {
-  queryResult: QueryResult; // This might only contain originalQuery if loaded from localStorage
-  database?: string; // Optional database context for re-executing query
+  queryResult: QueryResult;
+  database?: string;
 }
 
 const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryResultTableProps) => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
-  const { addTab, removeTab, activeTabId } = useTabs(); // Use useTabs hook
+  const { addTab, removeTab, activeTabId } = useTabs();
   const [currentQueryResult, setCurrentQueryResult] = useState<QueryResult>(initialQueryResult);
   const [searchInput, setSearchInput] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [limit, setLimit] = useState(25);
   const [offset, setOffset] = useState(0);
-  const [isLoadingData, setIsLoadingData] = useState(false); // For re-executing query
-  const [isSearching, setIsSearching] = useState(false); // For client-side filtering
-  const [isQueryExpanded, setIsQueryExpanded] = useState(false); // State for query expansion
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isQueryExpanded, setIsQueryExpanded] = useState(false);
 
-  // Debounce the search input and column filters
   const debouncedSearchTerm = useDebounce(searchInput, 300);
   const debouncedColumnFilters = useDebounceObject(columnFilters, 300);
 
-  // Function to re-execute the query
   const reExecuteQuery = useCallback(async (query: string) => {
     if (!query) return;
     setIsLoadingData(true);
@@ -77,43 +77,40 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
       setCurrentQueryResult(result);
       if (!result.success) {
         toast({
-          title: "Query re-execution failed",
-          description: result.error || "An error occurred while re-executing the query.",
+          title: t("sqlEditor.queryReExecutionFailed"),
+          description: result.error || t("sqlEditor.queryExecutionError"),
           variant: "destructive"
         });
       }
     } catch (error) {
       console.error('Error re-executing query:', error);
       toast({
-        title: "Query re-execution failed",
-        description: error instanceof Error ? error.message : "Failed to re-execute SQL query",
+        title: t("sqlEditor.queryReExecutionFailed"),
+        description: error instanceof Error ? error.message : t("sqlEditor.failedToExecuteSqlQuery"),
         variant: "destructive"
       });
     } finally {
       setIsLoadingData(false);
     }
-  }, [database, toast]);
+  }, [database, toast, t]);
 
-  // Effect to load data if only originalQuery is present (e.g., from localStorage)
   useEffect(() => {
     if (initialQueryResult.originalQuery && !initialQueryResult.data) {
       reExecuteQuery(initialQueryResult.originalQuery);
     } else {
-      setCurrentQueryResult(initialQueryResult); // Use the provided full result
+      setCurrentQueryResult(initialQueryResult);
     }
     setOffset(0);
     setSearchInput("");
     setColumnFilters({});
-    setIsQueryExpanded(false); // Reset expansion state
+    setIsQueryExpanded(false);
   }, [initialQueryResult, reExecuteQuery]);
 
-  // Client-side filtering and searching
   const filteredData = useMemo(() => {
     if (!currentQueryResult.data) return [];
 
     let data = currentQueryResult.data;
 
-    // Global search
     if (debouncedSearchTerm) {
       const searchTermLower = debouncedSearchTerm.toLowerCase();
       data = data.filter(row =>
@@ -123,7 +120,6 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
       );
     }
 
-    // Column-specific filters
     Object.entries(debouncedColumnFilters).forEach(([columnName, filterValue]) => {
       if (filterValue) {
         const filterValueLower = filterValue.toLowerCase();
@@ -136,7 +132,6 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
     return data;
   }, [currentQueryResult.data, debouncedSearchTerm, debouncedColumnFilters]);
 
-  // Client-side pagination
   const paginatedData = useMemo(() => {
     return filteredData.slice(offset, offset + limit);
   }, [filteredData, offset, limit]);
@@ -187,7 +182,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
   };
 
   const formatCellValue = (value: any) => {
-    if (value === null) return <span className="text-muted-foreground italic">NULL</span>;
+    if (value === null) return <span className="text-muted-foreground italic">{t("queryResultTable.null")}</span>;
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
@@ -199,7 +194,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
 
   const displayedQuery = useMemo(() => {
     const query = currentQueryResult.originalQuery || '';
-    const maxLength = 300; // Max length before truncating
+    const maxLength = 300;
     if (isQueryExpanded || query.length <= maxLength) {
       return query;
     }
@@ -215,36 +210,36 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
           linesBetweenQueries: 2,
         });
         addTab({
-          title: "SQL Editor",
+          title: t("header.sqlEditorTitle"),
           type: "sql-editor",
           closable: true,
           sqlQueryContent: formattedQuery,
         });
-        removeTab(activeTabId); // Close the current query result tab
+        removeTab(activeTabId);
       } catch (error) {
         console.error('Error formatting query for editor:', error);
         toast({
-          title: "Error opening SQL Editor",
-          description: "Failed to format query. Opening editor with unformatted query.",
+          title: t("sqlEditor.openingEditorFailed"),
+          description: t("sqlEditor.failedToFormatForEditor"),
           variant: "destructive"
         });
         addTab({
-          title: "SQL Editor",
+          title: t("header.sqlEditorTitle"),
           type: "sql-editor",
           closable: true,
           sqlQueryContent: currentQueryResult.originalQuery,
         });
-        removeTab(activeTabId); // Close the current query result tab
+        removeTab(activeTabId);
       }
     }
-  }, [currentQueryResult.originalQuery, addTab, removeTab, activeTabId, toast]);
+  }, [currentQueryResult.originalQuery, addTab, removeTab, activeTabId, toast, t]);
 
   if (isLoadingData) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading query results...</p>
+          <p className="text-muted-foreground">{t("sqlEditor.loadingQueryResults")}</p>
         </div>
       </div>
     );
@@ -254,7 +249,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
     return (
       <div className="space-y-2 text-red-500 p-6">
         <AlertCircle className="h-5 w-5 inline-block mr-2" />
-        <span className="font-medium">Error:</span> {currentQueryResult.error}
+        <span className="font-medium">{t("sqlEditor.error")}:</span> {currentQueryResult.error}
         {currentQueryResult.originalQuery && (
           <div className="font-mono text-xs bg-muted p-2 rounded mt-2">
             {displayedQuery}
@@ -262,18 +257,18 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
               <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
                 {isQueryExpanded ? (
                   <>
-                    <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
+                    <ChevronUp className="h-3 w-3 mr-1" /> {t("sqlEditor.viewLess")}
                   </>
                 ) : (
                   <>
-                    <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
+                    <ChevronDown className="h-3 w-3 mr-1" /> {t("sqlEditor.viewMore")}
                   </>
                 )}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={handleEditQuery} className="ml-2">
               <Edit className="h-4 w-4 mr-2" />
-              Edit Query
+              {t("sqlEditor.editQuery")}
             </Button>
           </div>
         )}
@@ -285,9 +280,9 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
     return (
       <div className="text-center text-muted-foreground py-8 p-6">
         <TableIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-        <p>No data returned for this query.</p>
+        <p>{t("queryResultTable.noDataReturned")}</p>
         {currentQueryResult.affectedRows !== undefined && (
-          <p className="text-sm mt-2">{currentQueryResult.affectedRows} rows affected.</p>
+          <p className="text-sm mt-2">{currentQueryResult.affectedRows} {t("queryResultTable.rowsAffected")}.</p>
         )}
         {currentQueryResult.originalQuery && (
           <div className="font-mono text-xs bg-muted p-2 rounded mt-2">
@@ -296,18 +291,18 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
               <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
                 {isQueryExpanded ? (
                   <>
-                    <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
+                    <ChevronUp className="h-3 w-3 mr-1" /> {t("sqlEditor.viewLess")}
                   </>
                 ) : (
                   <>
-                    <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
+                    <ChevronDown className="h-3 w-3 mr-1" /> {t("sqlEditor.viewMore")}
                   </>
                 )}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={handleEditQuery} className="ml-2">
               <Edit className="h-4 w-4 mr-2" />
-              Edit Query
+              {t("sqlEditor.editQuery")}
             </Button>
           </div>
         )}
@@ -331,9 +326,13 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
           <CardContent className="pt-6">
             <div className="space-y-2 text-sm">
               <div>
-                Mostrando registros {startRow + 1} - {endRow + 1} ({currentQueryResult.rowCount?.toLocaleString() || 0} no total,{' '}
-                {hasAnyFilters && `filtrado no cliente (${filteredData.length.toLocaleString()} resultados), `}
-                Consulta levou {(currentQueryResult.executionTime / 1000).toFixed(4)} segundos.)
+                {t("queryResultTable.showingRecords", {
+                  start: startRow + 1,
+                  end: endRow + 1,
+                  total: currentQueryResult.rowCount?.toLocaleString() || 0,
+                  filteredByServer: hasAnyFilters ? t("queryResultTable.clientFiltered", { filteredLength: filteredData.length.toLocaleString() }) + ", " : "",
+                  time: (currentQueryResult.executionTime / 1000).toFixed(4)
+                })}
               </div>
               {currentQueryResult.originalQuery && (
                 <div className="font-mono text-xs bg-muted p-2 rounded flex items-center justify-between">
@@ -343,11 +342,11 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                       <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
                         {isQueryExpanded ? (
                           <>
-                            <ChevronUp className="h-3 w-3 mr-1" /> Ver Menos
+                            <ChevronUp className="h-3 w-3 mr-1" /> {t("sqlEditor.viewLess")}
                           </>
                         ) : (
                           <>
-                            <ChevronDown className="h-3 w-3 mr-1" /> Ver Mais
+                            <ChevronDown className="h-3 w-3 mr-1" /> {t("sqlEditor.viewMore")}
                           </>
                         )}
                       </Button>
@@ -355,7 +354,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                   </div>
                   <Button variant="outline" size="sm" onClick={handleEditQuery} className="ml-2">
                     <Edit className="h-4 w-4 mr-2" />
-                    Edit Query
+                    {t("sqlEditor.editQuery")}
                   </Button>
                 </div>
               )}
@@ -368,10 +367,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Browse Data</CardTitle>
+                <CardTitle>{t("queryResultTable.browseData")}</CardTitle>
                 <CardDescription>
-                  {currentQueryResult.rowCount?.toLocaleString() || 0} total rows
-                  {hasAnyFilters && ` • Client filtered`}
+                  {currentQueryResult.rowCount?.toLocaleString() || 0} {t("queryResultTable.totalRows")}
+                  {hasAnyFilters && ` • ${t("queryResultTable.clientFiltered")}`}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -381,11 +380,11 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                   onClick={() => currentQueryResult.originalQuery ? reExecuteQuery(currentQueryResult.originalQuery) : setCurrentQueryResult(initialQueryResult)}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Refresh
+                  {t("queryResultTable.refresh")}
                 </Button>
                 <Button variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
-                  Export
+                  {t("queryResultTable.export")}
                 </Button>
               </div>
             </div>
@@ -399,7 +398,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                     <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                   )}
                   <Input 
-                    placeholder="Search in results..." 
+                    placeholder={t("queryResultTable.searchInResults")}
                     className="pl-10 pr-10"
                     value={searchInput}
                     onChange={(e) => handleSearchInputChange(e.target.value)}
@@ -408,7 +407,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                 {hasAnyFilters && (
                   <Button variant="outline" size="sm" onClick={clearAllFilters}>
                     <X className="h-4 w-4 mr-2" />
-                    Clear All
+                    {t("queryResultTable.clearAll")}
                   </Button>
                 )}
                 <Select value={limit.toString()} onValueChange={handleLimitChange}>
@@ -416,10 +415,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10">10 rows</SelectItem>
-                    <SelectItem value="25">25 rows</SelectItem>
-                    <SelectItem value="50">50 rows</SelectItem>
-                    <SelectItem value="100">100 rows</SelectItem>
+                    <SelectItem value="10">10 {t("queryResultTable.rows")}</SelectItem>
+                    <SelectItem value="25">25 {t("queryResultTable.rows")}</SelectItem>
+                    <SelectItem value="50">50 {t("queryResultTable.rows")}</SelectItem>
+                    <SelectItem value="100">100 {t("queryResultTable.rows")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -430,15 +429,15 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                   {isSearching && (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      <span>Searching...</span>
+                      <span>{t("queryResultTable.searching")}</span>
                     </div>
                   )}
                   {hasClientSearch && !isSearching && (
-                    <Badge variant="secondary">Global: "{debouncedSearchTerm}"</Badge>
+                    <Badge variant="secondary">{t("queryResultTable.global")}: "{debouncedSearchTerm}"</Badge>
                   )}
                   {hasActiveFilters && (
                     <Badge variant="outline">
-                      {Object.keys(debouncedColumnFilters).length} column filters
+                      {Object.keys(debouncedColumnFilters).length} {t("queryResultTable.columnFilters")}
                     </Badge>
                   )}
                 </div>
@@ -462,7 +461,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                                   </div>
                                   <div className="relative">
                                     <Input
-                                      placeholder="Filter..."
+                                      placeholder={t("queryResultTable.filter")}
                                       className="h-7 text-xs"
                                       value={columnFilters[column.name] || ''}
                                       onChange={(e) => handleColumnFilter(column.name, e.target.value)}
@@ -506,8 +505,12 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
 
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                      Mostrando {startRow + 1} a {endRow + 1} de {filteredData.length.toLocaleString()} entradas
-                      {hasAnyFilters && ` (filtrado no cliente)`}
+                      {t("queryResultTable.showingEntries", {
+                        start: startRow + 1,
+                        end: endRow + 1,
+                        filteredLength: filteredData.length.toLocaleString()
+                      })}
+                      {hasAnyFilters && ` (${t("queryResultTable.clientFiltered")})`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
@@ -516,10 +519,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                         onClick={handlePrevPage}
                         disabled={offset === 0}
                       >
-                        Anterior
+                        {t("queryResultTable.previous")}
                       </Button>
                       <span className="flex items-center px-3">
-                        Página {currentPage} de {totalPages}
+                        {t("queryResultTable.page")} {currentPage} {t("queryResultTable.of")} {totalPages}
                       </span>
                       <Button 
                         variant="outline" 
@@ -527,7 +530,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                         onClick={handleNextPage}
                         disabled={offset + limit >= filteredData.length}
                       >
-                        Próximo
+                        {t("queryResultTable.next")}
                       </Button>
                     </div>
                   </div>
@@ -536,7 +539,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                 <div className="text-center py-8">
                   <TableIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">
-                    {hasAnyFilters ? 'Nenhum dado encontrado correspondente aos seus filtros' : 'Nenhum dado neste resultado de query'}
+                    {hasAnyFilters ? t("queryResultTable.noDataFound") : t("queryResultTable.noDataInTable")}
                   </p>
                 </div>
               )}

@@ -14,9 +14,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Database, Loader2, AlertCircle } from "lucide-react";
-import { apiService, DatabaseConfig } from "@/services/api"; // Import apiService
+import { apiService, DatabaseConfig } from "@/services/api";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 const LoginPage = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { login } = useAuth();
   const [host, setHost] = useState("localhost");
   const [port, setPort] = useState(3306);
@@ -74,7 +76,7 @@ const LoginPage = () => {
       await login({ host, port, username, password });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Ocorreu um erro desconhecido.",
+        err instanceof Error ? err.message : t("loginPage.unknownError"),
       );
     } finally {
       setIsLoading(false);
@@ -86,16 +88,16 @@ const LoginPage = () => {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <Database className="mx-auto h-10 w-10 mb-2" />
-          <CardTitle className="text-2xl">phpMyAdmin</CardTitle>
+          <CardTitle className="text-2xl">{t("loginPage.title")}</CardTitle>
           <CardDescription>
-            Conecte-se ao seu Banco de Dados MySQL
+            {t("loginPage.description")}
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2 col-span-2">
-                <Label htmlFor="host">Servidor</Label>
+                <Label htmlFor="host">{t("loginPage.server")}</Label>
                 <Input
                   id="host"
                   value={host}
@@ -104,7 +106,7 @@ const LoginPage = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="port">Porta</Label>
+                <Label htmlFor="port">{t("loginPage.port")}</Label>
                 <Input
                   id="port"
                   type="number"
@@ -115,7 +117,7 @@ const LoginPage = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="username">Usuário</Label>
+              <Label htmlFor="username">{t("loginPage.username")}</Label>
               <Input
                 id="username"
                 value={username}
@@ -124,7 +126,7 @@ const LoginPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Label htmlFor="password">{t("loginPage.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -142,7 +144,7 @@ const LoginPage = () => {
           <CardFooter>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Conectar
+              {t("loginPage.connect")}
             </Button>
           </CardFooter>
         </form>

@@ -13,8 +13,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { useDatabaseCache } from "@/context/DatabaseCacheContext"; // New import
-import InsertRowDialog from "@/components/InsertRowDialog"; // Import the new dialog
+import { useDatabaseCache } from "@/context/DatabaseCacheContext";
+import InsertRowDialog from "@/components/InsertRowDialog";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -56,10 +57,11 @@ interface DatabaseBrowserProps {
 }
 
 const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const { hasPrivilege } = useAuth();
-  const { refreshDatabases } = useDatabaseCache(); // Use the hook
-  const [searchInput, setSearchInput] = useState(""); // Input value (immediate)
+  const { refreshDatabases } = useDatabaseCache();
+  const [searchInput, setSearchInput] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
   const [tableData, setTableData] = useState<TableData | null>(null);
   const [tableInfo, setTableInfo] = useState<any>(null);
@@ -74,15 +76,11 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
-  const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false); // State for InsertRowDialog
+  const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false);
 
-  // Debounce the search input (wait 500ms after user stops typing)
   const debouncedSearchTerm = useDebounce(searchInput, 500);
-  
-  // Debounce column filters (wait 500ms after user stops typing)
   const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
 
-  // Check if table has primary key and get PK column
   const primaryKeyColumn = useMemo(() => {
     return tableData?.columns.find(col => col.key === 'PRI') || null;
   }, [tableData]);
@@ -100,7 +98,6 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     if (!database || !table) return;
 
     try {
-      // Show loading only for initial load, not for search
       if (!tableData) {
         setIsLoading(true);
       } else {
@@ -119,13 +116,13 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       
       setQueryTime(((endTime - startTime) / 1000).toFixed(4));
       setTableData(data);
-      setSelectedRows(new Set()); // Clear selection when data changes
+      setSelectedRows(new Set());
     } catch (error) {
       console.error('Error loading table data:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load table data');
+      setError(error instanceof Error ? error.message : t('queryResultTable.failedToLoadTableData'));
       toast({
-        title: "Error loading table data",
-        description: "Failed to fetch table data from the database",
+        title: t("queryResultTable.errorLoadingTableData"),
+        description: t("queryResultTable.failedToFetchTableData"),
         variant: "destructive"
       });
     } finally {
@@ -148,7 +145,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
   const handleSearchInputChange = (value: string) => {
     setSearchInput(value);
-    setOffset(0); // Reset to first page when searching
+    setOffset(0);
   };
 
   const handleColumnFilter = (columnName: string, value: string) => {
@@ -156,7 +153,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       ...prev,
       [columnName]: value
     }));
-    setOffset(0); // Reset to first page when filtering
+    setOffset(0);
   };
 
   const clearColumnFilter = (columnName: string) => {
@@ -176,7 +173,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
   const handleLimitChange = (value: string) => {
     setLimit(parseInt(value));
-    setOffset(0); // Reset to first page when changing limit
+    setOffset(0);
   };
 
   const handlePrevPage = () => {
@@ -191,15 +188,13 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     }
   };
 
-  // Get primary key value for a row
   const getPrimaryKeyValue = (row: any) => {
     if (!primaryKeyColumn) return null;
     return row[primaryKeyColumn.name];
   };
 
-  // Inline cell editing
   const handleCellDoubleClick = (rowIndex: number, columnName: string, currentValue: any) => {
-    if (!hasPrimaryKey || !hasPrivilege("UPDATE")) return; // Only allow editing if table has PK
+    if (!hasPrimaryKey || !hasPrivilege("UPDATE")) return;
     
     setEditingCell({ rowIndex, columnName });
     setEditValue(currentValue === null ? '' : String(currentValue));
@@ -215,19 +210,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       await apiService.updateCell(database, table, primaryKey, editingCell.columnName, editValue);
       
       toast({
-        title: "Cell updated",
-        description: "The cell has been updated successfully",
+        title: t("queryResultTable.cellUpdated"),
+        description: t("queryResultTable.cellUpdatedSuccessfully"),
       });
 
-      // Refresh data to show changes
       await loadTableData();
-      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
+      refreshDatabases({ databaseName: database });
       
     } catch (error) {
       console.error('Error updating cell:', error);
       toast({
-        title: "Error updating cell",
-        description: error instanceof Error ? error.message : "Failed to update cell",
+        title: t("queryResultTable.errorUpdatingCell"),
+        description: error instanceof Error ? error.message : t("queryResultTable.failedToUpdateCell"),
         variant: "destructive"
       });
     } finally {
@@ -249,7 +243,6 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     }
   };
 
-  // Row editing
   const handleEditRow = (rowIndex: number) => {
     if (!tableData) return;
     const row = tableData.data[rowIndex];
@@ -266,19 +259,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       await apiService.updateRow(database, table, primaryKey, editingRow.data);
       
       toast({
-        title: "Row updated",
-        description: "The row has been updated successfully",
+        title: t("queryResultTable.rowUpdated"),
+        description: t("queryResultTable.rowUpdatedSuccessfully"),
       });
 
-      // Refresh data to show changes
       await loadTableData();
-      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
+      refreshDatabases({ databaseName: database });
       
     } catch (error) {
       console.error('Error updating row:', error);
       toast({
-        title: "Error updating row",
-        description: error instanceof Error ? error.message : "Failed to update row",
+        title: t("queryResultTable.errorUpdatingRow"),
+        description: error instanceof Error ? error.message : t("queryResultTable.failedToUpdateRow"),
         variant: "destructive"
       });
     } finally {
@@ -290,7 +282,6 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     setEditingRow(null);
   };
 
-  // Copy row
   const handleCopyRow = async (rowIndex: number) => {
     if (!tableData || !database || !table) return;
 
@@ -298,7 +289,6 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       const row = tableData.data[rowIndex];
       const copyData = { ...row };
       
-      // Remove primary key if it's auto increment
       if (primaryKeyColumn && primaryKeyColumn.extra.includes('auto_increment')) {
         delete copyData[primaryKeyColumn.name];
       }
@@ -306,25 +296,23 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       await apiService.insertRow(database, table, copyData);
       
       toast({
-        title: "Row copied",
-        description: "The row has been copied successfully",
+        title: t("queryResultTable.rowCopied"),
+        description: t("queryResultTable.rowCopiedSuccessfully"),
       });
 
-      // Refresh data to show new row
       await loadTableData();
-      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
+      refreshDatabases({ databaseName: database });
       
     } catch (error) {
       console.error('Error copying row:', error);
       toast({
-        title: "Error copying row",
-        description: error instanceof Error ? error.message : "Failed to copy row",
+        title: t("queryResultTable.errorCopyingRow"),
+        description: error instanceof Error ? error.message : t("queryResultTable.failedToCopyRow"),
         variant: "destructive"
       });
     }
   };
 
-  // Delete row
   const handleDeleteRow = (rowIndex: number) => {
     if (!tableData) return;
     const row = tableData.data[rowIndex];
@@ -339,19 +327,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       await apiService.deleteRow(database, table, deleteConfirm.primaryKey);
       
       toast({
-        title: "Row deleted",
-        description: "The row has been deleted successfully",
+        title: t("queryResultTable.rowDeleted"),
+        description: t("queryResultTable.rowDeletedSuccessfully"),
       });
 
-      // Refresh data to show changes
       await loadTableData();
-      refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
+      refreshDatabases({ databaseName: database });
       
     } catch (error) {
       console.error('Error deleting row:', error);
       toast({
-        title: "Error deleting row",
-        description: error instanceof Error ? error.message : "Failed to delete row",
+        title: t("queryResultTable.errorDeletingRow"),
+        description: error instanceof Error ? error.message : t("queryResultTable.failedToDeleteRow"),
         variant: "destructive"
       });
     } finally {
@@ -359,7 +346,6 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     }
   };
 
-  // Row selection
   const handleRowSelect = (rowIndex: number, checked: boolean) => {
     const newSelection = new Set(selectedRows);
     if (checked) {
@@ -379,19 +365,17 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   };
 
   const formatCellValue = (value: any) => {
-    if (value === null) return <span className="text-muted-foreground italic">NULL</span>;
+    if (value === null) return <span className="text-muted-foreground italic">{t("queryResultTable.null")}</span>;
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
   };
 
-  // Generate actual SQL query that was executed
   const generateSQLQuery = () => {
     let query = `SELECT * FROM \`${table}\``;
     
     const conditions = [];
     
-    // Add search condition
     if (debouncedSearchTerm) {
       if (tableData?.columns) {
         const concatColumns = tableData.columns.map(col => `COALESCE(\`${col.name}\`, '')`).join(', ');
@@ -399,7 +383,6 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       }
     }
     
-    // Add column filters
     Object.entries(debouncedColumnFilters).forEach(([columnName, filterValue]) => {
       if (filterValue) {
         conditions.push(`\`${columnName}\` LIKE '%${filterValue}%'`);
@@ -425,7 +408,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading table data...</p>
+          <p className="text-muted-foreground">{t("queryResultTable.loadingTableData")}</p>
         </div>
       </div>
     );
@@ -438,7 +421,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
           <AlertCircle className="h-8 w-8 mx-auto mb-4 text-red-500" />
           <p className="text-red-500 mb-4">{error}</p>
           <Button onClick={loadTableData} variant="outline">
-            Retry
+            {t("queryResultTable.retry")}
           </Button>
         </div>
       </div>
@@ -454,16 +437,20 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const hasAnyFilters = hasActiveFilters || hasServerSearch;
 
   return (
-    <div className="h-full"> {/* Removed overflow-y-auto */}
+    <div className="h-full">
       <div className="p-6 space-y-6">
         {/* Query Information */}
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-2 text-sm">
               <div>
-                Mostrando registros {startRow} - {endRow} ({tableData?.total.toLocaleString() || 0} no total,{' '}
-                {hasAnyFilters && 'filtrado pelo servidor, '}
-                Consulta levou {queryTime} segundos.)
+                {t("queryResultTable.showingRecords", {
+                  start: startRow,
+                  end: endRow,
+                  total: tableData?.total.toLocaleString() || 0,
+                  filteredByServer: hasAnyFilters ? t("queryResultTable.filteredByServer") : "",
+                  time: queryTime
+                })}
               </div>
               <div className="font-mono text-xs bg-muted p-2 rounded">
                 {generateSQLQuery()}
@@ -477,11 +464,11 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Browse Data</CardTitle>
+                <CardTitle>{t("queryResultTable.browseData")}</CardTitle>
                 <CardDescription>
-                  {tableData ? `${tableData.total.toLocaleString()} total rows` : 'No data'}
-                  {hasAnyFilters && ` • Server filtered`}
-                  {hasPrimaryKey && ` • Editable (has PK)`}
+                  {tableData ? `${tableData.total.toLocaleString()} ${t("queryResultTable.totalRows")}` : t("queryResultTable.noData")}
+                  {hasAnyFilters && ` • ${t("queryResultTable.serverFiltered")}`}
+                  {hasPrimaryKey && ` • ${t("queryResultTable.editableHasPk")}`}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
@@ -491,16 +478,16 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   onClick={loadTableData}
                 >
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Refresh
+                  {t("queryResultTable.refresh")}
                 </Button>
                 <Button variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
-                  Export
+                  {t("queryResultTable.export")}
                 </Button>
                 {hasPrivilege("INSERT") && (
                   <Button size="sm" onClick={() => setIsInsertRowDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Insert Row
+                    {t("queryResultTable.insertRow")}
                   </Button>
                 )}
               </div>
@@ -515,7 +502,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                     <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                   )}
                   <Input 
-                    placeholder="Search in database..." 
+                    placeholder={t("queryResultTable.searchInDatabase")}
                     className="pl-10 pr-10"
                     value={searchInput}
                     onChange={(e) => handleSearchInputChange(e.target.value)}
@@ -524,7 +511,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                 {hasAnyFilters && (
                   <Button variant="outline" size="sm" onClick={clearAllFilters}>
                     <X className="h-4 w-4 mr-2" />
-                    Clear All
+                    {t("queryResultTable.clearAll")}
                   </Button>
                 )}
                 <Select value={limit.toString()} onValueChange={handleLimitChange}>
@@ -532,10 +519,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10">10 rows</SelectItem>
-                    <SelectItem value="25">25 rows</SelectItem>
-                    <SelectItem value="50">50 rows</SelectItem>
-                    <SelectItem value="100">100 rows</SelectItem>
+                    <SelectItem value="10">10 {t("queryResultTable.rows")}</SelectItem>
+                    <SelectItem value="25">25 {t("queryResultTable.rows")}</SelectItem>
+                    <SelectItem value="50">50 {t("queryResultTable.rows")}</SelectItem>
+                    <SelectItem value="100">100 {t("queryResultTable.rows")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -546,15 +533,15 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   {isSearching && (
                     <div className="flex items-center gap-2">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      <span>Searching...</span>
+                      <span>{t("queryResultTable.searching")}</span>
                     </div>
                   )}
                   {hasServerSearch && !isSearching && (
-                    <Badge variant="secondary">Global: "{debouncedSearchTerm}"</Badge>
+                    <Badge variant="secondary">{t("queryResultTable.global")}: "{debouncedSearchTerm}"</Badge>
                   )}
                   {hasActiveFilters && (
                     <Badge variant="outline">
-                      {Object.keys(debouncedColumnFilters).length} column filters
+                      {Object.keys(debouncedColumnFilters).length} {t("queryResultTable.columnFilters")}
                     </Badge>
                   )}
                 </div>
@@ -570,7 +557,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                             {/* Actions column - only show if table has PK and user has privileges */}
                             {hasPrimaryKey && (hasPrivilege("UPDATE") || hasPrivilege("INSERT") || hasPrivilege("DELETE")) && (
                               <th className="p-2 text-left w-24">
-                                <span className="text-sm font-medium">Actions</span>
+                                <span className="text-sm font-medium">{t("queryResultTable.actions")}</span>
                               </th>
                             )}
                             {/* Checkbox column - only show if table has PK */}
@@ -589,13 +576,13 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                     <span className="font-medium text-sm">{column.name}</span>
                                     <span className="text-xs text-muted-foreground font-normal">
                                       {column.type}
-                                      {column.key === 'PRI' && ' (PK)'}
-                                      {!column.null && ' NOT NULL'}
+                                      {column.key === 'PRI' && ` (${t("queryResultTable.pk")})`}
+                                      {!column.null && ` ${t("queryResultTable.notNull")}`}
                                     </span>
                                   </div>
                                   <div className="relative">
                                     <Input
-                                      placeholder="Filter..."
+                                      placeholder={t("queryResultTable.filter")}
                                       className="h-7 text-xs"
                                       value={columnFilters[column.name] || ''}
                                       onChange={(e) => handleColumnFilter(column.name, e.target.value)}
@@ -628,7 +615,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         variant="ghost" 
                                         size="sm" 
                                         className="h-6 w-6 p-0"
-                                        title="Edit Row"
+                                        title={t("queryResultTable.editRowAction")}
                                         onClick={() => handleEditRow(rowIndex)}
                                       >
                                         <Edit className="h-3 w-3 text-blue-600" />
@@ -639,7 +626,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         variant="ghost" 
                                         size="sm" 
                                         className="h-6 w-6 p-0"
-                                        title="Copy Row"
+                                        title={t("queryResultTable.copyRow")}
                                         onClick={() => handleCopyRow(rowIndex)}
                                       >
                                         <Copy className="h-3 w-3 text-green-600" />
@@ -650,7 +637,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         variant="ghost" 
                                         size="sm" 
                                         className="h-6 w-6 p-0"
-                                        title="Delete Row"
+                                        title={t("queryResultTable.deleteRowAction")}
                                         onClick={() => handleDeleteRow(rowIndex)}
                                       >
                                         <Trash2 className="h-3 w-3 text-red-600" />
@@ -673,7 +660,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                   key={column.name} 
                                   className="p-2 max-w-xs cursor-pointer"
                                   onDoubleClick={() => handleCellDoubleClick(rowIndex, column.name, row[column.name])}
-                                  title={hasPrimaryKey && hasPrivilege("UPDATE") ? "Double-click to edit" : undefined}
+                                  title={hasPrimaryKey && hasPrivilege("UPDATE") ? t("queryResultTable.doubleClickToEdit") : undefined}
                                 >
                                   {editingCell?.rowIndex === rowIndex && editingCell?.columnName === column.name ? (
                                     <Input
@@ -700,9 +687,13 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
-                      Showing {startRow + 1} to {endRow + 1} of {tableData.total.toLocaleString()} entries
-                      {hasAnyFilters && ` (server filtered)`}
-                      {selectedRows.size > 0 && ` • ${selectedRows.size} selected`}
+                      {t("queryResultTable.showingEntries", {
+                        start: startRow + 1,
+                        end: endRow + 1,
+                        filteredLength: tableData.total.toLocaleString()
+                      })}
+                      {hasAnyFilters && ` (${t("queryResultTable.serverFiltered")})`}
+                      {selectedRows.size > 0 && ` • ${selectedRows.size} ${t("queryResultTable.selected")}`}
                     </span>
                     <div className="flex gap-2">
                       <Button 
@@ -711,10 +702,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                         onClick={handlePrevPage}
                         disabled={offset === 0}
                       >
-                        Previous
+                        {t("queryResultTable.previous")}
                       </Button>
                       <span className="flex items-center px-3">
-                        Page {currentPage} of {totalPages}
+                        {t("queryResultTable.page")} {currentPage} {t("queryResultTable.of")} {totalPages}
                       </span>
                       <Button 
                         variant="outline" 
@@ -722,7 +713,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                         onClick={handleNextPage}
                         disabled={offset + limit >= tableData.total}
                       >
-                        Next
+                        {t("queryResultTable.next")}
                       </Button>
                     </div>
                   </div>
@@ -731,7 +722,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                 <div className="text-center py-8">
                   <TableIcon className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">
-                    {hasAnyFilters ? 'No data found matching your filters' : 'No data in this table'}
+                    {hasAnyFilters ? t("queryResultTable.noDataFound") : t("queryResultTable.noDataInTable")}
                   </p>
                 </div>
               )}
@@ -744,9 +735,9 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
           <Dialog open={!!editingRow} onOpenChange={() => setEditingRow(null)}>
             <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Edit Row</DialogTitle>
+                <DialogTitle>{t("queryResultTable.editRow")}</DialogTitle>
                 <DialogDescription>
-                  Make changes to the row data. Click save when you're done.
+                  {t("queryResultTable.editRowDescription")}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -757,8 +748,8 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                         <span className="font-medium">{column.name}</span>
                         <span className="text-xs text-muted-foreground">
                           {column.type}
-                          {column.key === 'PRI' && ' (PK)'}
-                          {!column.null && ' NOT NULL'}
+                          {column.key === 'PRI' && ` (${t("queryResultTable.pk")})`}
+                          {!column.null && ` ${t("queryResultTable.notNull")}`}
                         </span>
                       </div>
                     </label>
@@ -769,8 +760,8 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                           ...editingRow,
                           data: { ...editingRow.data, [column.name]: e.target.value }
                         })}
-                        disabled={column.key === 'PRI'} // Disable PK editing
-                        placeholder={column.null ? 'NULL' : 'Required'}
+                        disabled={column.key === 'PRI'}
+                        placeholder={column.null ? t("queryResultTable.null") : t("queryResultTable.required")}
                         className="w-full"
                       />
                     </div>
@@ -780,11 +771,11 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
               <DialogFooter>
                 <Button variant="outline" onClick={handleRowEditCancel}>
                   <XCircle className="h-4 w-4 mr-2" />
-                  Cancel
+                  {t("queryResultTable.cancel")}
                 </Button>
                 <Button onClick={handleRowEditSave}>
                   <Save className="h-4 w-4 mr-2" />
-                  Save Changes
+                  {t("queryResultTable.saveChanges")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -796,18 +787,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
           <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Confirm Delete</DialogTitle>
+                <DialogTitle>{t("queryResultTable.confirmDelete")}</DialogTitle>
                 <DialogDescription>
-                  Are you sure you want to delete this row? This action cannot be undone.
+                  {t("queryResultTable.confirmDeleteDescription")}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-                  Cancel
+                  {t("queryResultTable.cancel")}
                 </Button>
                 <Button variant="destructive" onClick={confirmDeleteRow}>
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Row
+                  {t("queryResultTable.deleteRow")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -823,8 +814,8 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
             table={table}
             columns={tableData.columns}
             onRowInserted={() => {
-              loadTableData(); // Refresh data after successful insert
-              refreshDatabases({ databaseName: database }); // Invalidate cache for this database (row count might change)
+              loadTableData();
+              refreshDatabases({ databaseName: database });
             }}
           />
         )}

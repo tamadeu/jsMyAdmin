@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidvv4 } from 'uuid';
 import { QueryResult } from "@/services/api";
-import { useAuth } from './AuthContext'; // Importando o hook de autenticação
+import { useAuth } from './AuthContext';
 
 export interface AppTab {
   id: string;
@@ -14,7 +14,7 @@ export interface AppTab {
   queryResult?: QueryResult;
   sqlQueryContent?: string;
   originalQuery?: string;
-  filterType?: 'all' | 'tables' | 'views'; // Adicionado filterType
+  filterType?: 'all' | 'tables' | 'views';
 }
 
 interface PersistedTab {
@@ -25,7 +25,7 @@ interface PersistedTab {
   closable: boolean;
   sqlQueryContent?: string;
   originalQuery?: string;
-  filterType?: 'all' | 'tables' | 'views'; // Adicionado filterType
+  filterType?: 'all' | 'tables' | 'views';
 }
 
 interface TabContextType {
@@ -45,7 +45,7 @@ interface TabProviderProps {
 }
 
 export function TabProvider({ children }: TabProviderProps) {
-  const { user } = useAuth(); // Obtendo o usuário autenticado
+  const { user } = useAuth();
   const [tabs, setTabs] = useState<AppTab[]>([]);
   const [activeTabId, _setActiveTabId] = useState<string>('');
   const activeTabIdRef = useRef(activeTabId);
@@ -87,7 +87,7 @@ export function TabProvider({ children }: TabProviderProps) {
       if (tab.type === 'query-result' && tab.originalQuery) {
         pTab.originalQuery = tab.originalQuery;
       }
-      if (tab.type === 'database-tables-list' && tab.filterType) { // Salvar filterType
+      if (tab.type === 'database-tables-list' && tab.filterType) {
         pTab.filterType = tab.filterType;
       }
       return pTab;
@@ -149,7 +149,7 @@ export function TabProvider({ children }: TabProviderProps) {
         const existingTab = prevTabs.find(tab =>
           tab.type === newTab.type &&
           JSON.stringify(tab.params) === JSON.stringify(newTab.params) &&
-          tab.filterType === newTab.filterType // Comparar filterType também
+          tab.filterType === newTab.filterType
         );
         if (existingTab) {
           setActiveTab(existingTab.id);
@@ -201,9 +201,8 @@ export function TabProvider({ children }: TabProviderProps) {
       if (targetTabIndex === -1) return prevTabs;
 
       const targetTab = prevTabs[targetTabIndex];
-      // Only update if the sqlQueryContent is actually different
       if (content.sqlQueryContent === targetTab.sqlQueryContent) {
-        return prevTabs; // No change needed, return previous state to prevent re-render
+        return prevTabs;
       }
 
       const updatedTabs = prevTabs.map(tab =>

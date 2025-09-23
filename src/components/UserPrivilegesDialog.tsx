@@ -12,12 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 interface UserPrivilegesDialogProps {
   user: string;
   host: string;
   onClose: () => void;
-  onPrivilegesUpdated: () => void; // New prop
+  onPrivilegesUpdated: () => void;
 }
 
 const GLOBAL_PRIVILEGES = {
@@ -33,6 +34,7 @@ const DB_PRIVILEGES = {
 };
 
 const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: UserPrivilegesDialogProps) => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -55,12 +57,12 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
       setDbPrivileges(privsData.databasePrivileges);
       setAllDatabases(dbsData);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to load data";
+      const errorMessage = err instanceof Error ? err.message : t("userPrivilegesDialog.errorLoadingData");
       setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [user, host]);
+  }, [user, host, t]);
 
   useEffect(() => {
     fetchAllData();
@@ -79,10 +81,10 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
     try {
       setIsSaving(true);
       await apiService.updateUserPrivileges(user, host, { privileges: Array.from(globalPrivileges) });
-      toast({ title: "Global Privileges Updated" });
-      onPrivilegesUpdated(); // Notify parent to refresh cache
+      toast({ title: t("userPrivilegesDialog.globalPrivilegesUpdated") });
+      onPrivilegesUpdated();
     } catch (err) {
-      toast({ title: "Update Failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
+      toast({ title: t("userPrivilegesDialog.updateFailed"), description: err instanceof Error ? err.message : t("userPrivilegesDialog.unknownError"), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -91,11 +93,11 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
   const handleRevokeDb = async (database: string) => {
     try {
       await apiService.revokeDatabasePrivileges(user, host, database);
-      toast({ title: "Privileges Revoked", description: `All privileges on ${database} revoked.` });
-      onPrivilegesUpdated(); // Notify parent to refresh cache
+      toast({ title: t("userPrivilegesDialog.privilegesRevoked"), description: t("userPrivilegesDialog.privilegesRevokedDescription", { database: database }) });
+      onPrivilegesUpdated();
       fetchAllData();
     } catch (err) {
-      toast({ title: "Revoke Failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
+      toast({ title: t("userPrivilegesDialog.revokeFailed"), description: err instanceof Error ? err.message : t("userPrivilegesDialog.unknownError"), variant: "destructive" });
     }
   };
 
@@ -114,12 +116,12 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
       await apiService.updateDatabasePrivileges(
         user, host, editingDb.database, editingDb.privileges || [], editingDb.grantOption || false
       );
-      toast({ title: "Database Privileges Updated" });
+      toast({ title: t("userPrivilegesDialog.dbPrivilegesUpdated") });
       setEditingDb(null);
-      onPrivilegesUpdated(); // Notify parent to refresh cache
+      onPrivilegesUpdated();
       fetchAllData();
     } catch (err) {
-      toast({ title: "Update Failed", description: err instanceof Error ? err.message : "An error occurred", variant: "destructive" });
+      toast({ title: t("userPrivilegesDialog.updateFailed"), description: err instanceof Error ? err.message : t("userPrivilegesDialog.unknownError"), variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -150,11 +152,11 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
         {Object.entries(categories).map(([categoryName, privileges]) => (
           <div key={categoryName} className="p-4 border rounded-md flex-1 w-full md:w-auto">
             <div className="flex justify-between items-center mb-3 pb-2 border-b">
-              <h4 className="font-semibold text-md capitalize">{categoryName}</h4>
+              <h4 className="font-semibold text-md capitalize">{t(`userPrivilegesDialog.${categoryName}`)}</h4>
               <div>
-                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => handleSelectAll(privileges)}>All</Button>
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => handleSelectAll(privileges)}>{t("userPrivilegesDialog.all")}</Button>
                 <span className="mx-1 text-muted-foreground">/</span>
-                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => handleDeselectAll(privileges)}>None</Button>
+                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => handleDeselectAll(privileges)}>{t("userPrivilegesDialog.none")}</Button>
               </div>
             </div>
             <div className="space-y-3">
@@ -175,36 +177,36 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle>Edit Privileges: {user}@{host}</DialogTitle>
-          <DialogDescription>Manage global and database-specific privileges for this user.</DialogDescription>
+          <DialogTitle>{t("userPrivilegesDialog.title", { user: user, host: host })}</DialogTitle>
+          <DialogDescription>{t("userPrivilegesDialog.description")}</DialogDescription>
         </DialogHeader>
         
-        {isLoading && <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>}
+        {isLoading && <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /> {t("userPrivilegesDialog.loading")}</div>}
         {error && <div className="flex flex-col items-center justify-center h-96 text-red-500"><AlertCircle className="h-8 w-8 mb-2" /><p>{error}</p></div>}
 
         {!isLoading && !error && (
           <Tabs defaultValue="global" className="w-full">
             <TabsList>
-              <TabsTrigger value="global">Global Privileges</TabsTrigger>
-              <TabsTrigger value="database">Database-Specific</TabsTrigger>
+              <TabsTrigger value="global">{t("userPrivilegesDialog.globalPrivileges")}</TabsTrigger>
+              <TabsTrigger value="database">{t("userPrivilegesDialog.databaseSpecific")}</TabsTrigger>
             </TabsList>
             <TabsContent value="global" className="py-4 max-h-[60vh] overflow-y-auto pr-2 space-y-4">
               {renderCategorizedPrivileges(GLOBAL_PRIVILEGES, globalPrivileges, handleGlobalPrivilegeChange)}
               <div className="flex justify-end pt-4">
                 <Button onClick={handleSaveGlobal} disabled={isSaving}>
                   {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save Global Privileges
+                  {t("userPrivilegesDialog.saveGlobalPrivileges")}
                 </Button>
               </div>
             </TabsContent>
             <TabsContent value="database" className="py-4 max-h-[60vh] overflow-y-auto pr-2 space-y-6">
               <Card>
-                <CardHeader><CardTitle>Existing Privileges</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{t("userPrivilegesDialog.existingPrivileges")}</CardTitle></CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Database</TableHead><TableHead>Privileges</TableHead><TableHead>Grant Option</TableHead><TableHead className="text-right">Actions</TableHead>
+                        <TableHead>{t("userPrivilegesDialog.database")}</TableHead><TableHead>{t("userPrivilegesDialog.privileges")}</TableHead><TableHead>{t("userPrivilegesDialog.grantOption")}</TableHead><TableHead className="text-right">{t("userPrivilegesDialog.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -212,30 +214,30 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
                         <TableRow key={p.database}>
                           <TableCell className="font-mono">{p.database}</TableCell>
                           <TableCell className="text-xs max-w-xs truncate">{p.privileges.join(', ')}</TableCell>
-                          <TableCell>{p.grantOption ? 'Yes' : 'No'}</TableCell>
+                          <TableCell>{p.grantOption ? t("userPrivilegesDialog.yes") : t("userPrivilegesDialog.no")}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" onClick={() => handleEditDb(p)}><Edit className="h-4 w-4 mr-2" />Edit</Button>
-                            <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleRevokeDb(p.database)}><Trash2 className="h-4 w-4 mr-2" />Revoke</Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleEditDb(p)}><Edit className="h-4 w-4 mr-2" />{t("userPrivilegesDialog.edit")}</Button>
+                            <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleRevokeDb(p.database)}><Trash2 className="h-4 w-4 mr-2" />{t("userPrivilegesDialog.revoke")}</Button>
                           </TableCell>
                         </TableRow>
                       ))}
-                      {dbPrivileges.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">No database-specific privileges found.</TableCell></TableRow>}
+                      {dbPrivileges.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">{t("userPrivilegesDialog.noDbPrivilegesFound")}</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </CardContent>
               </Card>
               
               <Card>
-                <CardHeader><CardTitle>{editingDb?.database ? 'Edit' : 'Add'} Privileges on a Database</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{editingDb?.database ? t("userPrivilegesDialog.edit") : t("userPrivilegesDialog.add")} {t("userPrivilegesDialog.privilegesOnDb")}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Database</Label>
+                    <Label>{t("userPrivilegesDialog.database")}</Label>
                     <Select
                       value={editingDb?.database || ""}
                       onValueChange={(db) => setEditingDb({ database: db, privileges: [], grantOption: false })}
                       disabled={!!editingDb?.database && dbPrivileges.some(p => p.database === editingDb.database)}
                     >
-                      <SelectTrigger><SelectValue placeholder="Select a database" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("userPrivilegesDialog.selectDatabase")} /></SelectTrigger>
                       <SelectContent>
                         {allDatabases.map(db => <SelectItem key={db} value={db}>{db}</SelectItem>)}
                       </SelectContent>
@@ -246,13 +248,13 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
                       {renderCategorizedPrivileges(DB_PRIVILEGES, new Set(editingDb.privileges || []), handleEditingDbPrivChange)}
                       <div className="flex items-center space-x-2 pt-2">
                         <Checkbox id="db-grant" checked={editingDb.grantOption} onCheckedChange={(checked) => setEditingDb(prev => ({ ...prev!, grantOption: !!checked }))} />
-                        <Label htmlFor="db-grant">GRANT OPTION</Label>
+                        <Label htmlFor="db-grant">{t("userPrivilegesDialog.grantOption")}</Label>
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setEditingDb(null)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setEditingDb(null)}>{t("userPrivilegesDialog.cancel")}</Button>
                         <Button onClick={handleSaveDb} disabled={isSaving}>
                           {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                          Save Changes
+                          {t("userPrivilegesDialog.saveChanges")}
                         </Button>
                       </div>
                     </div>
@@ -263,7 +265,7 @@ const UserPrivilegesDialog = ({ user, host, onClose, onPrivilegesUpdated }: User
           </Tabs>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={onClose}>{t("userPrivilegesDialog.close")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

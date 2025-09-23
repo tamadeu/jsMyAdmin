@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import i18n from "@/i18n"; // Import i18n instance
 
 type Theme = "dark" | "light" | "system";
 
@@ -23,7 +24,7 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "jsmyadmin-theme", // Updated from phpmyadmin-theme
+  storageKey = "jsmyadmin-theme",
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(

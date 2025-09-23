@@ -8,9 +8,11 @@ import { apiService, QueryResult, QueryHistoryPayload } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
 import { format } from "sql-formatter";
-import SqlCodeEditor from "@/components/SqlCodeEditor"; // New import
+import SqlCodeEditor from "@/components/SqlCodeEditor";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 const SqlEditor = () => {
+  const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const { addTab, activeTabId, getTabById, updateTabContent, removeTab } = useTabs();
   
@@ -31,16 +33,16 @@ const SqlEditor = () => {
       setQueryHistory(historyData);
     } catch (error) {
       console.error('Error fetching query history:', error);
-      setHistoryError(error instanceof Error ? error.message : "Failed to load query history.");
+      setHistoryError(error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"));
       toast({
-        title: "Error loading query history",
-        description: error instanceof Error ? error.message : "Failed to load query history.",
+        title: t("sqlEditor.errorLoadingHistory"),
+        description: error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"),
         variant: "destructive"
       });
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [toast]);
+  }, [toast, t]);
 
   // Effect to synchronize local sqlQuery state with activeTab.sqlQueryContent when activeTab changes
   useEffect(() => {
@@ -85,7 +87,7 @@ const SqlEditor = () => {
         const isSelect = sqlQuery.trim().toLowerCase().startsWith('select');
         if (isSelect && result.data) {
           addTab({
-            title: `Query Result (${new Date().toLocaleTimeString()})`,
+            title: t("header.queryResultTitle", { time: new Date().toLocaleTimeString() }),
             type: 'query-result',
             queryResult: { ...result, originalQuery: sqlQuery },
             closable: true,
@@ -96,27 +98,27 @@ const SqlEditor = () => {
           }
         } else {
           toast({
-            title: "Query executed",
-            description: result.message || "SQL query executed successfully.",
+            title: t("sqlEditor.queryExecuted"),
+            description: result.message || t("sqlEditor.queryExecutedSuccessfully"),
           });
         }
       } else {
         toast({
-          title: "Query failed",
-          description: result.error || "An error occurred during query execution.",
+          title: t("sqlEditor.queryFailed"),
+          description: result.error || t("sqlEditor.queryExecutionError"),
           variant: "destructive"
         });
       }
     } catch (error) {
       console.error('Error executing query:', error);
       toast({
-        title: "Query failed",
-        description: error instanceof Error ? error.message : "Failed to execute SQL query",
+        title: t("sqlEditor.queryFailed"),
+        description: error instanceof Error ? error.message : t("sqlEditor.failedToExecuteSqlQuery"),
         variant: "destructive"
       });
       result = {
         success: false,
-        error: error instanceof Error ? error.message : "Client-side error",
+        error: error instanceof Error ? error.message : t("sqlEditor.clientSideError"),
         executionTime: 0,
         originalQuery: sqlQuery
       };
@@ -135,12 +137,12 @@ const SqlEditor = () => {
         });
       }
     }
-  }, [sqlQuery, addTab, toast, fetchQueryHistory, activeTab, activeTabId, removeTab]);
+  }, [sqlQuery, addTab, toast, fetchQueryHistory, activeTab, activeTabId, removeTab, t]);
 
   const saveQuery = () => {
     toast({
-      title: "Feature not implemented",
-      description: "Saving queries is not yet available.",
+      title: t("sqlEditor.featureNotImplemented"),
+      description: t("sqlEditor.savingQueriesNotAvailable"),
       variant: "default"
     });
   };
@@ -154,18 +156,18 @@ const SqlEditor = () => {
       });
       setSqlQuery(formatted);
       toast({
-        title: "Query formatted",
-        description: "SQL query has been formatted.",
+        title: t("sqlEditor.queryFormatted"),
+        description: t("sqlEditor.sqlQueryFormatted"),
       });
     } catch (error) {
       console.error('Error formatting query:', error);
       toast({
-        title: "Formatting failed",
-        description: error instanceof Error ? error.message : "Failed to format SQL query",
+        title: t("sqlEditor.formattingFailed"),
+        description: error instanceof Error ? error.message : t("sqlEditor.failedToFormatQuery"),
         variant: "destructive"
       });
     }
-  }, [sqlQuery, toast]);
+  }, [sqlQuery, toast, t]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.ctrlKey && e.key === 'Enter') {
@@ -178,27 +180,27 @@ const SqlEditor = () => {
     <div className="flex flex-col h-full p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">SQL Editor</h1>
-          <p className="text-muted-foreground">Write and execute SQL queries</p>
+          <h1 className="text-2xl font-bold">{t("sqlEditor.title")}</h1>
+          <p className="text-muted-foreground">{t("sqlEditor.subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={formatQuery}>
             <AlignLeft className="h-4 w-4 mr-2" />
-            Format SQL
+            {t("sqlEditor.formatSql")}
           </Button>
           <Button variant="outline" size="sm" onClick={saveQuery}>
             <Save className="h-4 w-4 mr-2" />
-            Save
+            {t("sqlEditor.save")}
           </Button>
           <Button size="sm" onClick={executeQuery} disabled={isExecuting}>
             <Play className="h-4 w-4 mr-2" />
-            {isExecuting ? 'Executing...' : 'Execute'}
+            {isExecuting ? t("sqlEditor.executing") : t("sqlEditor.execute")}
           </Button>
         </div>
       </div>
 
       {/* Query Editor Area */}
-      <div className="flex-1"> {/* Use flex-1 to make it take available space */}
+      <div className="flex-1">
         <SqlCodeEditor
           value={sqlQuery}
           onValueChange={setSqlQuery}
@@ -213,7 +215,7 @@ const SqlEditor = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <History className="h-5 w-5" />
-              <CardTitle>My Query History</CardTitle>
+              <CardTitle>{t("sqlEditor.myQueryHistory")}</CardTitle>
             </div>
             <Button 
               variant="ghost" 
@@ -225,13 +227,13 @@ const SqlEditor = () => {
               <RefreshCw className={`h-4 w-4 ${isLoadingHistory ? 'animate-spin' : ''}`} />
             </Button>
           </div>
-          <CardDescription>Recently executed SQL queries by you.</CardDescription>
+          <CardDescription>{t("sqlEditor.myQueryHistoryDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoadingHistory ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Loading history...</p>
+              <p className="text-sm text-muted-foreground">{t("sqlEditor.loadingHistory")}</p>
             </div>
           ) : historyError ? (
             <div className="flex items-center justify-center py-4 text-red-500">
@@ -239,11 +241,11 @@ const SqlEditor = () => {
               <p className="text-sm">{historyError}</p>
             </div>
           ) : queryHistory.length === 0 ? (
-            <div className="text-center py-4 text-muted-foreground">No recent queries.</div>
+            <div className="text-center py-4 text-muted-foreground">{t("sqlEditor.noRecentQueries")}</div>
           ) : (
             queryHistory.map((query, index) => (
               <div 
-                key={query.id || index} // Use id if available, fallback to index
+                key={query.id || index}
                 className="p-3 bg-accent rounded-lg cursor-pointer hover:bg-accent/80"
                 onClick={() => setSqlQuery(query.query_text)}
               >
@@ -251,7 +253,7 @@ const SqlEditor = () => {
                 <div className="text-xs text-muted-foreground mt-1">
                   {query.execution_time_ms}ms • {new Date(query.executed_at!).toLocaleString()}
                   {query.database_context && ` • DB: ${query.database_context}`}
-                  {query.status === 'error' && <span className="text-red-500 ml-2"> (Error)</span>}
+                  {query.status === 'error' && <span className="text-red-500 ml-2"> ({t("sqlEditor.error")})</span>}
                 </div>
               </div>
             ))
@@ -262,8 +264,8 @@ const SqlEditor = () => {
       {/* Quick Actions Card */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common SQL commands</CardDescription>
+          <CardTitle>{t("sqlEditor.quickActions")}</CardTitle>
+          <CardDescription>{t("sqlEditor.commonSqlCommands")}</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Button 
@@ -271,28 +273,28 @@ const SqlEditor = () => {
             className="w-full justify-start"
             onClick={() => setSqlQuery("SHOW TABLES;")}
           >
-            Show Tables
+            {t("sqlEditor.showTables")}
           </Button>
           <Button 
             variant="outline" 
             className="w-full justify-start"
             onClick={() => setSqlQuery("SHOW DATABASES;")}
           >
-            Show Databases
+            {t("sqlEditor.showDatabases")}
           </Button>
           <Button 
             variant="outline" 
             className="w-full justify-start"
             onClick={() => setSqlQuery("SELECT * FROM users LIMIT 10;")}
           >
-            Browse Users
+            {t("sqlEditor.browseUsers")}
           </Button>
           <Button 
             variant="outline" 
             className="w-full justify-start"
             onClick={() => setSqlQuery("SELECT * FROM products LIMIT 10;")}
           >
-            Browse Products
+            {t("sqlEditor.browseProducts")}
           </Button>
         </CardContent>
       </Card>
