@@ -267,10 +267,6 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                             <LayoutPanelTop className="h-4 w-4 mr-2" />
                             {t("databaseTablesList.structure")}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenSqlEditor(item.name)}>
-                            <Play className="h-4 w-4 mr-2" />
-                            {t("databaseTablesList.sqlEditor")}
-                          </Button>
                           {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
                             <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="text-orange-500 hover:text-orange-600">
                               <Eraser className="h-4 w-4 mr-2" />
