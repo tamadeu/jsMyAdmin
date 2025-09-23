@@ -1,6 +1,7 @@
 "use client";
 
-import { Wifi, Bell, User, LogOut } from "lucide-react";
+import { useState } from "react";
+import { Wifi, Bell, User, LogOut, Keyboard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useTabs } from "@/context/TabContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -12,12 +13,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button"; // Certifique-se de que Button está importado
+import KeyboardShortcutsDialog from "@/components/KeyboardShortcutsDialog"; // Importar o novo componente
 
 const Header = () => {
   const { activeTabId, getTabById } = useTabs();
   const { logout } = useAuth();
   const activeTab = getTabById(activeTabId);
   const isMobile = useIsMobile();
+  const [isShortcutsDialogOpen, setIsShortcutsDialogOpen] = useState(false); // Estado para o modal de atalhos
 
   let headerTitle = "jsMyAdmin";
   let headerSubtitle: string | undefined = undefined;
@@ -77,6 +81,16 @@ const Header = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 px-0"
+            onClick={() => setIsShortcutsDialogOpen(true)} // Botão para abrir o modal
+            title="Atalhos de Teclado"
+          >
+            <Keyboard className="h-4 w-4" />
+            <span className="sr-only">Atalhos de Teclado</span>
+          </Button>
           <div className="flex items-center gap-2">
             <Wifi className="h-4 w-4 text-green-500" />
             <Badge variant="outline" className="text-green-500 border-green-500">
@@ -100,6 +114,10 @@ const Header = () => {
           </DropdownMenu>
         </div>
       </div>
+      <KeyboardShortcutsDialog 
+        open={isShortcutsDialogOpen} 
+        onOpenChange={setIsShortcutsDialogOpen} 
+      />
     </header>
   );
 };
