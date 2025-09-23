@@ -1,4 +1,7 @@
+"use client";
+
 import * as React from "react";
+import { useTranslation } from "react-i18next"; // Import useTranslation
 
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
@@ -134,39 +137,11 @@ function dispatch(action: Action) {
   });
 }
 
-type Toast = Omit<ToasterToast, "id">;
-
-function toast({ ...props }: Toast) {
-  const id = genId();
-
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    });
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
-
-  dispatch({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss();
-      },
-    },
-  });
-
-  return {
-    id: id,
-    dismiss,
-    update,
-  };
-}
+// The global toast function is removed. It will now be defined inside useToast.
 
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState);
+  const { t } = useTranslation(); // Use translation hook here
 
   React.useEffect(() => {
     listeners.push(setState);
@@ -178,6 +153,38 @@ function useToast() {
     };
   }, [state]);
 
+  // Define the toast function inside the hook to access 't'
+  const toast = React.useCallback(({ title, description, ...props }: Omit<ToasterToast, "id">) => {
+    const id = genId();
+
+    const update = (props: ToasterToast) =>
+      dispatch({
+        type: "UPDATE_TOAST",
+        toast: { ...props, id },
+      });
+    const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
+
+    dispatch({
+      type: "ADD_TOAST",
+      toast: {
+        ...props,
+        id,
+        title: title, // Title is already translated by the calling component
+        description: description, // Description is already translated by the calling component
+        open: true,
+        onOpenChange: (open) => {
+          if (!open) dismiss();
+        },
+      },
+    });
+
+    return {
+      id: id,
+      dismiss,
+      update,
+    };
+  }, [t]); // Depend on t to ensure it's up-to-date if language changes
+
   return {
     ...state,
     toast,
@@ -185,4 +192,4 @@ function useToast() {
   };
 }
 
-export { useToast, toast };
+export { useToast }; // Export only useToast

@@ -320,7 +320,7 @@
     "tableDeleted": "Tabela Excluída",
     "tableDeletedSuccessfully": "Tabela '{{tableName}}' excluída com sucesso.",
     "errorDeletingTable": "Erro ao Excluir Tabela",
-    "failedToDeleteTable": "Falha ao excluir tabela.",
+    "failedToToDeleteTable": "Falha ao excluir tabela.",
     "tableTruncated": "Tabela Esvaziada",
     "tableTruncatedSuccessfully": "Todos os dados da tabela '{{tableName}}' foram removidos.",
     "errorTruncatingTable": "Erro ao Esvaziar Tabela",
@@ -449,5 +449,9 @@
     "noDataToExport": "Não há dados para exportar.",
     "exportSuccessful": "Exportação Bem-Sucedida",
     "dataExportedSuccessfully": "Dados exportados com sucesso como {{format}}."
+  },
+  "notFoundPage": {
+    "oopsPageNotFound": "Oops! Página não encontrada",
+    "returnToHome": "Voltar para a Página Inicial"
   }
 }

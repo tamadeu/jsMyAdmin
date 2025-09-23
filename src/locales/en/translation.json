@@ -449,5 +449,9 @@
     "noDataToExport": "There is no data to export.",
     "exportSuccessful": "Export Successful",
     "dataExportedSuccessfully": "Data exported successfully as {{format}}."
+  },
+  "notFoundPage": {
+    "oopsPageNotFound": "Oops! Page not found",
+    "returnToHome": "Return to Home"
   }
 }
