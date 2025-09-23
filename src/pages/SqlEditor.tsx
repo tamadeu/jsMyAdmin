@@ -25,6 +25,7 @@ const SqlEditor = () => {
   const [queryHistory, setQueryHistory] = useState<QueryHistoryPayload[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isSqlAgentDialogOpen, setIsSqlAgentDialogOpen] = useState(false); // State for AI Agent dialog
 
   const fetchQueryHistory = useCallback(async () => {
     setIsLoadingHistory(true);
@@ -192,6 +193,10 @@ const SqlEditor = () => {
           <p className="text-muted-foreground">{t("sqlEditor.subtitle")}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsSqlAgentDialogOpen(true)}>
+            <Brain className="h-4 w-4 mr-2" />
+            {t("sqlEditor.generateWithAi")}
+          </Button>
           <Button variant="outline" size="sm" onClick={formatQuery}>
             <AlignLeft className="h-4 w-4 mr-2" />
             {t("sqlEditor.formatSql")}
@@ -207,8 +212,13 @@ const SqlEditor = () => {
         </div>
       </div>
 
-      {/* AI Agent Section */}
-      <SqlAgent onGenerateSql={handleAiGeneratedSql} currentDatabase={currentDatabaseContext} />
+      {/* AI Agent Dialog */}
+      <SqlAgent 
+        open={isSqlAgentDialogOpen} 
+        onOpenChange={setIsSqlAgentDialogOpen} 
+        onGenerateSql={handleAiGeneratedSql} 
+        currentDatabase={currentDatabaseContext} 
+      />
 
       {/* Query Editor Area */}
       <div className="flex-1">

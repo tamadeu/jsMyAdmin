@@ -105,7 +105,8 @@
     "failedToFormatForEditor": "Failed to format query. Opening editor with unformatted query.",
     "viewLess": "View Less",
     "viewMore": "View More",
-    "editQuery": "Edit Query"
+    "editQuery": "Edit Query",
+    "generateWithAi": "Generate with AI"
   },
   "queryResultTable": {
     "showingRecords": "Showing records {{start}} - {{end}} ({{total}} total, {{filteredByServer}}Query took {{time}} seconds.)",
@@ -501,6 +502,7 @@
     "sqlGenerated": "SQL Generated",
     "sqlGeneratedSuccessfully": "SQL query generated successfully by AI.",
     "errorGeneratingSql": "Error Generating SQL",
-    "failedToGenerateSql": "Failed to generate SQL with AI."
+    "failedToGenerateSql": "Failed to generate SQL with AI.",
+    "cancel": "Cancel"
   }
 }

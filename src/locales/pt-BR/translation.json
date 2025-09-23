@@ -105,7 +105,8 @@
     "failedToFormatForEditor": "Falha ao formatar consulta. Abrindo editor com consulta não formatada.",
     "viewLess": "Ver Menos",
     "viewMore": "Ver Mais",
-    "editQuery": "Editar Consulta"
+    "editQuery": "Editar Consulta",
+    "generateWithAi": "Gerar com IA"
   },
   "queryResultTable": {
     "showingRecords": "Mostrando registros {{start}} - {{end}} ({{total}} no total, {{filteredByServer}}Consulta levou {{time}} segundos.)",
@@ -501,6 +502,7 @@
     "sqlGenerated": "SQL Gerado",
     "sqlGeneratedSuccessfully": "Consulta SQL gerada com sucesso pela IA.",
     "errorGeneratingSql": "Erro ao Gerar SQL",
-    "failedToGenerateSql": "Falha ao gerar SQL com IA."
+    "failedToGenerateSql": "Falha ao gerar SQL com IA.",
+    "cancel": "Cancelar"
   }
 }

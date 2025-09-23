@@ -4,18 +4,21 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Brain, Send } from "lucide-react";
+import { Loader2, Brain, Send, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/services/api";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface SqlAgentProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onGenerateSql: (sql: string) => void;
   currentDatabase?: string;
 }
 
-const SqlAgent = ({ onGenerateSql, currentDatabase }: SqlAgentProps) => {
+const SqlAgent = ({ open, onOpenChange, onGenerateSql, currentDatabase }: SqlAgentProps) => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [prompt, setPrompt] = useState("");
@@ -79,6 +82,7 @@ const SqlAgent = ({ onGenerateSql, currentDatabase }: SqlAgentProps) => {
           title: t("sqlAgent.sqlGenerated"),
           description: t("sqlAgent.sqlGeneratedSuccessfully"),
         });
+        onOpenChange(false); // Close dialog on successful generation
       } else {
         throw new Error(result.message || t("sqlAgent.failedToGenerateSql"));
       }
@@ -95,43 +99,51 @@ const SqlAgent = ({ onGenerateSql, currentDatabase }: SqlAgentProps) => {
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Brain className="h-5 w-5" /> {t("sqlAgent.title")}
-        </CardTitle>
-        <CardDescription>{t("sqlAgent.description")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Textarea
-          placeholder={t("sqlAgent.promptPlaceholder")}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={5}
-          disabled={isGenerating}
-        />
-        <div className="flex items-center gap-2">
-          <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isGenerating}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder={t("sqlAgent.selectAiModel")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="gemini">Google Gemini</SelectItem>
-              <SelectItem value="openai">OpenAI (GPT)</SelectItem>
-              <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} className="flex-1">
-            {isGenerating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4 mr-2" />
-            )}
-            {isGenerating ? t("sqlAgent.generatingSql") : t("sqlAgent.generateSql")}
-          </Button>
+    <Dialog open={open} onOpenChange={(o) => { if (!isGenerating) onOpenChange(o); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" /> {t("sqlAgent.title")}
+          </DialogTitle>
+          <DialogDescription>{t("sqlAgent.description")}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <Textarea
+            placeholder={t("sqlAgent.promptPlaceholder")}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={5}
+            disabled={isGenerating}
+          />
+          <div className="flex items-center gap-2">
+            <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isGenerating}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder={t("sqlAgent.selectAiModel")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
+                <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleGenerate} disabled={isGenerating || !prompt.trim()} className="flex-1">
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-2" />
+              )}
+              {isGenerating ? t("sqlAgent.generatingSql") : t("sqlAgent.generateSql")}
+            </Button>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isGenerating}>
+            <XCircle className="h-4 w-4 mr-2" />
+            {t("sqlAgent.cancel")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
