@@ -1,6 +1,6 @@
 {
   "loginPage": {
-    "title": "phpMyAdmin",
+    "title": "jsMyAdmin",
     "description": "Conecte-se ao seu Banco de Dados MySQL",
     "server": "Servidor",
     "port": "Porta",

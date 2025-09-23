@@ -102,7 +102,7 @@ const ExportDataDialog = ({
     const statements: string[] = [];
 
     // Header comments and SET statements
-    statements.push(`-- phpMyAdmin SQL Dump`);
+    statements.push(`-- jsMyAdmin SQL Dump`);
     statements.push(`-- Time: ${new Date().toLocaleString()}`);
     statements.push(`SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";`);
     statements.push(`START TRANSACTION;`);

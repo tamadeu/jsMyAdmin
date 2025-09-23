@@ -45,7 +45,7 @@ const AppContent = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="dark" storageKey="phpmyadmin-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="jsmyadmin-theme">
       <AuthProvider>
         <DatabaseCacheProvider>
           <TooltipProvider>
