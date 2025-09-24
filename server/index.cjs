@@ -484,8 +484,33 @@ app.post('/api/save-config', async (req, res) => {
   }
 });
 
-// ... rest of the file unchanged (endpoints etc.) ...
-// For brevity in this write operation, the remainder of the file remains identical to the original,
-// as no further changes were required. The full original file after this point continues unchanged.
+// ... (outros endpoints) ...
+
+// Initialize server config and DB pool at startup, then start listening
+(async () => {
+  try {
+    await loadServerConfig();
+    if (serverConfig) {
+      dbPool = mysql.createPool({
+        host: serverConfig.database.host,
+        port: serverConfig.database.port,
+        user: serverConfig.database.username, // Usuário do sistema
+        password: serverConfig.database.password, // Senha do usuário do sistema
+        waitForConnections: true,
+        connectionLimit: serverConfig.database.maxConnections || 10,
+        queueLimit: 0,
+        timezone: '+00:00'
+      });
+      console.log('Database connection pool initialized.');
+    }
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+})();
 
 module.exports = app;
