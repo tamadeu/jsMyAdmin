@@ -20,7 +20,7 @@ if (!SESSION_SECRET_KEY || SESSION_SECRET_KEY === 'sua_chave_secreta_super_segur
 }
 
 const ALGORITHM = 'aes-256-cbc';
-const KEY = crypto.createHash('sha256').update(String(SESSION_SECRET_SECRET)).digest('base64').substr(0, 32);
+const KEY = crypto.createHash('sha256').update(String(SESSION_SECRET_KEY)).digest('base64').substr(0, 32);
 
 function encrypt(text) {
   const iv = crypto.scryptSync(SESSION_SECRET_KEY, 'salt', 16); // IV determinístico
@@ -146,7 +146,7 @@ async function getUserPooledConnection(req) {
       ssl: serverConfig.database.ssl ? {
         ca: serverConfig.database.sslCA || undefined,
         cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined, // Corrigido: de 'key' para 'sslKey'
+        key: serverConfig.database.sslKey || undefined,
       } : false,
       multipleStatements: serverConfig.security.allowMultipleStatements,
       timezone: '+00:00'
