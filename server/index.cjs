@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-'use strict';
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
@@ -139,35 +137,20 @@ async function getUserPooledConnection(req) {
 
   const connection = await dbPool.getConnection();
   try {
-    const changeUserPayloadBase = {
+    await connection.changeUser({
       user: req.dbCredentials.user,
       password: req.dbCredentials.password,
+      database: serverConfig.database.defaultDatabase, // Use default from server config
       charset: serverConfig.database.charset,
       ssl: serverConfig.database.ssl ? {
         ca: serverConfig.database.sslCA || undefined,
         cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined,
+        key: serverConfig.database.key || undefined, // Corrigido de sslKey para key
       } : false,
       multipleStatements: serverConfig.security.allowMultipleStatements,
       timezone: '+00:00'
-    };
-
-    // First attempt: include database (keeps previous behavior when possible)
-    try {
-      const payloadWithDb = { ...changeUserPayloadBase, database: serverConfig.database.defaultDatabase };
-      await connection.changeUser(payloadWithDb);
-      return connection;
-    } catch (err) {
-      // If the user simply doesn't have access to the serverConfig default database, retry without database
-      if (err && err.code === 'ER_DBACCESS_DENIED_ERROR') {
-        console.warn(`changeUser with database '${serverConfig.database.defaultDatabase}' failed for user '${req.dbCredentials.user}'; retrying without setting database to avoid access denied error.`);
-        // Retry without database property — this authenticates the user but doesn't switch to the protected schema
-        await connection.changeUser(changeUserPayloadBase);
-        return connection;
-      }
-      // rethrow other errors
-      throw err;
-    }
+    });
+    return connection;
   } catch (error) {
     connection.release(); // Release connection on error
     throw error;
@@ -481,605 +464,590 @@ app.post('/api/save-config', async (req, res) => {
   }
 });
 
-// Get server status
-app.get('/api/status', authMiddleware, async (req, res) => {
-  let connection;
-  try {
-    connection = await getUserPooledConnection(req);
-    const [statusRows] = await connection.execute('SHOW STATUS LIKE "Uptime";');
-    const uptime = statusRows.find(row => row.Variable_name === 'Uptime')?.Value || 'N/A';
-
-    const [versionRows] = await connection.execute('SELECT VERSION() as version;');
-    const version = versionRows[0]?.version || 'N/A';
-
-    const [connectionsRows] = await connection.execute('SHOW STATUS LIKE "Threads_connected";');
-    const connections = connectionsRows.find(row => row.Variable_name === 'Threads_connected')?.Value || 0;
-
-    res.json({
-      version: version,
-      uptime: uptime,
-      connections: parseInt(connections, 10),
-      status: 'OK'
-    });
-  } catch (error) {
-    console.error('Error fetching server status:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch server status' });
-  } finally {
-    if (connection) connection.release();
-  }
-});
-
-// Get list of databases
+// Get databases
 app.get('/api/databases', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await getUserPooledConnection(req);
-    const [rows] = await connection.execute('SHOW DATABASES');
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const [rows] = await connection.query('SHOW DATABASES');
     const databases = rows.map(row => row.Database);
     res.json(databases);
   } catch (error) {
     console.error('Error fetching databases:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch databases' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Create a new database
+// Create new database
 app.post('/api/databases', authMiddleware, async (req, res) => {
   let connection;
   try {
+    connection = await getUserPooledConnection(req);
     const { databaseName, charset, collation } = req.body;
+
     if (!databaseName) {
-      return res.status(400).json({ error: 'Database name is required.' });
+      return res.status(400).json({ success: false, error: 'Database name is required.' });
     }
 
-    connection = await getUserPooledConnection(req);
-    await connection.execute(
-      `CREATE DATABASE \`${databaseName}\` CHARACTER SET ${charset || 'utf8mb4'} COLLATE ${collation || 'utf8mb4_unicode_ci'}`
-    );
+    // Basic sanitization for database name
+    if (!/^[a-zA-Z0-9_]+$/.test(databaseName)) {
+      return res.status(400).json({ success: false, error: 'Invalid database name. Only alphanumeric characters and underscores are allowed.' });
+    }
+
+    let createQuery = `CREATE DATABASE \`${databaseName}\``;
+    if (charset) {
+      createQuery += ` CHARACTER SET ${connection.escapeId(charset)}`;
+    }
+    if (collation) {
+      createQuery += ` COLLATE ${connection.escapeId(collation)}`;
+    }
+
+    await connection.query(createQuery);
     res.json({ success: true, message: `Database '${databaseName}' created successfully.` });
   } catch (error) {
     console.error('Error creating database:', error);
-    res.status(500).json({ error: error.message || 'Failed to create database.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
 
 // Get tables and views for a database
-app.get('/api/databases/:db/tables', authMiddleware, async (req, res) => {
+app.get('/api/databases/:database/tables', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { db } = req.params;
-    connection = await getUserPooledConnection(req);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const { database } = req.params;
+    
+    const [tablesAndViews] = await connection.execute(`
+      SELECT TABLE_NAME as table_name, TABLE_TYPE as table_type, TABLE_ROWS as table_rows,
+      ROUND(((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024), 2) AS size_mb,
+      ENGINE as engine, TABLE_COLLATION as table_collation
+      FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_TYPE, TABLE_NAME
+    `, [database]);
 
-    const [tablesResult] = await connection.execute(
-      `SELECT 
-        TABLE_NAME as name, 
-        TABLE_ROWS as rows, 
-        (DATA_LENGTH + INDEX_LENGTH) as size_bytes, 
-        ENGINE as engine, 
-        TABLE_COLLATION as collation,
-        TABLE_TYPE as type
-      FROM INFORMATION_SCHEMA.TABLES 
-      WHERE TABLE_SCHEMA = ? AND TABLE_TYPE IN ('BASE TABLE', 'VIEW')`,
-      [db]
-    );
-
-    const tables = [];
-    const views = [];
-
-    for (const row of tablesResult) {
-      const size = row.size_bytes !== null ? `${(row.size_bytes / 1024 / 1024).toFixed(2)} MB` : 'N/A';
-      const item = {
-        name: row.name,
-        rows: row.rows !== null ? parseInt(row.rows, 10) : 0,
-        size: size,
-        engine: row.engine || 'N/A',
-        collation: row.collation || 'N/A',
+    const tables = [], views = [];
+    tablesAndViews.forEach(item => {
+      const info = {
+        name: item.table_name, rows: item.table_rows || 0,
+        size: item.size_mb ? `${item.size_mb} MB` : '0 MB',
+        engine: item.engine || 'N/A', collation: item.table_collation || 'Unknown'
       };
-      if (row.type === 'BASE TABLE') {
-        tables.push(item);
-      } else if (row.type === 'VIEW') {
-        views.push(item);
-      }
-    }
-
-    res.json({
-      tables: tables,
-      views: views,
-      totalTables: tables.length,
-      totalViews: views.length,
+      if (item.table_type === 'VIEW') views.push(info);
+      else tables.push(info);
     });
+    
+    res.json({ tables, views, totalTables: tables.length, totalViews: views.length });
   } catch (error) {
-    console.error('Error fetching tables and views:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch tables and views.' });
+    console.error('Error fetching tables:', error);
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Create a new table
+// Create new table
 app.post('/api/databases/:database/tables', authMiddleware, async (req, res) => {
   let connection;
   try {
+    connection = await getUserPooledConnection(req);
     const { database } = req.params;
     const { tableName, columns } = req.body;
 
     if (!tableName || !columns || !Array.isArray(columns) || columns.length === 0) {
-      return res.status(400).json({ error: 'Table name and columns are required.' });
+      return res.status(400).json({ success: false, error: 'Table name and column definitions are required.' });
     }
+
+    // Basic sanitization for table name
+    if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+      return res.status(400).json({ success: false, error: 'Invalid table name. Only alphanumeric characters and underscores are allowed.' });
+    }
+
+    await connection.query(`USE \`${database}\``);
 
     const columnDefinitions = columns.map(col => {
       let definition = `\`${col.name}\` ${col.type}`;
-      if (col.length) {
+      if (col.length !== undefined && col.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(col.type.toUpperCase())) {
         definition += `(${col.length})`;
       }
       if (!col.nullable) {
         definition += ` NOT NULL`;
       }
+      if (col.isAutoIncrement) {
+        definition += ` AUTO_INCREMENT`;
+      }
       if (col.defaultValue !== null && col.defaultValue !== undefined && col.defaultValue !== '') {
+        // Escape default values properly
         if (typeof col.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(col.defaultValue.toUpperCase())) {
-          definition += ` DEFAULT '${String(col.defaultValue).replace(/'/g, "''")}'`;
+          definition += ` DEFAULT ${connection.escape(col.defaultValue)}`;
         } else {
           definition += ` DEFAULT ${col.defaultValue}`;
         }
-      } else if (col.defaultValue === '') { // Handle empty string default for non-nullable
-        definition += ` DEFAULT ''`;
-      }
-      if (col.isAutoIncrement) {
-        definition += ` AUTO_INCREMENT`;
+      } else if (col.nullable && col.defaultValue === null) {
+        definition += ` DEFAULT NULL`;
       }
       return definition;
     });
 
     const primaryKeyColumns = columns.filter(col => col.isPrimaryKey).map(col => `\`${col.name}\``);
-    if (primaryKeyColumns.length > 0) {
-      columnDefinitions.push(`PRIMARY KEY (${primaryKeyColumns.join(', ')})`);
+    if (primaryKeyColumns.length === 0) {
+      return res.status(400).json({ success: false, error: 'A table must have at least one primary key.' });
     }
+    columnDefinitions.push(`PRIMARY KEY (${primaryKeyColumns.join(', ')})`);
 
-    const createTableSql = `CREATE TABLE \`${database}\`.\`${tableName}\` (\n  ${columnDefinitions.join(',\n  ')}\n);`;
-
-    connection = await getUserPooledConnection(req);
-    await connection.execute(createTableSql);
-
-    res.json({ success: true, message: `Table '${tableName}' created successfully in database '${database}'.` });
+    const createTableQuery = `CREATE TABLE \`${tableName}\` (${columnDefinitions.join(', ')})`;
+    
+    await connection.query(createTableQuery);
+    res.json({ success: true, message: `Table '${tableName}' created successfully.` });
   } catch (error) {
     console.error('Error creating table:', error);
-    res.status(500).json({ error: error.message || 'Failed to create table.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
 
-// Delete a table
+// Delete table
 app.delete('/api/databases/:database/tables/:table', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { database, table } = req.params;
     connection = await getUserPooledConnection(req);
-    await connection.execute(`DROP TABLE \`${database}\`.\`${table}\``);
+    const { database, table } = req.params;
+
+    await connection.query(`USE \`${database}\``);
+    await connection.query(`DROP TABLE \`${table}\``);
+    
     res.json({ success: true, message: `Table '${table}' deleted successfully.` });
   } catch (error) {
     console.error('Error deleting table:', error);
-    res.status(500).json({ error: error.message || 'Failed to delete table.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
 
-// Truncate (empty) a table
+// Truncate table data
 app.delete('/api/databases/:database/tables/:table/data', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { database, table } = req.params;
     connection = await getUserPooledConnection(req);
-    await connection.execute(`TRUNCATE TABLE \`${database}\`.\`${table}\``);
+    const { database, table } = req.params;
+
+    await connection.query(`USE \`${database}\``);
+    await connection.query(`TRUNCATE TABLE \`${table}\``);
+    // Adiciona ANALYZE TABLE para forçar a atualização das estatísticas no information_schema
+    await connection.query(`ANALYZE TABLE \`${table}\``);
+    
     res.json({ success: true, message: `Table '${table}' truncated successfully.` });
   } catch (error) {
     console.error('Error truncating table:', error);
-    res.status(500).json({ error: error.message || 'Failed to truncate table.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
+
+// Helper to compare column definitions (excluding name for rename detection)
+function areColumnDefinitionsSimilar(col1, col2) {
+  const typesWithLength = ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'];
+
+  let lengthMatches = true;
+  if (typesWithLength.includes(col1.type) && typesWithLength.includes(col2.type)) {
+    lengthMatches = col1.length === col2.length;
+  } else if (!typesWithLength.includes(col1.type) && !typesWithLength.includes(col2.type)) {
+    lengthMatches = true; // Neither type uses length, so they match on length
+  } else {
+    lengthMatches = false; // One uses length, the other doesn't, so they don't match
+  }
+
+  return (
+    col1.type === col2.type &&
+    lengthMatches &&
+    col1.nullable === col2.nullable &&
+    col1.isAutoIncrement === col2.isAutoIncrement &&
+    String(col1.defaultValue) === String(col2.defaultValue)
+  );
+}
 
 // Update table structure
 app.put('/api/databases/:database/tables/:table/structure', authMiddleware, async (req, res) => {
   let connection;
   try {
+    connection = await getUserPooledConnection(req);
     const { database, table } = req.params;
-    const { columns } = req.body;
+    const newColumns = req.body.columns; // This array now represents the desired order
 
-    if (!columns || !Array.isArray(columns)) {
-      return res.status(400).json({ error: 'Columns array is required.' });
+    if (!newColumns || !Array.isArray(newColumns)) {
+      return res.status(400).json({ success: false, error: 'New column definitions are required.' });
     }
 
-    connection = await getUserPooledConnection(req);
+    await connection.query(`USE \`${database}\``);
 
-    // Fetch current structure to compare
-    const [currentColumnsRaw] = await connection.execute(
-      `SELECT COLUMN_NAME as name, COLUMN_TYPE as type, IS_NULLABLE as nullable, COLUMN_KEY as \`key\`, COLUMN_DEFAULT as \`default\`, EXTRA as extra
-       FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
-       ORDER BY ORDINAL_POSITION`,
-      [database, table]
-    );
-
-    const currentColumns = currentColumnsRaw.map(col => ({
-      name: col.name,
-      type: col.type,
-      nullable: col.nullable === 'YES',
-      key: col.key,
-      default: col.default,
-      extra: col.extra,
+    // 1. Fetch current table structure
+    const [currentDescribe] = await connection.query(`DESCRIBE \`${table}\``);
+    const currentColumns = currentDescribe.map(col => ({
+      name: col.Field,
+      type: col.Type.split('(')[0].toUpperCase(),
+      length: col.Type.includes('(') ? parseInt(col.Type.split('(')[1].replace(')', '')) : undefined,
+      nullable: col.Null === 'YES',
+      isPrimaryKey: col.Key === 'PRI',
+      isAutoIncrement: col.Extra.includes('auto_increment'),
+      defaultValue: col.Default,
     }));
 
     const alterStatements = [];
+    const currentColumnMap = new Map(currentColumns.map(c => [c.name, c]));
+    const newColumnMap = new Map(newColumns.map(c => [c.name, c]));
 
-    // 1. Handle dropped columns
+    // --- Primary Key Handling (before column changes) ---
+    const currentPKColumns = currentColumns.filter(c => c.isPrimaryKey).map(c => c.name);
+    const newPKColumns = newColumns.filter(c => c.isPrimaryKey).map(c => c.name);
+
+    // Drop existing primary key if it's changing or being removed
+    if (currentPKColumns.length > 0 && (!newPKColumns.length || JSON.stringify(currentPKColumns.sort()) !== JSON.stringify(newPKColumns.sort()))) {
+      alterStatements.push(`ALTER TABLE \`${table}\` DROP PRIMARY KEY`);
+    }
+
+    // --- Identify dropped, added, modified, and renamed columns ---
+    const columnsToDrop = []; // Names of columns to drop
+    const columnsToAdd = []; // New column definitions to add
+    const columnsToModify = []; // New column definitions to modify (same name, different properties)
+    const columnsToRename = []; // Objects: { oldName: string, newCol: TableColumnDefinition }
+
+    // First, identify columns that are definitely dropped or potentially renamed (old name gone)
     for (const currentCol of currentColumns) {
-      if (!columns.some(newCol => newCol.name === currentCol.name)) {
-        alterStatements.push(`DROP COLUMN \`${currentCol.name}\``);
+      if (!newColumnMap.has(currentCol.name)) {
+        columnsToDrop.push(currentCol.name);
       }
     }
 
-    // 2. Handle added/modified columns
-    for (let i = 0; i < columns.length; i++) {
-      const newCol = columns[i];
-      const currentCol = currentColumns.find(c => c.name === newCol.name);
+    // Then, identify columns that are new or modified, and try to match renames
+    const unmatchedDroppedColumns = [...columnsToDrop]; // Copy for matching
+    for (const newCol of newColumns) {
+      const currentMatchByName = currentColumnMap.get(newCol.name);
 
-      let columnDefinition = `\`${newCol.name}\` ${newCol.type}`;
-      if (newCol.length) {
-        columnDefinition += `(${newCol.length})`;
-      }
-      columnDefinition += newCol.nullable ? ' NULL' : ' NOT NULL';
-      if (newCol.defaultValue !== null && newCol.defaultValue !== undefined && newCol.defaultValue !== '') {
-        if (typeof newCol.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(newCol.defaultValue.toUpperCase())) {
-          columnDefinition += ` DEFAULT '${String(newCol.defaultValue).replace(/'/g, "''")}'`;
-        } else {
-          columnDefinition += ` DEFAULT ${newCol.defaultValue}`;
+      if (currentMatchByName) {
+        // Column exists with the same name, check for modifications
+        const isModified = 
+          currentMatchByName.type !== newCol.type ||
+          (currentMatchByName.length !== newCol.length && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newCol.type.toUpperCase())) ||
+          currentMatchByName.nullable !== newCol.nullable ||
+          currentMatchByName.isAutoIncrement !== newCol.isAutoIncrement ||
+          String(currentMatchByName.defaultValue) !== String(newCol.defaultValue);
+
+        if (isModified) {
+          columnsToModify.push(newCol);
         }
-      } else if (newCol.defaultValue === '') {
-        columnDefinition += ` DEFAULT ''`;
-      }
-      if (newCol.isAutoIncrement) {
-        columnDefinition += ` AUTO_INCREMENT`;
-      }
-
-      if (!currentCol) {
-        // Add new column
-        alterStatements.push(`ADD COLUMN ${columnDefinition}`);
       } else {
-        // Modify existing column
-        // This is a simplified check. A real-world scenario would compare all properties.
-        // For now, we'll just assume if it exists, we might need to MODIFY.
-        // A more robust solution would compare type, nullability, default, extra, etc.
-        alterStatements.push(`MODIFY COLUMN ${columnDefinition}`);
+        // This is a new column name. Could be an ADD or a RENAME.
+        // Try to find a matching dropped column that is similar.
+        let renamed = false;
+        for (let i = 0; i < unmatchedDroppedColumns.length; i++) {
+          const oldName = unmatchedDroppedColumns[i];
+          const oldCol = currentColumnMap.get(oldName); // Get full definition of the old column
+
+          // Check for similarity (excluding name)
+          if (oldCol && areColumnDefinitionsSimilar(oldCol, newCol)) {
+            columnsToRename.push({ oldName: oldName, newCol: newCol });
+            unmatchedDroppedColumns.splice(i, 1); // Remove from unmatched dropped
+            renamed = true;
+            break;
+          }
+        }
+        if (!renamed) {
+          columnsToAdd.push(newCol);
+        }
       }
     }
 
-    // Handle primary key changes (simplified: drop existing, add new)
-    const currentPk = currentColumns.find(col => col.key === 'PRI');
-    const newPk = columns.find(col => col.isPrimaryKey);
-
-    if (currentPk && (!newPk || currentPk.name !== newPk.name)) {
-      alterStatements.push(`DROP PRIMARY KEY`);
-    }
-    if (newPk && (!currentPk || currentPk.name !== newPk.name)) {
-      alterStatements.push(`ADD PRIMARY KEY (\`${newPk.name}\`)`);
+    // Any remaining in unmatchedDroppedColumns are actual drops
+    for (const droppedColName of unmatchedDroppedColumns) {
+      alterStatements.push(`ALTER TABLE \`${table}\` DROP COLUMN \`${droppedColName}\``);
     }
 
-    if (alterStatements.length > 0) {
-      const fullAlterSql = `ALTER TABLE \`${database}\`.\`${table}\`\n  ${alterStatements.join(',\n  ')};`;
-      await connection.execute(fullAlterSql);
+    // Helper to build column definition string
+    const buildColumnDefinition = (col) => {
+      let definition = `\`${col.name}\` ${col.type}`;
+      if (col.length !== undefined && col.length !== null && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(col.type.toUpperCase())) {
+        definition += `(${col.length})`;
+      }
+      if (!col.nullable) {
+        definition += ` NOT NULL`;
+      }
+      if (col.isAutoIncrement) {
+        definition += ` AUTO_INCREMENT`;
+      }
+      if (col.defaultValue !== null && col.defaultValue !== undefined && col.defaultValue !== '') {
+        if (typeof col.defaultValue === 'string' && !['CURRENT_TIMESTAMP'].includes(col.defaultValue.toUpperCase())) {
+          definition += ` DEFAULT ${connection.escape(col.defaultValue)}`;
+        } else {
+          definition += ` DEFAULT ${col.defaultValue}`;
+        }
+      } else if (col.nullable && col.defaultValue === null) {
+        definition += ` DEFAULT NULL`;
+      }
+      return definition;
+    };
+
+    // Process renames, modifications, and additions in the order they appear in newColumns
+    for (let i = 0; i < newColumns.length; i++) {
+      const newCol = newColumns[i];
+      const prevColInNewOrder = i > 0 ? newColumns[i - 1] : null;
+      const afterClause = prevColInNewOrder ? ` AFTER \`${prevColInNewOrder.name}\`` : (i === 0 ? ` FIRST` : '');
+
+      const currentMatchByName = currentColumnMap.get(newCol.name);
+      const renameMatch = columnsToRename.find(r => r.newCol.name === newCol.name);
+
+      if (renameMatch) {
+        // Rename and potentially modify
+        const oldName = renameMatch.oldName;
+        const columnDefinition = buildColumnDefinition(newCol);
+        alterStatements.push(`ALTER TABLE \`${table}\` CHANGE COLUMN \`${oldName}\` ${columnDefinition}${afterClause}`);
+      } else if (currentMatchByName) {
+        // Modify existing column (same name) or reorder
+        const isModified = 
+          currentMatchByName.type !== newCol.type ||
+          (currentMatchByName.length !== newCol.length && ['VARCHAR', 'CHAR', 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT', 'DECIMAL'].includes(newCol.type.toUpperCase())) ||
+          currentMatchByName.nullable !== newCol.nullable ||
+          currentMatchByName.isAutoIncrement !== newCol.isAutoIncrement ||
+          String(currentMatchByName.defaultValue) !== String(newCol.defaultValue);
+
+        // Check if position changed
+        const currentPosition = currentColumns.findIndex(c => c.name === newCol.name);
+        const newPosition = i;
+        const positionChanged = currentPosition !== newPosition;
+
+        if (isModified || positionChanged) {
+          const columnDefinition = buildColumnDefinition(newCol);
+          alterStatements.push(`ALTER TABLE \`${table}\` MODIFY COLUMN ${columnDefinition}${afterClause}`);
+        }
+      } else {
+        // Add new column
+        const columnDefinition = buildColumnDefinition(newCol);
+        alterStatements.push(`ALTER TABLE \`${table}\` ADD COLUMN ${columnDefinition}${afterClause}`);
+      }
     }
 
-    res.json({ success: true, message: `Table '${table}' structure updated successfully.` });
+    // Add new primary key if it's changing or being added
+    if (newPKColumns.length > 0 && (!currentPKColumns.length || JSON.stringify(currentPKColumns.sort()) !== JSON.stringify(newPKColumns.sort()))) {
+      alterStatements.push(`ALTER TABLE \`${table}\` ADD PRIMARY KEY (${newPKColumns.map(name => `\`${name}\``).join(', ')})`);
+    }
+
+    // Execute all alter statements
+    for (const statement of alterStatements) {
+      console.log("Executing ALTER:", statement);
+      await connection.query(statement);
+    }
+    
+    res.json({ success: true, message: 'Table structure updated successfully.' });
   } catch (error) {
     console.error('Error updating table structure:', error);
-    res.status(500).json({ error: error.message || 'Failed to update table structure.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
 
-// Get table data with pagination, search, and filters
-app.get('/api/databases/:db/tables/:table/data', authMiddleware, async (req, res) => {
+// Get table data
+app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { db, table } = req.params;
-    const { limit = 25, offset = 0, search, ...columnFilters } = req.query;
-
-    connection = await getUserPooledConnection(req);
-
-    // Get column info
-    const [columnsRaw] = await connection.execute(
-      `SELECT COLUMN_NAME as name, COLUMN_TYPE as type, IS_NULLABLE as \`null\`, COLUMN_KEY as \`key\`, COLUMN_DEFAULT as \`default\`, EXTRA as extra
-       FROM INFORMATION_SCHEMA.COLUMNS
-       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
-       ORDER BY ORDINAL_POSITION`,
-      [db, table]
-    );
-
-    const columns = columnsRaw.map(col => ({
-      name: col.name,
-      type: col.type,
-      null: col.null === 'YES',
-      key: col.key,
-      default: col.default,
-      extra: col.extra,
-    }));
-
-    let whereClauses = [];
-    let queryParams = [];
-
-    // Global search
-    if (search) {
-      const searchTerms = columns.map(col => `\`${col.name}\` LIKE ?`);
-      whereClauses.push(`(${searchTerms.join(' OR ')})`);
-      for (let i = 0; i < columns.length; i++) {
-        queryParams.push(`%${search}%`);
-      }
-    }
-
-    // Column-specific filters
-    for (const key in columnFilters) {
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const { database, table } = req.params;
+    const { limit = 25, offset = 0, search = '' } = req.query;
+    
+    const columnFilters = {};
+    Object.keys(req.query).forEach(key => {
       if (key.startsWith('filter_')) {
-        const columnName = key.substring('filter_'.length);
-        const filterValue = columnFilters[key];
-        if (filterValue) {
-          whereClauses.push(`\`${columnName}\` LIKE ?`);
-          queryParams.push(`%${filterValue}%`);
+        const columnName = key.replace('filter_', '');
+        if (req.query[key] && req.query[key].trim()) {
+          columnFilters[columnName] = req.query[key].trim();
         }
       }
+    });
+    
+    await connection.query(`USE \`${database}\``);
+    const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+    
+    const whereConditions = [], queryParams = [];
+    if (search && search.trim()) {
+      const concatColumns = columns.map(col => `COALESCE(\`${col.Field}\`, '')`).join(', ');
+      whereConditions.push(`CONCAT(${concatColumns}) LIKE ?`);
+      queryParams.push(`%${search}%`);
     }
-
-    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-
-    // Count total rows (with filters)
-    const [countRows] = await connection.execute(
-      `SELECT COUNT(*) as total FROM \`${db}\`.\`${table}\` ${whereSql}`,
-      queryParams
-    );
-    const total = countRows[0].total;
-
-    // Fetch data
-    const [dataRows] = await connection.execute(
-      `SELECT * FROM \`${db}\`.\`${table}\` ${whereSql} LIMIT ? OFFSET ?`,
-      [...queryParams, parseInt(limit, 10), parseInt(offset, 10)]
-    );
-
+    Object.entries(columnFilters).forEach(([columnName, filterValue]) => {
+      if (columns.some(col => col.Field === columnName)) {
+        whereConditions.push(`\`${columnName}\` LIKE ?`);
+        queryParams.push(`%${filterValue}%`);
+      }
+    });
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    const dataQuery = `SELECT * FROM \`${table}\` ${whereClause} LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+    const countQuery = `SELECT COUNT(*) as total FROM \`${table}\` ${whereClause}`;
+    
+    const [rows] = await connection.query(dataQuery, queryParams);
+    const [countResult] = await connection.query(countQuery, queryParams);
+    
     res.json({
-      columns: columns,
-      data: dataRows,
-      total: total,
-      limit: parseInt(limit, 10),
-      offset: parseInt(offset, 10),
+      columns: columns.map(c => ({ name: c.Field, type: c.Type, null: c.Null === 'YES', key: c.Key, default: c.Default, extra: c.Extra })),
+      data: rows, total: countResult[0].total, limit: parseInt(limit), offset: parseInt(offset)
     });
   } catch (error) {
     console.error('Error fetching table data:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch table data.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
 // Update a single cell
-app.put('/api/databases/:db/tables/:table/cell', authMiddleware, async (req, res) => {
+app.put('/api/databases/:database/tables/:table/cell', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { db, table } = req.params;
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const { database, table } = req.params;
     const { primaryKey, columnName, newValue } = req.body;
 
-    if (!primaryKey || !columnName) {
-      return res.status(400).json({ error: 'Primary key and column name are required.' });
-    }
+    if (!primaryKey || !columnName) return res.status(400).json({ error: 'Primary key and column name are required' });
 
-    connection = await getUserPooledConnection(req);
+    await connection.query(`USE \`${database}\``);
+    const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+    const pkColumn = columns.find(col => col.Key === 'PRI');
+    if (!pkColumn) return res.status(400).json({ error: 'Table has no primary key' });
 
-    // Get primary key column name
-    const [pkColumnRows] = await connection.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_KEY = 'PRI'`,
-      [db, table]
-    );
-    if (pkColumnRows.length === 0) {
-      return res.status(400).json({ error: 'Table does not have a primary key, cannot update cell.' });
-    }
-    const pkColumnName = pkColumnRows[0].COLUMN_NAME;
-
-    const [result] = await connection.execute(
-      `UPDATE \`${db}\`.\`${table}\` SET \`${columnName}\` = ? WHERE \`${pkColumnName}\` = ?`,
-      [newValue, primaryKey]
-    );
-
-    res.json({ success: true, message: 'Cell updated successfully.', affectedRows: result.affectedRows });
+    const processedValue = convertDateForMySQL(newValue);
+    const [result] = await connection.execute(`UPDATE \`${table}\` SET \`${columnName}\` = ? WHERE \`${pkColumn.Field}\` = ?`, [processedValue, primaryKey]);
+    res.json({ success: true, message: `Cell updated successfully`, affectedRows: result.affectedRows });
   } catch (error) {
     console.error('Error updating cell:', error);
-    res.status(500).json({ error: error.message || 'Failed to update cell.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Update an entire row
-app.put('/api/databases/:db/tables/:table/row', authMiddleware, async (req, res) => {
+// Update entire row
+app.put('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { db, table } = req.params;
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const { database, table } = req.params;
     const { primaryKey, data } = req.body;
+    if (!primaryKey || !data) return res.status(400).json({ error: 'Primary key and data are required' });
 
-    if (!primaryKey || !data) {
-      return res.status(400).json({ error: 'Primary key and data are required.' });
-    }
-
-    connection = await getUserPooledConnection(req);
-
-    // Get primary key column name
-    const [pkColumnRows] = await connection.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_KEY = 'PRI'`,
-      [db, table]
-    );
-    if (pkColumnRows.length === 0) {
-      return res.status(400).json({ error: 'Table does not have a primary key, cannot update row.' });
-    }
-    const pkColumnName = pkColumnRows[0].COLUMN_NAME;
-
-    const updates = [];
-    const updateValues = [];
-    for (const key in data) {
-      if (key !== pkColumnName) { // Don't update the primary key itself
-        updates.push(`\`${key}\` = ?`);
-        updateValues.push(processDataForMySQL({ [key]: data[key] })[key]);
-      }
-    }
-
-    if (updates.length === 0) {
-      return res.json({ success: true, message: 'No updatable fields provided.', affectedRows: 0 });
-    }
-
-    const [result] = await connection.execute(
-      `UPDATE \`${db}\`.\`${table}\` SET ${updates.join(', ')} WHERE \`${pkColumnName}\` = ?`,
-      [...updateValues, primaryKey]
-    );
-
-    res.json({ success: true, message: 'Row updated successfully.', affectedRows: result.affectedRows });
-  } catch (error) {
-    console.error('Error updating row:', error);
-    res.status(500).json({ error: error.message || 'Failed to update row.' });
-  } finally {
-    if (connection) connection.release();
-  }
-});
-
-// Insert a new row
-app.post('/api/databases/:db/tables/:table/row', authMiddleware, async (req, res) => {
-  let connection;
-  try {
-    const { db, table } = req.params;
-    const { data } = req.body;
-
-    if (!data || Object.keys(data).length === 0) {
-      return res.status(400).json({ error: 'Data for insertion is required.' });
-    }
-
-    connection = await getUserPooledConnection(req);
-
-    const columns = [];
-    const placeholders = [];
-    const values = [];
+    await connection.query(`USE \`${database}\``);
+    const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+    const pkColumn = columns.find(col => col.Key === 'PRI');
+    if (!pkColumn) return res.status(400).json({ error: 'Table has no primary key' });
 
     const processedData = processDataForMySQL(data);
+    const setClause = Object.keys(processedData).filter(k => k !== pkColumn.Field).map(k => `\`${k}\` = ?`).join(', ');
+    const values = Object.keys(processedData).filter(k => k !== pkColumn.Field).map(k => processedData[k]);
+    
+    const [result] = await connection.execute(`UPDATE \`${table}\` SET ${setClause} WHERE \`${pkColumn.Field}\` = ?`, [...values, primaryKey]);
+    res.json({ success: true, message: `Row updated successfully`, affectedRows: result.affectedRows });
+  } catch (error) {
+    console.error('Error updating row:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
+  }
+});
 
-    for (const key in processedData) {
-      if (processedData[key] !== undefined) { // Only include if value is explicitly provided
-        columns.push(`\`${key}\``);
-        placeholders.push('?');
-        values.push(processedData[key]);
-      }
-    }
+// Insert new row
+app.post('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const { database, table } = req.params;
+    const { data } = req.body;
+    if (!data) return res.status(400).json({ error: 'Data is required' });
 
-    const [result] = await connection.execute(
-      `INSERT INTO \`${db}\`.\`${table}\` (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`,
-      values
-    );
+    await connection.query(`USE \`${database}\``);
+    const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+    const pkColumn = columns.find(col => col.Key === 'PRI');
+    
+    let processedData = processDataForMySQL(data);
+    if (pkColumn && pkColumn.Extra.includes('auto_increment')) delete processedData[pkColumn.Field];
 
-    res.json({ success: true, message: 'Row inserted successfully.', insertId: result.insertId, affectedRows: result.affectedRows });
+    const insertData = {};
+    Object.entries(processedData).forEach(([key, value]) => { if (value !== undefined) insertData[key] = value; });
+    if (Object.keys(insertData).length === 0) return res.status(400).json({ error: 'No valid data to insert' });
+
+    const columnNames = Object.keys(insertData).map(k => `\`${k}\``).join(', ');
+    const placeholders = Object.keys(insertData).map(() => '?').join(', ');
+    const values = Object.values(insertData);
+    
+    const [result] = await connection.execute(`INSERT INTO \`${table}\` (${columnNames}) VALUES (${placeholders})`, values);
+    res.json({ success: true, message: `Row inserted successfully`, insertId: result.insertId, affectedRows: result.affectedRows });
   } catch (error) {
     console.error('Error inserting row:', error);
-    res.status(500).json({ error: error.message || 'Failed to insert row.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Delete a row
-app.delete('/api/databases/:db/tables/:table/row', authMiddleware, async (req, res) => {
+// Delete row
+app.delete('/api/databases/:database/tables/:table/row', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { db, table } = req.params;
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const { database, table } = req.params;
     const { primaryKey } = req.body;
+    if (!primaryKey) return res.status(400).json({ error: 'Primary key is required' });
 
-    if (!primaryKey) {
-      return res.status(400).json({ error: 'Primary key is required for deletion.' });
-    }
+    await connection.query(`USE \`${database}\``);
+    const [columns] = await connection.query(`DESCRIBE \`${table}\``);
+    const pkColumn = columns.find(col => col.Key === 'PRI');
+    if (!pkColumn) return res.status(400).json({ error: 'Table has no primary key' });
 
-    connection = await getUserPooledConnection(req);
-
-    // Get primary key column name
-    const [pkColumnRows] = await connection.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_KEY = 'PRI'`,
-      [db, table]
-    );
-    if (pkColumnRows.length === 0) {
-      return res.status(400).json({ error: 'Table does not have a primary key, cannot delete row.' });
-    }
-    const pkColumnName = pkColumnRows[0].COLUMN_NAME;
-
-    const [result] = await connection.execute(
-      `DELETE FROM \`${db}\`.\`${table}\` WHERE \`${pkColumnName}\` = ?`,
-      [primaryKey]
-    );
-
-    res.json({ success: true, message: 'Row deleted successfully.', affectedRows: result.affectedRows });
+    const [result] = await connection.execute(`DELETE FROM \`${table}\` WHERE \`${pkColumn.Field}\` = ?`, [primaryKey]);
+    res.json({ success: true, message: `Row deleted successfully`, affectedRows: result.affectedRows });
   } catch (error) {
     console.error('Error deleting row:', error);
-    res.status(500).json({ error: error.message || 'Failed to delete row.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Execute arbitrary SQL query
+// Execute SQL query
 app.post('/api/query', authMiddleware, async (req, res) => {
   let connection;
-  const startTime = process.hrtime.bigint();
+  const startTime = Date.now();
   try {
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { query, database } = req.body;
-    if (!query) {
-      return res.status(400).json({ success: false, error: 'Query is required.' });
-    }
+    if (!query) return res.status(400).json({ error: 'Query is required' });
 
-    connection = await getUserPooledConnection(req);
+    if (database) await connection.query(`USE \`${database}\``);
 
-    if (database) {
-      await connection.execute(`USE \`${database}\``);
-    }
+    const [rows, fields] = await connection.query(query);
+    const executionTime = Date.now() - startTime;
 
-    const [rows, fields] = await connection.execute(query);
-    const endTime = process.hrtime.bigint();
-    const executionTime = Number(endTime - startTime) / 1_000_000; // Convert to milliseconds
-
-    let responseData = {
-      success: true,
-      executionTime: executionTime,
-      message: 'Query executed successfully.',
-    };
-
-    if (Array.isArray(rows)) {
-      // It's a SELECT query or similar returning rows
-      responseData.data = rows;
-      responseData.fields = fields.map(f => ({ name: f.name, type: f.columnType, table: f.table }));
-      responseData.rowCount = rows.length;
+    if (query.trim().toLowerCase().startsWith('select')) {
+      res.json({
+        success: true, data: rows,
+        fields: fields?.map(f => ({ name: f.name, type: f.type, table: f.table })) || [],
+        rowCount: Array.isArray(rows) ? rows.length : 0,
+        executionTime: executionTime
+      });
     } else {
-      // It's an INSERT, UPDATE, DELETE, DDL, etc.
-      responseData.affectedRows = rows.affectedRows;
-      responseData.message = rows.info || `Query executed. Affected rows: ${rows.affectedRows}`;
+      res.json({
+        success: true, message: `Query executed successfully. ${rows.affectedRows || 0} rows affected.`,
+        affectedRows: rows.affectedRows || 0, executionTime: executionTime
+      });
     }
-
-    res.json(responseData);
   } catch (error) {
-    const endTime = process.hrtime.bigint();
-    const executionTime = Number(endTime - startTime) / 1_000_000; // Convert to milliseconds
+    const executionTime = Date.now() - startTime;
     console.error('Error executing query:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to execute query.',
-      executionTime: executionTime,
-    });
+    res.status(400).json({ success: false, error: error.message, executionTime: executionTime });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -1088,101 +1056,145 @@ app.post('/api/query-history', authMiddleware, async (req, res) => {
   let connection;
   try {
     const { query_text, database_context, execution_time_ms, status, error_message } = req.body;
-    const { user, host_user } = req.dbCredentials;
+    const executed_by = req.dbCredentials.user; // Get user from authenticated session
+    
+    connection = await getSystemPooledConnection(); // Obter conexão do pool
 
-    connection = await getSystemPooledConnection();
-
-    await connection.execute(
-      `INSERT INTO \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` 
-       (query_text, database_context, executed_by, execution_time_ms, status, error_message, executed_at) 
-       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-      [query_text, database_context, `${user}@${host_user}`, execution_time_ms, status, error_message]
-    );
-    res.json({ success: true, message: 'Query saved to history.' });
+    const historyQuery = `
+      INSERT INTO \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` 
+      (query_text, database_context, executed_by, execution_time_ms, status, error_message) 
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    
+    await connection.execute(historyQuery, [
+      query_text,
+      database_context || null,
+      executed_by, // Store the user who executed the query
+      execution_time_ms,
+      status,
+      error_message || null
+    ]);
+    
+    res.json({ success: true, message: 'Query history saved.' });
   } catch (error) {
-    console.error('Error saving query to history:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to save query to history.' });
+    // This is a non-critical, fire-and-forget feature.
+    // If it fails (e.g., system tables not set up), log it server-side but don't fail the user's request.
+    console.warn('Could not save query history:', error.message);
+    res.status(200).json({ success: false, message: 'Could not save query history.' });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Get query history
+// Get query history for the authenticated user
 app.get('/api/query-history', authMiddleware, async (req, res) => {
   let connection;
   try {
-    const { user, host_user } = req.dbCredentials;
+    const executed_by = req.dbCredentials.user;
     connection = await getSystemPooledConnection();
 
     const [history] = await connection.execute(
-      `SELECT id, query_text, database_context, executed_by, execution_time_ms, status, error_message, executed_at 
+      `SELECT id, query_text, database_context, executed_at, execution_time_ms, status, error_message 
        FROM \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` 
        WHERE executed_by = ? 
-       ORDER BY executed_at DESC LIMIT 50`,
-      [`${user}@${host_user}`]
+       ORDER BY executed_at DESC LIMIT 10`, // Limit to 10 recent queries
+      [executed_by]
     );
+    
     res.json(history);
   } catch (error) {
     console.error('Error fetching query history:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to fetch query history.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
 
-// Get list of MySQL users
+// Get server status
+app.get('/api/status', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const [variables] = await connection.query('SHOW VARIABLES LIKE "version"');
+    const [status] = await connection.query('SHOW STATUS LIKE "Uptime"');
+    const [processes] = await connection.query('SHOW PROCESSLIST');
+    res.json({
+      version: variables[0]?.Value || 'Unknown', uptime: status[0]?.Value || '0',
+      connections: processes.length, status: 'connected'
+    });
+  } catch (error) {
+    console.error('Error fetching server status:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
+  }
+});
+
+// Get MySQL users
 app.get('/api/users', authMiddleware, async (req, res) => {
   let connection;
   try {
-    connection = await getUserPooledConnection(req);
-    const [users] = await connection.execute('SELECT user, host FROM mysql.user');
-    res.json(users);
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    const [rows] = await connection.query("SELECT user, host FROM mysql.user ORDER BY user, host");
+    res.json(rows);
   } catch (error) {
     console.error('Error fetching users:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch users.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Get user privileges
+// Get user privileges (global and database-specific)
 app.get('/api/users/:user/:host/privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
-    connection = await getUserPooledConnection(req);
+    const [rows] = await connection.query('SHOW GRANTS FOR ?@?', [user, host]);
+    
+    const globalRegex = /^GRANT (.*) ON \*\.\* TO/;
+    const dbRegex = /^GRANT (.*) ON `(.*?)`\.\* TO/;
 
-    const [grants] = await connection.execute(`SHOW GRANTS FOR '${user}'@'${host}'`);
+    let globalPrivileges = new Set();
+    const databasePrivileges = {};
 
-    let globalPrivileges = [];
-    let databasePrivileges = [];
+    rows.forEach(row => {
+      const grant = Object.values(row)[0];
+      const withGrantOption = grant.includes('WITH GRANT OPTION');
 
-    grants.forEach(grantRow => {
-      const grantString = Object.values(grantRow)[0];
-      if (grantString.includes('ON *.*')) {
-        const onGlobalRegex = /^GRANT (.*?) ON \*\.\*/;
-        const match = grantString.match(onGlobalRegex);
-        if (match && match[1]) {
-          globalPrivileges = match[1].split(',').map(p => p.trim().toUpperCase());
+      let match = grant.match(globalRegex);
+      if (match) {
+        const privs = match[1].split(',').map(p => p.trim().toUpperCase());
+        privs.forEach(p => globalPrivileges.add(p));
+        if (withGrantOption) globalPrivileges.add('GRANT OPTION');
+        return;
+      }
+
+      match = grant.match(dbRegex);
+      if (match) {
+        const dbName = match[2];
+        if (!databasePrivileges[dbName]) {
+          databasePrivileges[dbName] = { database: dbName, privileges: new Set(), grantOption: false };
         }
-      } else if (grantString.includes('ON `')) {
-        const onDbRegex = /^GRANT (.*?) ON `(.*?)`\.\* TO/;
-        const match = grantString.match(onDbRegex);
-        if (match && match[1] && match[2]) {
-          const privs = match[1].split(',').map(p => p.trim().toUpperCase());
-          const dbName = match[2];
-          const grantOption = grantString.includes('WITH GRANT OPTION');
-          databasePrivileges.push({ database: dbName, privileges: privs, grantOption: grantOption });
-        }
+        const privs = match[1].split(',').map(p => p.trim().toUpperCase());
+        privs.forEach(p => databasePrivileges[dbName].privileges.add(p));
+        if (withGrantOption) databasePrivileges[dbName].grantOption = true;
       }
     });
 
-    res.json({ globalPrivileges, databasePrivileges });
+    const finalGlobal = Array.from(globalPrivileges).filter(p => p !== 'USAGE');
+    const finalDb = Object.values(databasePrivileges).map(db => ({
+      ...db,
+      privileges: Array.from(db.privileges)
+    }));
+
+    res.json({ globalPrivileges: finalGlobal, databasePrivileges: finalDb });
   } catch (error) {
     console.error('Error fetching user privileges:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch user privileges.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
@@ -1190,363 +1202,178 @@ app.get('/api/users/:user/:host/privileges', authMiddleware, async (req, res) =>
 app.post('/api/users/:user/:host/privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
     const { privileges } = req.body;
 
-    connection = await getUserPooledConnection(req);
-
-    // Revoke all existing global privileges first
-    await connection.execute(`REVOKE ALL PRIVILEGES ON *.* FROM '${user}'@'${host}'`);
-
+    await connection.query('REVOKE ALL PRIVILEGES ON *.* FROM ?@?', [user, host]);
+    
     if (privileges && privileges.length > 0) {
-      const grantSql = `GRANT ${privileges.join(', ')} ON *.* TO '${user}'@'${host}'`;
-      await connection.execute(grantSql);
+      const grantQuery = `GRANT ${privileges.join(', ')} ON *.* TO ?@?`;
+      await connection.query(grantQuery, [user, host]);
     }
-
-    res.json({ success: true, message: 'Global privileges updated successfully.' });
+    
+    res.json({ success: true, message: 'Global privileges updated successfully' });
   } catch (error) {
-    console.error('Error updating global user privileges:', error);
-    res.status(500).json({ error: error.message || 'Failed to update global privileges.' });
+    console.error('Error updating global privileges:', error);
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Update/add database-specific privileges for a user
+// Update/Add database privileges
 app.post('/api/users/:user/:host/database-privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
     const { user, host } = req.params;
     const { database, privileges, grantOption } = req.body;
 
-    connection = await getUserPooledConnection(req);
-
-    // Revoke existing privileges on this database first
-    await connection.execute(`REVOKE ALL PRIVILEGES ON \`${database}\`.* FROM '${user}'@'${host}'`);
-
+    await connection.query('REVOKE ALL PRIVILEGES ON `??`.* FROM ?@?', [database, user, host]);
+    
     if (privileges && privileges.length > 0) {
-      let grantSql = `GRANT ${privileges.join(', ')} ON \`${database}\`.* TO '${user}'@'${host}'`;
+      let grantQuery = `GRANT ${privileges.join(', ')} ON \`${database}\`.* TO ?@?`;
       if (grantOption) {
-        grantSql += ` WITH GRANT OPTION`;
+        grantQuery += ' WITH GRANT OPTION';
       }
-      await connection.execute(grantSql);
+      await connection.query(grantQuery, [user, host]);
     }
-
-    res.json({ success: true, message: `Privileges on database '${database}' updated successfully.` });
+    
+    res.json({ success: true, message: 'Database privileges updated' });
   } catch (error) {
     console.error('Error updating database privileges:', error);
-    res.status(500).json({ error: error.message || 'Failed to update database privileges.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Revoke all privileges on a specific database for a user
+// Revoke all privileges on a database
 app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (req, res) => {
   let connection;
   try {
     const { user, host } = req.params;
     const { database } = req.body;
 
-    connection = await getUserPooledConnection(req);
-    await connection.execute(`REVOKE ALL PRIVILEGES ON \`${database}\`.* FROM '${user}'@'${host}'`);
-
-    res.json({ success: true, message: `All privileges on database '${database}' revoked successfully.` });
+    connection = await getUserPooledConnection(req); // Obter conexão do pool
+    await connection.query('REVOKE ALL PRIVILEGES, GRANT OPTION ON `??`.* FROM ?@?', [database, user, host]);
+    
+    res.json({ success: true, message: 'Database privileges revoked' });
   } catch (error) {
     console.error('Error revoking database privileges:', error);
-    res.status(500).json({ error: error.message || 'Failed to revoke database privileges.' });
+    res.status(500).json({ error: error.message });
   } finally {
-    if (connection) connection.release();
+    if (connection) connection.release(); // Liberar conexão de volta para o pool
   }
 });
 
-// Check system tables status
-app.get('/api/system/status', async (req, res) => {
+// Endpoint para verificar o status do sistema (se as tabelas meta existem)
+app.get('/api/system/status', async (req, res) => { // Removed authMiddleware
   let connection;
   try {
     connection = await getSystemPooledConnection();
-    const [rows] = await connection.execute(
-      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN (?, ?, ?, ?)`,
-      [SYSTEM_DATABASE, '_jsma_query_history', '_jsma_favorite_queries', '_jsma_favorite_tables', '_jsma_sessions']
-    );
-
-    const existingTables = new Set(rows.map(row => row.TABLE_NAME));
-    const missingTables = SYSTEM_TABLES.filter(table => !existingTables.has(table));
-
-    if (missingTables.length === 0) {
-      // Check for 'executed_by' column in _jsma_query_history
-      const [columns] = await connection.execute(
-        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'executed_by'`,
-        [SYSTEM_DATABASE, '_jsma_query_history']
-      );
-      if (columns.length === 0) {
-        return res.json({ status: 'needs_initialization', message: 'Missing `executed_by` column in `_jsma_query_history` table. Please re-initialize system tables.' });
-      }
-      return res.json({ status: 'ready', message: 'System tables are initialized and up-to-date.' });
-    } else {
-      return res.json({ status: 'needs_initialization', message: `Missing system tables: ${missingTables.join(', ')}. Please initialize system tables.` });
+    const [rows] = await connection.query(`SHOW DATABASES LIKE ?`, [SYSTEM_DATABASE]);
+    if (rows.length === 0) {
+      return res.json({ status: 'needs_initialization', message: 'System database not found.' });
     }
+
+    const [tableRows] = await connection.query(`SHOW TABLES FROM \`${SYSTEM_DATABASE}\``);
+    const existingTables = tableRows.map(row => Object.values(row)[0]);
+    const missingTables = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"]
+      .filter(table => !existingTables.includes(table));
+
+    if (missingTables.length > 0) {
+      return res.json({ status: 'needs_initialization', message: `Missing system tables: ${missingTables.join(', ')}` });
+    }
+
+    // Check for 'executed_by' column in _jsma_query_history
+    const [columns] = await connection.query(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\``);
+    const hasExecutedByColumn = columns.some(col => col.Field === 'executed_by');
+    if (!hasExecutedByColumn) {
+      return res.json({ status: 'needs_initialization', message: 'Missing `executed_by` column in `_jsma_query_history` table.' });
+    }
+
+    res.json({ status: 'ready', message: 'System is initialized.' });
   } catch (error) {
-    // If the database itself doesn't exist, it's also 'needs_initialization'
-    if (error.code === 'ER_BAD_DB_ERROR') {
-      return res.json({ status: 'needs_initialization', message: `System database '${SYSTEM_DATABASE}' not found. Please initialize system tables.` });
-    }
     console.error('Error checking system status:', error);
-    res.status(500).json({ status: 'error', message: error.message || 'Failed to check system status.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
 
-// Initialize system tables
-app.post('/api/system/initialize', async (req, res) => {
+// Endpoint para inicializar as tabelas do sistema
+app.post('/api/system/initialize', async (req, res) => { // Removed authMiddleware
   let connection;
   try {
     connection = await getSystemPooledConnection();
+    await connection.query(`CREATE DATABASE IF NOT EXISTS ??`, [SYSTEM_DATABASE]);
+        
+    const tableCreationQueries = [
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_by VARCHAR(255) NOT NULL, executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
+    ];
 
-    // Create database if it doesn't exist
-    await connection.execute(`CREATE DATABASE IF NOT EXISTS \`${SYSTEM_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-
-    // Create _jsma_query_history table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        query_text TEXT NOT NULL,
-        database_context VARCHAR(255),
-        executed_by VARCHAR(255) NOT NULL,
-        execution_time_ms INT,
-        status ENUM('success', 'error') NOT NULL,
-        error_message TEXT,
-        executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    `);
-
-    // Add executed_by column if missing (for backward compatibility)
-    const [columns] = await connection.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'executed_by'`,
-      [SYSTEM_DATABASE, '_jsma_query_history']
-    );
-    if (columns.length === 0) {
-      await connection.execute(`ALTER TABLE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ADD COLUMN executed_by VARCHAR(255) NOT NULL AFTER database_context`);
+    for (const query of tableCreationQueries) {
+      await connection.query(query);
     }
 
-    // Create _jsma_favorite_queries table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        query_text TEXT NOT NULL,
-        database_context VARCHAR(255),
-        user VARCHAR(255) NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    `);
-
-    // Create _jsma_favorite_tables table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        database_name VARCHAR(255) NOT NULL,
-        table_name VARCHAR(255) NOT NULL,
-        user VARCHAR(255) NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY (database_name, table_name, user)
-      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    `);
-
-    // Create _jsma_sessions table
-    await connection.execute(`
-      CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` (
-        session_token VARCHAR(255) PRIMARY KEY,
-        user VARCHAR(255) NOT NULL,
-        host VARCHAR(255) NOT NULL,
-        encrypted_password TEXT NOT NULL,
-        expires_at DATETIME NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    `);
+    // Check if 'executed_by' column exists and add it if not (for existing installations)
+    const [columns] = await connection.query(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\``);
+    const hasExecutedByColumn = columns.some(col => col.Field === 'executed_by');
+    if (!hasExecutedByColumn) {
+      console.log("Adding 'executed_by' column to _jsma_query_history table...");
+      await connection.query(`ALTER TABLE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ADD COLUMN \`executed_by\` VARCHAR(255) NOT NULL AFTER \`database_context\``);
+    }
 
     res.json({ success: true, message: 'System tables initialized successfully.' });
   } catch (error) {
     console.error('Error initializing system tables:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to initialize system tables.' });
-  } finally {
-    if (connection) connection.release();
-  }
-});
-
-// AI SQL Generation Endpoint
-app.post('/api/ai/generate-sql', authMiddleware, async (req, res) => {
-  let connection;
-  try {
-    const { prompt, model, database } = req.body;
-    if (!prompt) {
-      return res.status(400).json({ success: false, message: 'Prompt is required.' });
-    }
-
-    // Load AI config from serverConfig
-    if (!serverConfig || !serverConfig.ai) {
-      return res.status(400).json({ success: false, message: 'AI configuration not found on server.' });
-    }
-
-    let apiKey;
-    let modelName;
-    let apiUrl;
-
-    if (model === 'gemini') {
-      apiKey = serverConfig.ai.geminiApiKey;
-      modelName = 'gemini-pro'; // Or other specific Gemini model
-      apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-    } else if (model === 'openai') {
-      apiKey = serverConfig.ai.openAIApiKey;
-      modelName = 'gpt-3.5-turbo'; // Or other specific OpenAI model
-      apiUrl = 'https://api.openai.com/v1/chat/completions';
-    } else if (model === 'anthropic') {
-      apiKey = serverConfig.ai.anthropicApiKey;
-      modelName = 'claude-3-haiku-20240307'; // Or other specific Anthropic model
-      apiUrl = 'https://api.anthropic.com/v1/messages';
-    } else {
-      return res.status(400).json({ success: false, message: 'Invalid AI model selected.' });
-    }
-
-    if (!apiKey) {
-      return res.status(400).json({ success: false, message: `API key for ${model} is not configured.` });
-    }
-
-    let systemPrompt = `You are an AI assistant that generates MySQL SQL queries based on natural language descriptions.
-    Always respond with only the SQL query, without any additional text, explanations, or markdown formatting.
-    If the request is ambiguous or requires more information, generate a reasonable default query or a simple example.
-    Assume the user wants to interact with a MySQL database.`;
-
-    let userPrompt = `Generate a MySQL SQL query for the following request: "${prompt}".`;
-
-    if (database) {
-      // Fetch table schemas for the current database
-      connection = await getUserPooledConnection(req);
-      const [tablesResult] = await connection.execute(
-        `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_KEY, IS_NULLABLE, COLUMN_DEFAULT, EXTRA
-         FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = ?`,
-        [database]
-      );
-
-      const schemaInfo = {};
-      tablesResult.forEach(row => {
-        if (!schemaInfo[row.TABLE_NAME]) {
-          schemaInfo[row.TABLE_NAME] = [];
-        }
-        schemaInfo[row.TABLE_NAME].push({
-          column_name: row.COLUMN_NAME,
-          data_type: row.DATA_TYPE,
-          column_key: row.COLUMN_KEY,
-          is_nullable: row.IS_NULLABLE,
-          column_default: row.COLUMN_DEFAULT,
-          extra: row.EXTRA,
-        });
-      });
-
-      systemPrompt += `\n\nConsider the following schema for the database '${database}':\n${JSON.stringify(schemaInfo, null, 2)}\n`;
-      userPrompt = `Using the provided schema for database '${database}', generate a MySQL SQL query for the following request: "${prompt}".`;
-    }
-
-    let aiResponse;
-    if (model === 'gemini') {
-      const geminiPayload = {
-        contents: [
-          { role: "user", parts: [{ text: systemPrompt + "\n" + userPrompt }] }
-        ]
-      };
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(geminiPayload),
-      });
-      const data = await response.json();
-      aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    } else if (model === 'openai') {
-      const openaiPayload = {
-        model: modelName,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
-      };
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(openaiPayload),
-      });
-      const data = await response.json();
-      aiResponse = data.choices?.[0]?.message?.content;
-    } else if (model === 'anthropic') {
-      const anthropicPayload = {
-        model: modelName,
-        messages: [
-          { role: "user", content: systemPrompt + "\n" + userPrompt }
-        ],
-        max_tokens: 500,
-        temperature: 0.7,
-      };
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify(anthropicPayload),
-      });
-      const data = await response.json();
-      aiResponse = data.content?.[0]?.text;
-    }
-
-    if (!aiResponse) {
-      throw new Error('AI did not return a valid SQL query.');
-    }
-
-    // Clean up response (remove markdown code blocks if present)
-    let cleanedSql = aiResponse.replace(/```sql\n|```/g, '').trim();
-
-    res.json({ success: true, sql: cleanedSql });
-
-  } catch (error) {
-    console.error('Error generating SQL with AI:', error);
-    res.status(500).json({ success: false, message: error.message || 'Failed to generate SQL with AI.' });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (connection) connection.release();
   }
 });
 
 
-// Initialize server config and DB pool at startup, then start listening
-(async () => {
+// Inicializa a configuração do servidor e então inicia o servidor
+async function startServer() {
   try {
     await loadServerConfig();
-    if (serverConfig) {
-      dbPool = mysql.createPool({
-        host: serverConfig.database.host,
-        port: serverConfig.database.port,
-        user: serverConfig.database.username, // Usuário do sistema
-        password: serverConfig.database.password, // Senha do usuário do sistema
-        waitForConnections: true,
-        connectionLimit: serverConfig.database.maxConnections || 10,
-        queueLimit: 0,
-        timezone: '+00:00'
-      });
-      console.log('Database connection pool initialized.');
-    }
+    console.log("Initial serverConfig loaded:", serverConfig.database.username, serverConfig.database.password ? "password_set" : "password_not_set");
+    // Inicializa o pool de conexões após a configuração ser carregada
+    dbPool = mysql.createPool({
+      host: serverConfig.database.host,
+      port: serverConfig.database.port,
+      user: serverConfig.database.username, // Usuário do sistema
+      password: serverConfig.database.password, // Senha do usuário do sistema
+      waitForConnections: true,
+      connectionLimit: serverConfig.database.maxConnections || 10, // Usar maxConnections da config
+      queueLimit: 0, // Sem limite na fila de requisições
+      timezone: '+00:00'
+    });
+    console.log('Database connection pool initialized.');
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`API available at http://localhost:${PORT}/api`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    console.error('Failed to start server due to configuration error:', error);
+    process.exit(1); // Sai do processo se a configuração inicial falhar
   }
-})();
+}
 
-module.exports = app;
+startServer();
+
+process.on('SIGINT', async () => {
+  console.log('Shutting down server...');
+  if (dbPool) {
+    await dbPool.end();
+    console.log('Database connection pool closed.');
+  }
+  process.exit(0);
+});
