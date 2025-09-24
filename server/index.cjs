@@ -6,6 +6,11 @@ const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
 
+// Import AI SDKs
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -64,6 +69,10 @@ async function loadServerConfig() {
     // Adiciona as credenciais do usuário do sistema à configuração em memória
     serverConfig.database.username = MYSQL_SYSTEM_USER;
     serverConfig.database.password = MYSQL_SYSTEM_PASSWORD;
+    // Ensure AI section exists and has default values if not present
+    if (!serverConfig.ai) {
+      serverConfig.ai = { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" };
+    }
     console.log('Server configuration loaded successfully.');
   } catch (error) {
     console.error('Error loading server config at startup:', error);
@@ -1333,6 +1342,136 @@ app.post('/api/system/initialize', async (req, res) => { // Removed authMiddlewa
   } catch (error) {
     console.error('Error initializing system tables:', error);
     res.status(500).json({ success: false, error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// --- AI SQL Generation Endpoint ---
+app.post('/api/ai/generate-sql', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    const { prompt, model, database } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ success: false, message: 'Prompt is required.' });
+    }
+    if (!model) {
+      return res.status(400).json({ success: false, message: 'AI model is required.' });
+    }
+
+    if (!serverConfig || !serverConfig.ai) {
+      return res.status(500).json({ success: false, message: 'AI configuration not loaded on server.' });
+    }
+
+    let apiKey;
+    let aiService;
+    let systemMessage = `You are an expert MySQL database administrator. Your task is to generate a valid MySQL SQL query based on the user's request.
+    
+    - Always provide only the SQL query, without any additional text, explanations, or markdown.
+    - Ensure the query is syntactically correct for MySQL.
+    - If the request is ambiguous, make a reasonable assumption.
+    - If the request cannot be fulfilled with a single SQL query, provide the most relevant one.
+    - Do NOT include backticks around database names in USE statements.
+    - Do NOT include backticks around table or column names unless they contain special characters or are reserved keywords.
+    - If the user asks for DDL (CREATE, ALTER, DROP) or DML (INSERT, UPDATE, DELETE) operations, generate them.
+    - If the user asks for data retrieval, generate a SELECT statement.
+    - Prioritize clarity and correctness.`;
+
+    switch (model) {
+      case 'gemini':
+        apiKey = serverConfig.ai.geminiApiKey;
+        if (!apiKey) return res.status(400).json({ success: false, message: 'Gemini API Key is not configured.' });
+        aiService = new GoogleGenerativeAI(apiKey);
+        break;
+      case 'openai':
+        apiKey = serverConfig.ai.openAIApiKey;
+        if (!apiKey) return res.status(400).json({ success: false, message: 'OpenAI API Key is not configured.' });
+        aiService = new OpenAI({ apiKey });
+        break;
+      case 'anthropic':
+        apiKey = serverConfig.ai.anthropicApiKey;
+        if (!apiKey) return res.status(400).json({ success: false, message: 'Anthropic API Key is not configured.' });
+        aiService = new Anthropic({ apiKey });
+        break;
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid AI model selected.' });
+    }
+
+    let fullPrompt = prompt;
+
+    if (database) {
+      connection = await getUserPooledConnection(req);
+      const [tables] = await connection.query(`
+        SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_KEY, EXTRA
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ?
+        ORDER BY TABLE_NAME, ORDINAL_POSITION;
+      `, [database]);
+
+      let schemaDescription = `\n\nHere is the schema for the '${database}' database:\n\n`;
+      const tablesMap = new Map();
+      tables.forEach(col => {
+        if (!tablesMap.has(col.TABLE_NAME)) {
+          tablesMap.set(col.TABLE_NAME, []);
+        }
+        tablesMap.get(col.TABLE_NAME).push(col);
+      });
+
+      tablesMap.forEach((cols, tableName) => {
+        schemaDescription += `Table: \`${tableName}\`\n`;
+        cols.forEach(col => {
+          schemaDescription += `  - \`${col.COLUMN_NAME}\` ${col.DATA_TYPE}`;
+          if (col.COLUMN_KEY === 'PRI') schemaDescription += ' (PRIMARY KEY)';
+          if (col.EXTRA.includes('auto_increment')) schemaDescription += ' (AUTO_INCREMENT)';
+          schemaDescription += '\n';
+        });
+        schemaDescription += '\n';
+      });
+      fullPrompt = `Given the following MySQL database schema for database '${database}':\n${schemaDescription}\n\nGenerate a MySQL SQL query for the following request: ${prompt}`;
+    }
+
+    let generatedSql = '';
+
+    if (model === 'gemini') {
+      const modelInstance = aiService.getGenerativeModel({ model: "gemini-pro" });
+      const result = await modelInstance.generateContent([systemMessage, fullPrompt]);
+      const response = await result.response;
+      generatedSql = response.text();
+    } else if (model === 'openai') {
+      const completion = await aiService.chat.completions.create({
+        model: "gpt-3.5-turbo", // Or gpt-4, gpt-4o etc.
+        messages: [
+          { role: "system", content: systemMessage },
+          { role: "user", content: fullPrompt }
+        ],
+        temperature: 0.7,
+      });
+      generatedSql = completion.choices[0].message.content;
+    } else if (model === 'anthropic') {
+      const anthropicModel = "claude-3-haiku-20240307"; // Or other Claude models
+      const response = await aiService.messages.create({
+        model: anthropicModel,
+        max_tokens: 1024,
+        system: systemMessage,
+        messages: [
+          { role: "user", content: fullPrompt }
+        ],
+        temperature: 0.7,
+      });
+      generatedSql = response.content[0].text;
+    }
+
+    // Clean up generated SQL (remove markdown, extra text)
+    generatedSql = generatedSql.replace(/```sql\n?|```/g, '').trim();
+    generatedSql = generatedSql.replace(/```\n?|```/g, '').trim(); // Remove any remaining markdown
+    generatedSql = generatedSql.replace(/^(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\s/i, (match) => match.toUpperCase()); // Capitalize first keyword
+
+    res.json({ success: true, sql: generatedSql });
+
+  } catch (error) {
+    console.error('Error generating SQL with AI:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to generate SQL with AI.' });
   } finally {
     if (connection) connection.release();
   }
