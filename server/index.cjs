@@ -6,11 +6,6 @@ const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
 
-// Import AI SDKs
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const OpenAI = require('openai');
-const Anthropic = require('@anthropic-ai/sdk');
-
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -436,7 +431,7 @@ app.post('/api/save-config', async (req, res) => {
     // Also update other application/security settings
     existingConfig.application = config.application;
     existingConfig.security = config.security;
-    existingConfig.ai = config.ai; // Save AI configuration
+    existingConfig.ai = config.ai // Save AI configuration
 
     await fs.writeFile(configPath, JSON.stringify(existingConfig, null, 2));
 
@@ -1357,6 +1352,39 @@ app.post('/api/ai/generate-sql', authMiddleware, async (req, res) => {
       return res.status(500).json({ success: false, message: 'AI configuration not loaded.' });
     }
 
+    // Lazily require AI SDKs so server can start even if those packages failed to install.
+    let GoogleGenerativeAI = null;
+    let OpenAI = null;
+    let Anthropic = null;
+
+    try {
+      // prefer scoped package name if available
+      GoogleGenerativeAI = require('@google/generative-ai').GoogleGenerativeAI || require('google-generativeai').GoogleGenerativeAI;
+    } catch (e) {
+      // leave null if not installed
+    }
+    try {
+      OpenAI = require('openai');
+    } catch (e) {
+      // leave null if not installed
+    }
+    try {
+      Anthropic = require('@anthropic-ai/sdk');
+    } catch (e) {
+      // leave null if not installed
+    }
+
+    // If user requested a model whose SDK isn't available, return a user-friendly error.
+    if (model === 'gemini' && !GoogleGenerativeAI) {
+      return res.status(400).json({ success: false, message: 'Gemini SDK is not installed on the server. Please install @google/generative-ai (or the configured package) to use Gemini.' });
+    }
+    if (model === 'openai' && !OpenAI) {
+      return res.status(400).json({ success: false, message: 'OpenAI SDK is not installed on the server. Please install openai to use OpenAI.' });
+    }
+    if (model === 'anthropic' && !Anthropic) {
+      return res.status(400).json({ success: false, message: 'Anthropic SDK is not installed on the server. Please install @anthropic-ai/sdk to use Anthropic.' });
+    }
+
     let schemaContext = '';
     if (database) {
       connection = await getUserPooledConnection(req);
@@ -1404,34 +1432,50 @@ app.post('/api/ai/generate-sql', authMiddleware, async (req, res) => {
       if (!apiKey) {
         return res.status(400).json({ success: false, message: 'Gemini API Key is not configured.' });
       }
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const geminiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
-      const result = await geminiModel.generateContent(fullPrompt);
-      const response = await result.response;
-      generatedSql = response.text();
+      // Attempt to call Gemini SDK in a compatible way; implementation depends on installed package version.
+      try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const geminiModel = genAI.getGenerativeModel ? genAI.getGenerativeModel({ model: "gemini-pro" }) : genAI;
+        const result = await (geminiModel.generateContent ? geminiModel.generateContent(fullPrompt) : geminiModel.generate(fullPrompt));
+        const response = await (result.response || Promise.resolve(result));
+        generatedSql = response.text ? response.text() : (response.output || response);
+      } catch (err) {
+        console.error('Gemini generation error:', err);
+        throw err;
+      }
     } else if (model === 'openai') {
       const apiKey = serverConfig.ai.openAIApiKey;
       if (!apiKey) {
         return res.status(400).json({ success: false, message: 'OpenAI API Key is not configured.' });
       }
-      const openai = new OpenAI({ apiKey: apiKey });
-      const chatCompletion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{ role: "user", content: fullPrompt }],
-      });
-      generatedSql = chatCompletion.choices[0].message.content;
+      try {
+        const openai = new OpenAI({ apiKey: apiKey });
+        const chatCompletion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [{ role: "user", content: fullPrompt }],
+        });
+        generatedSql = chatCompletion.choices[0].message.content;
+      } catch (err) {
+        console.error('OpenAI generation error:', err);
+        throw err;
+      }
     } else if (model === 'anthropic') {
       const apiKey = serverConfig.ai.anthropicApiKey;
       if (!apiKey) {
         return res.status(400).json({ success: false, message: 'Anthropic API Key is not configured.' });
       }
-      const anthropic = new Anthropic({ apiKey: apiKey });
-      const msg = await anthropic.messages.create({
-        model: "claude-3-opus-20240229", // Or another suitable Claude model
-        max_tokens: 1024,
-        messages: [{ role: "user", content: fullPrompt }],
-      });
-      generatedSql = msg.content[0].text;
+      try {
+        const anthropic = new Anthropic({ apiKey: apiKey });
+        const msg = await anthropic.messages.create({
+          model: "claude-3-opus-20240229",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: fullPrompt }],
+        });
+        generatedSql = msg.content[0].text;
+      } catch (err) {
+        console.error('Anthropic generation error:', err);
+        throw err;
+      }
     } else {
       return res.status(400).json({ success: false, message: 'Invalid AI model selected.' });
     }
