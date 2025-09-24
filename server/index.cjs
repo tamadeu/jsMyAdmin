@@ -20,7 +20,7 @@ if (!SESSION_SECRET_KEY || SESSION_SECRET_KEY === 'sua_chave_secreta_super_segur
 }
 
 const ALGORITHM = 'aes-256-cbc';
-const KEY = crypto.createHash('sha256').update(String(SESSION_SECRET_KEY)).digest('base64').substr(0, 32);
+const KEY = crypto.createHash('sha256').update(String(SESSION_SECRET_SECRET)).digest('base64').substr(0, 32);
 
 function encrypt(text) {
   const iv = crypto.scryptSync(SESSION_SECRET_KEY, 'salt', 16); // IV determinístico
@@ -139,9 +139,6 @@ async function getUserPooledConnection(req) {
 
   const connection = await dbPool.getConnection();
   try {
-    // Try to change user AND set default database (the original behavior).
-    // Some users may not have access to the configured defaultDatabase (commonly 'mysql').
-    // If that happens (ER_DBACCESS_DENIED_ERROR), retry without the database property so the user is still authenticated.
     const changeUserPayloadBase = {
       user: req.dbCredentials.user,
       password: req.dbCredentials.password,
@@ -149,7 +146,7 @@ async function getUserPooledConnection(req) {
       ssl: serverConfig.database.ssl ? {
         ca: serverConfig.database.sslCA || undefined,
         cert: serverConfig.database.sslCertificate || undefined,
-        key: serverConfig.database.sslKey || undefined, // keep same mapping used elsewhere
+        key: serverConfig.database.sslKey || undefined, // Corrigido: de 'key' para 'sslKey'
       } : false,
       multipleStatements: serverConfig.security.allowMultipleStatements,
       timezone: '+00:00'
