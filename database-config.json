@@ -24,5 +24,10 @@
     "allowMultipleStatements": false,
     "allowLocalInfile": false,
     "requireSSL": false
+  },
+  "ai": {
+    "geminiApiKey": "***REMOVED***",
+    "openAIApiKey": "***REMOVED***",
+    "anthropicApiKey": "***REMOVED***"
   }
 }
