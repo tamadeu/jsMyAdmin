@@ -4,6 +4,8 @@ const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
+const http = require('http');
 
 // Load .env only if it exists and has required variables
 const envPath = path.join(__dirname, '../.env');
@@ -28,6 +30,10 @@ try {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH;
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH;
+const SSL_CA_PATH = process.env.SSL_CA_PATH;
 
 // --- Session Encryption ---
 let SESSION_SECRET_KEY = process.env.SESSION_SECRET_KEY;
@@ -1657,19 +1663,50 @@ async function startServer() {
       console.log('Starting server in setup mode - no database pool initialized yet.');
     }
 
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`API available at http://localhost:${PORT}/api`);
+    // Start HTTP server
+    const httpServer = http.createServer(app);
+    httpServer.listen(PORT, () => {
+      console.log(`HTTP Server running on port ${PORT}`);
+      console.log(`HTTP API available at http://localhost:${PORT}/api`);
       if (!envExists) {
         console.log('🔧 Server is running in SETUP MODE - please complete the initial setup wizard.');
       }
     });
+
+    // Start HTTPS server if SSL certificates are configured
+    if (SSL_KEY_PATH && SSL_CERT_PATH) {
+      try {
+        const options = {
+          key: await fs.readFile(SSL_KEY_PATH, 'utf8'),
+          cert: await fs.readFile(SSL_CERT_PATH, 'utf8')
+        };
+
+        // Add CA certificate if provided (for intermediate certificates)
+        if (SSL_CA_PATH) {
+          options.ca = await fs.readFile(SSL_CA_PATH, 'utf8');
+        }
+
+        const httpsServer = https.createServer(options, app);
+        httpsServer.listen(HTTPS_PORT, () => {
+          console.log(`HTTPS Server running on port ${HTTPS_PORT}`);
+          console.log(`HTTPS API available at https://localhost:${HTTPS_PORT}/api`);
+        });
+      } catch (sslError) {
+        console.error('Failed to start HTTPS server:', sslError.message);
+        console.log('Continuing with HTTP server only...');
+      }
+    } else {
+      console.log('SSL certificates not configured - running HTTP server only');
+      console.log('To enable HTTPS, set SSL_KEY_PATH and SSL_CERT_PATH in your .env file');
+    }
+
   } catch (error) {
     console.error('Failed to start server due to configuration error:', error);
     // In setup mode, we should still start the server even if config loading fails
     if (!envExists) {
       console.log('Starting server in setup mode despite config error...');
-      app.listen(PORT, () => {
+      const httpServer = http.createServer(app);
+      httpServer.listen(PORT, () => {
         console.log(`Server running on port ${PORT} (SETUP MODE)`);
         console.log(`API available at http://localhost:${PORT}/api`);
         console.log('🔧 Please complete the initial setup wizard.');

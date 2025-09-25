@@ -164,10 +164,47 @@ class ApiService {
   private currentUserProfile: UserProfile | null = null;
 
   constructor() {
-    // Use the same protocol (HTTP/HTTPS) as the current page
-    const protocol = window.location.protocol; // 'https:' or 'http:'
-    const currentHost = window.location.hostname;
-    this.baseUrl = `${protocol}//${currentHost}:3001/api`;
+    // Check if API URL is explicitly configured via environment variable
+    if (import.meta.env.VITE_API_URL) {
+      this.baseUrl = import.meta.env.VITE_API_URL;
+    } else {
+      // Auto-detect API URL based on current page
+      const protocol = window.location.protocol; // 'https:' or 'http:'
+      const currentHost = window.location.hostname;
+      
+      // Determine the API port intelligently
+      let apiPort: string;
+      
+      // If we're accessing the frontend through a specific port, use that context
+      if (window.location.port) {
+        const currentPort = parseInt(window.location.port);
+        
+        // Common port mapping scenarios:
+        if (currentPort === 8080 || currentPort === 3000 || currentPort === 5173) {
+          // Frontend development ports -> backend development ports
+          apiPort = protocol === 'https:' ? '3443' : '3001';
+        } else if (currentPort === 80 || currentPort === 443) {
+          // Standard web ports -> use same for API (reverse proxy scenario)
+          apiPort = window.location.port;
+        } else {
+          // Custom port -> assume API is on same port (reverse proxy or custom setup)
+          apiPort = window.location.port;
+        }
+      } else {
+        // No explicit port means standard web ports (80/443)
+        if (protocol === 'https:') {
+          // HTTPS without explicit port -> try standard HTTPS port
+          apiPort = '443';
+        } else {
+          // HTTP without explicit port -> use standard backend port
+          apiPort = '3001';
+        }
+      }
+      
+      this.baseUrl = `${protocol}//${currentHost}:${apiPort}/api`;
+    }
+    
+    console.log(`API Service initialized with baseUrl: ${this.baseUrl}`);
     this.loadToken();
   }
 
