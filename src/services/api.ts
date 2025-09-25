@@ -127,6 +127,23 @@ interface SystemStatusResponse {
   message: string;
 }
 
+export interface RootConnectionData {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+export interface SystemUserConfig {
+  username: string;
+  password: string;
+}
+
+export interface SetupFinalizationData {
+  systemUser: SystemUserConfig;
+  sessionSecretKey: string;
+}
+
 export interface TableColumnDefinition {
   id: string; // Used for React keys
   name: string;
@@ -198,6 +215,50 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
+    });
+    return response.json();
+  }
+
+  async testRootConnection(connectionData: RootConnectionData): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/system/test-root-connection`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(connectionData),
+    });
+    return response.json();
+  }
+
+  async createSystemDatabase(connectionData: RootConnectionData): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/system/create-database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(connectionData),
+    });
+    return response.json();
+  }
+
+  async createSystemUser(connectionData: RootConnectionData, userConfig: SystemUserConfig): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/system/create-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ connectionData, userConfig }),
+    });
+    return response.json();
+  }
+
+  async finalizeSystemSetup(setupData: SetupFinalizationData): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/system/finalize-setup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(setupData),
     });
     return response.json();
   }

@@ -1355,6 +1355,207 @@ app.post('/api/system/initialize', async (req, res) => { // Removed authMiddlewa
   }
 });
 
+// Endpoint para testar conexão com credenciais root
+app.post('/api/system/test-root-connection', async (req, res) => {
+  const { host, port, username, password } = req.body;
+  
+  let connection;
+  try {
+    connection = await mysql.createConnection({
+      host: host || 'localhost',
+      port: port || 3306,
+      user: username,
+      password: password || '',
+      connectionTimeout: 10000
+    });
+    
+    // Testar se o usuário tem privilégios administrativos
+    await connection.query('SELECT 1');
+    const [privileges] = await connection.query(`SHOW GRANTS FOR '${username}'@'${host || 'localhost'}'`);
+    
+    // Verificar se tem privilégios de CREATE DATABASE e CREATE USER
+    const hasAdminPrivileges = privileges.some(grant => 
+      grant[`Grants for ${username}@${host || 'localhost'}`].includes('ALL PRIVILEGES') ||
+      (grant[`Grants for ${username}@${host || 'localhost'}`].includes('CREATE') && 
+       grant[`Grants for ${username}@${host || 'localhost'}`].includes('GRANT OPTION'))
+    );
+    
+    if (!hasAdminPrivileges) {
+      return res.json({ 
+        success: false, 
+        message: 'O usuário não possui privilégios administrativos suficientes. É necessário um usuário com privilégios de CREATE DATABASE, CREATE USER e GRANT OPTION.' 
+      });
+    }
+    
+    res.json({ success: true, message: 'Conexão estabelecida com sucesso e privilégios administrativos confirmados.' });
+  } catch (error) {
+    console.error('Error testing root connection:', error);
+    res.json({ success: false, message: `Erro de conexão: ${error.message}` });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Endpoint para criar o banco de dados do sistema
+app.post('/api/system/create-database', async (req, res) => {
+  const { host, port, username, password } = req.body;
+  
+  let connection;
+  try {
+    connection = await mysql.createConnection({
+      host: host || 'localhost',
+      port: port || 3306,
+      user: username,
+      password: password || '',
+      connectionTimeout: 10000
+    });
+    
+    // Criar o banco de dados do sistema
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${SYSTEM_DATABASE}\``);
+    
+    // Criar as tabelas do sistema
+    const tableCreationQueries = [
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        query_text TEXT NOT NULL,
+        database_context VARCHAR(255),
+        executed_by VARCHAR(255) NOT NULL,
+        executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        execution_time_ms INT,
+        status ENUM('success', 'error') NOT NULL,
+        error_message TEXT
+      )`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        query_text TEXT NOT NULL,
+        database_context VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        database_name VARCHAR(255) NOT NULL,
+        table_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_favorite (database_name, table_name)
+      )`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_token VARCHAR(128) NOT NULL UNIQUE,
+        user VARCHAR(255) NOT NULL,
+        host VARCHAR(255) NOT NULL,
+        encrypted_password TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL,
+        INDEX idx_token (session_token),
+        INDEX idx_expires (expires_at)
+      )`
+    ];
+    
+    for (const query of tableCreationQueries) {
+      await connection.query(query);
+    }
+    
+    res.json({ success: true, message: `Banco de dados ${SYSTEM_DATABASE} e tabelas criados com sucesso.` });
+  } catch (error) {
+    console.error('Error creating system database:', error);
+    res.status(500).json({ success: false, message: `Erro ao criar banco de dados: ${error.message}` });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Endpoint para criar o usuário do sistema
+app.post('/api/system/create-user', async (req, res) => {
+  const { connectionData, userConfig } = req.body;
+  const { host, port, username, password } = connectionData;
+  const { username: sysUsername, password: sysPassword } = userConfig;
+  
+  let connection;
+  try {
+    connection = await mysql.createConnection({
+      host: host || 'localhost',
+      port: port || 3306,
+      user: username,
+      password: password || '',
+      connectionTimeout: 10000
+    });
+    
+    // Criar o usuário do sistema
+    await connection.query(`CREATE USER IF NOT EXISTS '${sysUsername}'@'localhost' IDENTIFIED BY ?`, [sysPassword]);
+    await connection.query(`CREATE USER IF NOT EXISTS '${sysUsername}'@'%' IDENTIFIED BY ?`, [sysPassword]);
+    
+    // Dar privilégios ao usuário do sistema
+    await connection.query(`GRANT ALL PRIVILEGES ON \`${SYSTEM_DATABASE}\`.* TO '${sysUsername}'@'localhost'`);
+    await connection.query(`GRANT ALL PRIVILEGES ON \`${SYSTEM_DATABASE}\`.* TO '${sysUsername}'@'%'`);
+    
+    // Privilégios para operações administrativas básicas
+    await connection.query(`GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX ON *.* TO '${sysUsername}'@'localhost'`);
+    await connection.query(`GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX ON *.* TO '${sysUsername}'@'%'`);
+    
+    // Privilégios para gerenciar usuários (necessário para o jsMyAdmin funcionar)
+    await connection.query(`GRANT CREATE USER, RELOAD ON *.* TO '${sysUsername}'@'localhost'`);
+    await connection.query(`GRANT CREATE USER, RELOAD ON *.* TO '${sysUsername}'@'%'`);
+    
+    await connection.query('FLUSH PRIVILEGES');
+    
+    res.json({ success: true, message: `Usuário ${sysUsername} criado com sucesso.` });
+  } catch (error) {
+    console.error('Error creating system user:', error);
+    res.status(500).json({ success: false, message: `Erro ao criar usuário: ${error.message}` });
+  } finally {
+    if (connection) await connection.end();
+  }
+});
+
+// Endpoint para finalizar a configuração do sistema
+app.post('/api/system/finalize-setup', async (req, res) => {
+  const { systemUser, sessionSecretKey } = req.body;
+  
+  try {
+    // Atualizar o arquivo .env com as novas configurações
+    const envPath = path.join(__dirname, '../.env');
+    let envContent = '';
+    
+    try {
+      envContent = await fs.readFile(envPath, 'utf8');
+    } catch (error) {
+      // Se o arquivo .env não existir, criar um novo
+      envContent = '';
+    }
+    
+    // Atualizar ou adicionar as variáveis de ambiente
+    const updateEnvVar = (content, key, value) => {
+      const regex = new RegExp(`^${key}=.*$`, 'm');
+      if (regex.test(content)) {
+        return content.replace(regex, `${key}=${value}`);
+      } else {
+        return content + (content.endsWith('\n') || content === '' ? '' : '\n') + `${key}=${value}\n`;
+      }
+    };
+    
+    envContent = updateEnvVar(envContent, 'MYSQL_SYSTEM_USER', systemUser.username);
+    envContent = updateEnvVar(envContent, 'MYSQL_SYSTEM_PASSWORD', systemUser.password);
+    envContent = updateEnvVar(envContent, 'SESSION_SECRET_KEY', sessionSecretKey);
+    
+    // Garantir que temos o PORT se não estiver definido
+    if (!envContent.includes('PORT=')) {
+      envContent = updateEnvVar(envContent, 'PORT', '3001');
+    }
+    
+    await fs.writeFile(envPath, envContent);
+    
+    res.json({ 
+      success: true, 
+      message: 'Configuração inicial concluída com sucesso! O sistema será reiniciado para aplicar as alterações.' 
+    });
+    
+  } catch (error) {
+    console.error('Error finalizing setup:', error);
+    res.status(500).json({ success: false, message: `Erro ao finalizar configuração: ${error.message}` });
+  }
+});
+
 
 // Initialize server configuration and then start the server
 async function startServer() {
