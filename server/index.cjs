@@ -1318,43 +1318,24 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
   }
 });
 
-// Endpoint to check system status (if meta tables exist)
-app.get('/api/system/status', async (req, res) => { // Removed authMiddleware
-  // Check if we have the .env file with required variables
-  if (!envExists || !MYSQL_SYSTEM_USER || !MYSQL_SYSTEM_PASSWORD || !SESSION_SECRET_KEY || SESSION_SECRET_KEY.startsWith('temp_setup_key_')) {
-    return res.json({ status: 'needs_initialization', message: 'System requires initial setup.' });
-  }
-
-  let connection;
+// Endpoint to check system status (simplified approach - no DB connection required)
+app.get('/api/system/status', async (req, res) => { // No auth required
   try {
-    connection = await getSystemPooledConnection();
-    const [rows] = await connection.query(`SHOW DATABASES LIKE ?`, [SYSTEM_DATABASE]);
-    if (rows.length === 0) {
-      return res.json({ status: 'needs_initialization', message: 'System database not found.' });
+    // Check if we have the .env file with required variables
+    if (!envExists || !MYSQL_SYSTEM_USER || !MYSQL_SYSTEM_PASSWORD || !SESSION_SECRET_KEY || SESSION_SECRET_KEY.startsWith('temp_setup_key_')) {
+      return res.json({ status: 'needs_initialization', message: 'System requires initial setup.' });
     }
 
-    const [tableRows] = await connection.query(`SHOW TABLES FROM \`${SYSTEM_DATABASE}\``);
-    const existingTables = tableRows.map(row => Object.values(row)[0]);
-    const missingTables = ["_jsma_query_history", "_jsma_favorite_queries", "_jsma_favorite_tables", "_jsma_sessions"]
-      .filter(table => !existingTables.includes(table));
-
-    if (missingTables.length > 0) {
-      return res.json({ status: 'needs_initialization', message: `Missing system tables: ${missingTables.join(', ')}` });
+    // Check if the configuration file exists and is valid
+    if (!serverConfig) {
+      return res.json({ status: 'needs_initialization', message: 'Configuration file missing or invalid.' });
     }
 
-    // Check for 'executed_by' column in _jsma_query_history
-    const [columns] = await connection.query(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\``);
-    const hasExecutedByColumn = columns.some(col => col.Field === 'executed_by');
-    if (!hasExecutedByColumn) {
-      return res.json({ status: 'needs_initialization', message: 'Missing `executed_by` column in `_jsma_query_history` table.' });
-    }
-
-    res.json({ status: 'ready', message: 'System is initialized.' });
+    // If we got here, the system is configured
+    res.json({ status: 'ready', message: 'System is configured and ready.' });
   } catch (error) {
     console.error('Error checking system status:', error);
-    return res.json({ status: 'needs_initialization', message: 'System database not accessible.' });
-  } finally {
-    if (connection) connection.release();
+    return res.json({ status: 'needs_initialization', message: 'Error checking system configuration.' });
   }
 });
 
