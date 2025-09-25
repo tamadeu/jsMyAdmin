@@ -18,20 +18,23 @@ interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => void;
   hasPrivilege: (privilege: string) => boolean;
+  canPerformDatabaseAction: (action: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { ReactNode }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { t } = useTranslation(); // Initialize useTranslation
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
   const logout = useCallback(async () => {
+    console.log('AuthContext: Starting logout process');
     await apiService.logout();
     setIsAuthenticated(false);
     setUser(null);
+    console.log('AuthContext: Logout completed');
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
@@ -82,7 +85,26 @@ export const AuthProvider = ({ children }: { ReactNode }) => {
     [user],
   );
 
-  const value = { isAuthenticated, isInitializing, user, login, logout, hasPrivilege };
+  // New function for database-specific privilege checking
+  // This is optimistic - shows UI elements and lets backend handle actual permission validation
+  const canPerformDatabaseAction = useCallback(
+    (action: string): boolean => {
+      if (!user) return false;
+      
+      // If user has global privileges, they can definitely perform the action
+      if (hasPrivilege(action)) return true;
+      
+      // For users without global privileges, we optimistically allow actions
+      // The backend will handle the actual permission validation
+      // This prevents the UI from being overly restrictive for users with database-specific privileges
+      const basicActions = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'INDEX'];
+      
+      return basicActions.includes(action.toUpperCase());
+    },
+    [user, hasPrivilege],
+  );
+
+  const value = { isAuthenticated, isInitializing, user, login, logout, hasPrivilege, canPerformDatabaseAction };
 
   return (
     <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useDatabaseCache } from "@/context/DatabaseCacheContext";
+import { useTabs } from "@/context/TabContext";
 import InsertRowDialog from "@/components/InsertRowDialog";
 import ExportDataDialog from "@/components/ExportDataDialog"; // Import the new ExportDataDialog
 import { useTranslation } from "react-i18next"; // Import useTranslation
@@ -61,8 +62,9 @@ interface DatabaseBrowserProps {
 const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
-  const { hasPrivilege } = useAuth();
+  const { hasPrivilege, canPerformDatabaseAction } = useAuth();
   const { refreshDatabases } = useDatabaseCache();
+  const { addTab } = useTabs();
   const navigate = useNavigate(); // Initialize useNavigate
   const [searchInput, setSearchInput] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
@@ -198,7 +200,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   };
 
   const handleCellDoubleClick = (rowIndex: number, columnName: string, currentValue: any) => {
-    if (!hasPrimaryKey || !hasPrivilege("UPDATE")) return;
+    if (!hasPrimaryKey || !canPerformDatabaseAction("UPDATE")) return;
     
     setEditingCell({ rowIndex, columnName });
     setEditValue(currentValue === null ? '' : String(currentValue));
@@ -410,7 +412,12 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   };
 
   const handleViewStructure = () => {
-    navigate(`/${database}/${table}/structure`);
+    addTab({ 
+      title: t("tableStructurePage.title", { tableName: table }), 
+      type: "table-structure", 
+      params: { database, table }, 
+      closable: true 
+    });
   };
 
   const isTable = tableInfo?.table_type !== 'VIEW';
@@ -484,7 +491,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                {isTable && hasPrivilege("ALTER") && (
+                {isTable && canPerformDatabaseAction("ALTER") && (
                   <Button variant="outline" size="sm" onClick={handleViewStructure}>
                     <LayoutPanelTop className="h-4 w-4 mr-2" />
                     {t("databaseBrowser.structure")}
@@ -502,7 +509,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   <Download className="h-4 w-4 mr-2" />
                   {t("queryResultTable.export")}
                 </Button>
-                {hasPrivilege("INSERT") && (
+                {canPerformDatabaseAction("INSERT") && (
                   <Button size="sm" onClick={() => setIsInsertRowDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     {t("queryResultTable.insertRow")}
@@ -573,7 +580,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                         <thead className="bg-muted">
                           <tr>
                             {/* Actions column - only show if table has PK and user has privileges */}
-                            {hasPrimaryKey && (hasPrivilege("UPDATE") || hasPrivilege("INSERT") || hasPrivilege("DELETE")) && (
+                            {hasPrimaryKey && (canPerformDatabaseAction("UPDATE") || canPerformDatabaseAction("INSERT") || canPerformDatabaseAction("DELETE")) && (
                               <th className="p-2 text-left w-24">
                                 <span className="text-sm font-medium">{t("queryResultTable.actions")}</span>
                               </th>
@@ -625,10 +632,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                           {tableData.data.map((row, rowIndex) => (
                             <tr key={rowIndex} className="border-t hover:bg-muted/50">
                               {/* Actions column - only show if table has PK and user has privileges */}
-                              {hasPrimaryKey && (hasPrivilege("UPDATE") || hasPrivilege("INSERT") || hasPrivilege("DELETE")) && (
+                              {hasPrimaryKey && (canPerformDatabaseAction("UPDATE") || canPerformDatabaseAction("INSERT") || canPerformDatabaseAction("DELETE")) && (
                                 <td className="p-2">
                                   <div className="flex gap-1">
-                                    {hasPrivilege("UPDATE") && (
+                                    {canPerformDatabaseAction("UPDATE") && (
                                       <Button 
                                         variant="ghost" 
                                         size="sm" 
@@ -639,7 +646,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         <Edit className="h-3 w-3 text-blue-600" />
                                       </Button>
                                     )}
-                                    {hasPrivilege("INSERT") && (
+                                    {canPerformDatabaseAction("INSERT") && (
                                       <Button 
                                         variant="ghost" 
                                         size="sm" 
@@ -650,7 +657,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         <Copy className="h-3 w-3 text-green-600" />
                                       </Button>
                                     )}
-                                    {hasPrivilege("DELETE") && (
+                                    {canPerformDatabaseAction("DELETE") && (
                                       <Button 
                                         variant="ghost" 
                                         size="sm" 
@@ -678,7 +685,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                   key={column.name} 
                                   className="p-2 max-w-xs cursor-pointer"
                                   onDoubleClick={() => handleCellDoubleClick(rowIndex, column.name, row[column.name])}
-                                  title={hasPrimaryKey && hasPrivilege("UPDATE") ? t("queryResultTable.doubleClickToEdit") : undefined}
+                                  title={hasPrimaryKey && canPerformDatabaseAction("UPDATE") ? t("queryResultTable.doubleClickToEdit") : undefined}
                                 >
                                   {editingCell?.rowIndex === rowIndex && editingCell?.columnName === column.name ? (
                                     <Input

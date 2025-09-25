@@ -127,7 +127,7 @@ const Sidebar = () => {
           <Button 
             variant={isSidebarItemActive("dashboard") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => navigate('/')}
+            onClick={() => addTab({ title: t("sidebar.dashboard"), type: "dashboard", closable: false })}
           >
             <Database className="h-4 w-4 mr-2" />
             {t("sidebar.dashboard")}
@@ -135,7 +135,7 @@ const Sidebar = () => {
           <Button 
             variant={isSidebarItemActive("sql-editor") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => navigate('/sql')}
+            onClick={() => addTab({ title: t("sidebar.sqlEditor"), type: "sql-editor", closable: true })}
           >
             <Play className="h-4 w-4 mr-2" />
             {t("sidebar.sqlEditor")}
@@ -143,7 +143,7 @@ const Sidebar = () => {
           <Button 
             variant={isSidebarItemActive("config") ? "secondary" : "ghost"} 
             className="w-full justify-start"
-            onClick={() => navigate('/configuration')}
+            onClick={() => addTab({ title: t("sidebar.configuration"), type: "config", closable: true })}
           >
             <Settings className="h-4 w-4 mr-2" />
             {t("sidebar.configuration")}
@@ -152,7 +152,7 @@ const Sidebar = () => {
             <Button
               variant={isSidebarItemActive("users") ? "secondary" : "ghost"}
               className="w-full justify-start"
-              onClick={() => navigate('/users')}
+              onClick={() => addTab({ title: t("sidebar.users"), type: "users", closable: true })}
             >
               <Users className="h-4 w-4 mr-2" />
               {t("sidebar.users")}
@@ -234,7 +234,13 @@ const Sidebar = () => {
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDatabaseToggle(db.name);
-                      navigate(`/${db.name}/tables`);
+                      addTab({ 
+                        title: t("databaseTablesList.tablesTitle", { databaseName: db.name }), 
+                        type: "database-tables-list", 
+                        params: { database: db.name }, 
+                        filterType: 'tables', 
+                        closable: true 
+                      });
                     }}
                   >
                     <div className="flex items-center gap-2 flex-1">
@@ -267,7 +273,13 @@ const Sidebar = () => {
                               }`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/${db.name}/tables`);
+                                addTab({ 
+                                  title: t("databaseTablesList.tablesTitle", { databaseName: db.name }), 
+                                  type: "database-tables-list", 
+                                  params: { database: db.name }, 
+                                  filterType: 'tables', 
+                                  closable: true 
+                                });
                               }}
                             >
                               <div className="flex items-center gap-2">
@@ -285,7 +297,12 @@ const Sidebar = () => {
                                         ? "bg-secondary hover:bg-secondary/80" 
                                         : "hover:bg-accent"
                                     }`}
-                                    onClick={() => navigate(`/${db.name}/${table.name}`)}
+                                    onClick={() => addTab({ 
+                                      title: table.name, 
+                                      type: "table", 
+                                      params: { database: db.name, table: table.name }, 
+                                      closable: true 
+                                    })}
                                   >
                                     <div className="flex items-center gap-2">
                                       <Table className="h-3 w-3" />
@@ -309,7 +326,13 @@ const Sidebar = () => {
                               }`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/${db.name}/views`);
+                                addTab({ 
+                                  title: t("databaseTablesList.viewsTitle", { databaseName: db.name }), 
+                                  type: "database-tables-list", 
+                                  params: { database: db.name }, 
+                                  filterType: 'views', 
+                                  closable: true 
+                                });
                               }}
                             >
                               <div className="flex items-center gap-2">
@@ -327,7 +350,12 @@ const Sidebar = () => {
                                         ? "bg-secondary hover:bg-secondary/80" 
                                         : "hover:bg-accent"
                                     }`}
-                                    onClick={() => navigate(`/${db.name}/${view.name}`)}
+                                    onClick={() => addTab({ 
+                                      title: view.name, 
+                                      type: "table", 
+                                      params: { database: db.name, table: view.name }, 
+                                      closable: true 
+                                    })}
                                   >
                                     <div className="flex items-center gap-2">
                                       <Eye className="h-3 w-3" />

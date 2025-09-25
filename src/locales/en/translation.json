@@ -392,7 +392,8 @@
     "structureCopied": "Structure Copied",
     "structureCopiedSuccessfully": "Table structure copied to clipboard as JSON.",
     "errorCopyingStructure": "Error Copying Structure",
-    "failedToCopyStructure": "Failed to copy table structure."
+    "failedToCopyStructure": "Failed to copy table structure.",
+    "copyStructure": "Copiar Estrutura como JSON"
   },
   "usersPage": {
     "title": "MySQL Users",

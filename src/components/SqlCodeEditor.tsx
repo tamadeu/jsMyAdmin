@@ -9,7 +9,7 @@ import 'prismjs/themes/prism.css'; // Basic Prism theme, can be customized or re
 interface SqlCodeEditorProps {
   value: string;
   onValueChange: (code: string) => void;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement | HTMLDivElement>) => void;
   placeholder?: string;
   readOnly?: boolean;
 }

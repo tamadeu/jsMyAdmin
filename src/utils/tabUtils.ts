@@ -1,36 +1,48 @@
 import { AppTab } from "@/context/TabContext";
 
 export function getTabPath(tab: AppTab): string {
+  const baseUrl = '/';
+  const params = new URLSearchParams();
+
   switch (tab.type) {
     case 'dashboard':
-      return '/';
+      return baseUrl; // Just the root URL
     case 'sql-editor':
-      return '/sql';
+      params.set('page', 'sql');
+      break;
     case 'config':
-      return '/configuration';
+      params.set('page', 'config');
+      break;
     case 'users':
-      return '/users';
+      params.set('page', 'users');
+      break;
     case 'database-tables-list':
       if (tab.params?.database) {
-        if (tab.filterType === 'tables') return `/${tab.params.database}/tables`;
-        if (tab.filterType === 'views') return `/${tab.params.database}/views`;
-        return `/${tab.params.database}`; // Default for all tables/views
+        params.set('db', tab.params.database);
+        if (tab.filterType === 'tables') params.set('filter', 'tables');
+        if (tab.filterType === 'views') params.set('filter', 'views');
       }
-      return '/'; // Fallback
+      break;
     case 'table':
       if (tab.params?.database && tab.params?.table) {
-        return `/${tab.params.database}/${tab.params.table}`;
+        params.set('db', tab.params.database);
+        params.set('table', tab.params.table);
       }
-      return '/'; // Fallback
+      break;
     case 'table-structure':
       if (tab.params?.database && tab.params?.table) {
-        return `/${tab.params.database}/${tab.params.table}/structure`;
+        params.set('db', tab.params.database);
+        params.set('table', tab.params.table);
+        params.set('view', 'structure');
       }
-      return '/'; // Fallback
+      break;
     case 'query-result':
-      // Query results don't have a direct URL path, stay on current path or dashboard
-      return '/'; 
+      // Query results don't have direct URL representation
+      return baseUrl;
     default:
-      return '/';
+      return baseUrl;
   }
+
+  const queryString = params.toString();
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
 }

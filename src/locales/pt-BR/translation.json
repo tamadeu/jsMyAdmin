@@ -392,7 +392,8 @@
     "structureCopied": "Estrutura Copiada",
     "structureCopiedSuccessfully": "Estrutura da tabela copiada para a área de transferência como JSON.",
     "errorCopyingStructure": "Erro ao Copiar Estrutura",
-    "failedToCopyStructure": "Falha ao copiar a estrutura da tabela."
+    "failedToCopyStructure": "Falha ao copiar a estrutura da tabela.",
+    "copyStructure": "Copiar Estrutura como JSON"
   },
   "usersPage": {
     "title": "Usuários MySQL",

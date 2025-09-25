@@ -25,7 +25,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { hasPrivilege } = useAuth();
+  const { hasPrivilege, canPerformDatabaseAction } = useAuth();
   const { databases, isLoadingDatabases, databaseError, refreshDatabases } = useDatabaseCache();
   const { addTab, removeTab, activeTabId } = useTabs();
 
@@ -62,11 +62,21 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   }, [allTables, allViews, searchTerm, filterType]);
 
   const handleOpenTable = (tableName: string) => {
-    navigate(`/${database}/${tableName}`);
+    addTab({ 
+      title: tableName, 
+      type: "table", 
+      params: { database, table: tableName }, 
+      closable: true 
+    });
   };
 
   const handleOpenTableStructure = (tableName: string) => {
-    navigate(`/${database}/${tableName}/structure`);
+    addTab({ 
+      title: t("tableStructurePage.title", { tableName }), 
+      type: "table-structure", 
+      params: { database, table: tableName }, 
+      closable: true 
+    });
   };
 
   const handleOpenSqlEditor = (tableName: string) => {
@@ -260,13 +270,13 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
                               <LayoutPanelTop className="h-3 w-3 mr-1" />
                               {t("databaseTablesList.structure")}
                             </Button>
-                            {allTables.some(t => t.name === item.name) && hasPrivilege("DELETE") && (
+                            {allTables.some(t => t.name === item.name) && canPerformDatabaseAction("DELETE") && (
                               <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="h-6 px-2 text-[11px] text-orange-500 hover:bg-accent hover:text-orange-600">
                                 <Eraser className="h-3 w-3 mr-1" />
                                 {t("databaseTablesList.empty")}
                               </Button>
                             )}
-                            {allTables.some(t => t.name === item.name) && hasPrivilege("DROP") && (
+                            {allTables.some(t => t.name === item.name) && canPerformDatabaseAction("DROP") && (
                               <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="h-6 px-2 text-[11px] text-red-500 hover:bg-accent hover:text-red-600">
                                 <Trash2 className="h-3 w-3 mr-1" />
                                 {t("databaseTablesList.delete")}
@@ -297,7 +307,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
 
       {/* Delete Table Confirmation Dialog */}
       {deleteTableConfirm && (
-        <AlertDialog open={!!deleteTableConfirm} onOpenChange={setDeleteTableConfirm}>
+        <AlertDialog open={!!deleteTableConfirm} onOpenChange={(open) => !open && setDeleteTableConfirm(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>{t("databaseTablesList.confirmDeleteTitle")}</AlertDialogTitle>
@@ -318,7 +328,7 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
 
       {/* Truncate Table Confirmation Dialog */}
       {truncateTableConfirm && (
-        <AlertDialog open={!!truncateTableConfirm} onOpenChange={setTruncateTableConfirm}>
+        <AlertDialog open={!!truncateTableConfirm} onOpenChange={(open) => !open && setTruncateTableConfirm(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>{t("databaseTablesList.confirmTruncateTitle")}</AlertDialogTitle>

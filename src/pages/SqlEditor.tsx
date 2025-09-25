@@ -88,16 +88,14 @@ const SqlEditor = () => {
       if (result.success) {
         const isSelect = sqlQuery.trim().toLowerCase().startsWith('select');
         if (isSelect && result.data) {
+          // Create the new Query Result tab (this will automatically activate it)
           addTab({
             title: t("header.queryResultTitle", { time: new Date().toLocaleTimeString() }),
             type: 'query-result',
             queryResult: { ...result, originalQuery: sqlQuery },
             closable: true,
           });
-          // Close the current SQL Editor tab if it's closable
-          if (activeTab?.type === 'sql-editor' && activeTab.closable) {
-            removeTab(activeTabId);
-          }
+          // Note: We don't close the SQL Editor tab anymore to preserve user's work
         } else {
           toast({
             title: t("sqlEditor.queryExecuted"),
@@ -153,7 +151,7 @@ const SqlEditor = () => {
     try {
       const formatted = format(sqlQuery, {
         language: 'mysql',
-        indent: '  ',
+        tabWidth: 2,
         linesBetweenQueries: 2,
       });
       setSqlQuery(formatted);

@@ -37,6 +37,7 @@ interface TabContextType {
   setActiveTab: (tabId: string) => void;
   getTabById: (tabId: string) => AppTab | undefined;
   updateTabContent: (tabId: string, content: { sqlQueryContent?: string }) => void;
+  clearUserTabs: () => void; // Add function to clear tabs on logout
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
@@ -51,19 +52,11 @@ export function TabProvider({ children, navigate }: TabProviderProps) {
   const [tabs, setTabs] = useState<AppTab[]>([]);
   const [activeTabId, _setActiveTabId] = useState<string>('');
   const activeTabIdRef = useRef(activeTabId);
+  const [currentUserKey, setCurrentUserKey] = useState<string>(''); // Track current user
 
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
-
-  const setActiveTab = useCallback((id: string) => {
-    _setActiveTabId(id);
-    activeTabIdRef.current = id;
-    const newActiveTab = tabs.find(tab => tab.id === id);
-    if (newActiveTab) {
-      navigate(getTabPath(newActiveTab));
-    }
-  }, [tabs, navigate]);
 
   const getTabsKey = useCallback(() => {
     if (!user) return null;
@@ -74,6 +67,22 @@ export function TabProvider({ children, navigate }: TabProviderProps) {
     if (!user) return null;
     return `jsmyadmin-active-tab-${user.username}@${user.host}`;
   }, [user]);
+
+  const setActiveTab = useCallback((id: string) => {
+    _setActiveTabId(id);
+    activeTabIdRef.current = id;
+    
+    // Save active tab to localStorage
+    const activeTabKey = getActiveTabKey();
+    if (activeTabKey) {
+      localStorage.setItem(activeTabKey, id);
+    }
+    
+    const newActiveTab = tabs.find(tab => tab.id === id);
+    if (newActiveTab) {
+      navigate(getTabPath(newActiveTab));
+    }
+  }, [tabs, navigate, getActiveTabKey]);
 
   const saveTabsToLocalStorage = useCallback((currentTabs: AppTab[]) => {
     const tabsKey = getTabsKey();
@@ -106,14 +115,21 @@ export function TabProvider({ children, navigate }: TabProviderProps) {
     const activeTabKey = getActiveTabKey();
 
     if (!tabsKey || !activeTabKey) {
+      // User not logged in - clear tabs
+      console.log('TabContext: No user logged in, clearing tabs');
       setTabs([]);
-      setActiveTab('');
+      _setActiveTabId('');
       return;
     }
+
+    console.log(`TabContext: Loading tabs for user with key: ${tabsKey}`);
 
     try {
       const savedTabsJson = localStorage.getItem(tabsKey);
       const savedActiveTabId = localStorage.getItem(activeTabKey);
+
+      console.log(`TabContext: Found saved tabs:`, savedTabsJson ? 'Yes' : 'No');
+      console.log(`TabContext: Found saved active tab:`, savedActiveTabId);
 
       if (savedTabsJson) {
         const loadedTabs: PersistedTab[] = JSON.parse(savedTabsJson);
@@ -121,29 +137,36 @@ export function TabProvider({ children, navigate }: TabProviderProps) {
         setTabs(hydratedTabs);
 
         if (savedActiveTabId && hydratedTabs.some(tab => tab.id === savedActiveTabId)) {
-          setActiveTab(savedActiveTabId);
+          console.log(`TabContext: Setting active tab to saved: ${savedActiveTabId}`);
+          _setActiveTabId(savedActiveTabId);
         } else if (hydratedTabs.length > 0) {
-          setActiveTab(hydratedTabs[0].id);
+          console.log(`TabContext: Setting active tab to first: ${hydratedTabs[0].id}`);
+          _setActiveTabId(hydratedTabs[0].id);
         } else {
+          console.log('TabContext: No saved tabs, creating dashboard');
           const dashboardTab: AppTab = { id: uuidvv4(), title: 'Dashboard', type: 'dashboard', closable: false };
           const updatedTabs = [dashboardTab];
+          setTabs(updatedTabs);
           saveTabsToLocalStorage(updatedTabs);
-          setActiveTab(dashboardTab.id);
+          _setActiveTabId(dashboardTab.id);
         }
       } else {
+        console.log('TabContext: No saved tabs found, creating dashboard');
         const dashboardTab: AppTab = { id: uuidvv4(), title: 'Dashboard', type: 'dashboard', closable: false };
         const updatedTabs = [dashboardTab];
+        setTabs(updatedTabs);
         saveTabsToLocalStorage(updatedTabs);
-        setActiveTab(dashboardTab.id);
+        _setActiveTabId(dashboardTab.id);
       }
     } catch (error) {
       console.error("Failed to load tabs from localStorage:", error);
       const dashboardTab: AppTab = { id: uuidvv4(), title: 'Dashboard', type: 'dashboard', closable: false };
       const updatedTabs = [dashboardTab];
+      setTabs(updatedTabs);
       saveTabsToLocalStorage(updatedTabs);
-      setActiveTab(dashboardTab.id);
+      _setActiveTabId(dashboardTab.id);
     }
-  }, [getTabsKey, getActiveTabKey, saveTabsToLocalStorage]); // Removed setActiveTab from deps to prevent infinite loop
+  }, [user?.username, user?.host, getTabsKey, getActiveTabKey, saveTabsToLocalStorage]); // Removed setActiveTab from deps to prevent infinite loop
 
   useEffect(() => {
     const activeTabKey = getActiveTabKey();
@@ -155,12 +178,23 @@ export function TabProvider({ children, navigate }: TabProviderProps) {
   const addTab = useCallback((newTab: Omit<AppTab, 'id'>) => {
     setTabs(prevTabs => {
       if (newTab.type !== 'query-result') {
-        const existingTab = prevTabs.find(tab =>
-          tab.type === newTab.type &&
-          JSON.stringify(tab.params) === JSON.stringify(newTab.params) &&
-          tab.filterType === newTab.filterType
-        );
+        const existingTab = prevTabs.find(tab => {
+          // Compare type
+          if (tab.type !== newTab.type) return false;
+          
+          // Compare params (handle undefined/empty object cases)
+          const tabParams = tab.params || {};
+          const newTabParams = newTab.params || {};
+          const paramsMatch = JSON.stringify(tabParams) === JSON.stringify(newTabParams);
+          
+          // Compare filterType (handle undefined cases)
+          const filterTypeMatch = (tab.filterType || undefined) === (newTab.filterType || undefined);
+          
+          return paramsMatch && filterTypeMatch;
+        });
+        
         if (existingTab) {
+          console.log(`TabContext: Found existing tab of type ${newTab.type}, activating:`, existingTab.id);
           setActiveTab(existingTab.id);
           return prevTabs;
         }
@@ -230,6 +264,31 @@ export function TabProvider({ children, navigate }: TabProviderProps) {
     return tabs.find(tab => tab.id === tabId);
   }, [tabs]);
 
+  const clearUserTabs = useCallback(() => {
+    console.log('TabContext: Clearing all tabs for user logout');
+    setTabs([]);
+    _setActiveTabId('');
+    
+    // Clear localStorage entries for current user
+    const tabsKey = getTabsKey();
+    const activeTabKey = getActiveTabKey();
+    if (tabsKey) localStorage.removeItem(tabsKey);
+    if (activeTabKey) localStorage.removeItem(activeTabKey);
+  }, [getTabsKey, getActiveTabKey]);
+
+  // Register the clearUserTabs callback with AuthContext
+  useEffect(() => {
+    const newUserKey = user ? `${user.username}@${user.host}` : '';
+    
+    // If user changed (including from null to user or user to null)
+    if (currentUserKey && currentUserKey !== newUserKey) {
+      console.log(`TabContext: User changed from ${currentUserKey} to ${newUserKey}, clearing tabs`);
+      clearUserTabs();
+    }
+    
+    setCurrentUserKey(newUserKey);
+  }, [user?.username, user?.host, currentUserKey, clearUserTabs]);
+
   const value = React.useMemo(() => ({
     tabs,
     activeTabId,
@@ -238,7 +297,8 @@ export function TabProvider({ children, navigate }: TabProviderProps) {
     setActiveTab,
     getTabById,
     updateTabContent,
-  }), [tabs, activeTabId, addTab, removeTab, setActiveTab, getTabById, updateTabContent]);
+    clearUserTabs,
+  }), [tabs, activeTabId, addTab, removeTab, setActiveTab, getTabById, updateTabContent, clearUserTabs]);
 
   return (
     <TabContext.Provider value={value}>
