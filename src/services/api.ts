@@ -159,11 +159,14 @@ export interface TableColumnDefinition {
 const QUERY_HISTORY_CACHE_EXPIRATION_TIME = 10 * 60 * 1000; // 10 minutos em milissegundos
 
 class ApiService {
-  private baseUrl = "http://localhost:3001/api";
+  private baseUrl: string;
   private sessionToken: string | null = null;
   private currentUserProfile: UserProfile | null = null;
 
   constructor() {
+    // Use the same host as the current page, but port 3001 for API
+    const currentHost = window.location.hostname;
+    this.baseUrl = `http://${currentHost}:3001/api`;
     this.loadToken();
   }
 
