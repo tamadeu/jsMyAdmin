@@ -164,9 +164,10 @@ class ApiService {
   private currentUserProfile: UserProfile | null = null;
 
   constructor() {
-    // Use the same host as the current page, but port 3001 for API
+    // Use the same protocol (HTTP/HTTPS) as the current page
+    const protocol = window.location.protocol; // 'https:' or 'http:'
     const currentHost = window.location.hostname;
-    this.baseUrl = `http://${currentHost}:3001/api`;
+    this.baseUrl = `${protocol}//${currentHost}:3001/api`;
     this.loadToken();
   }
 
