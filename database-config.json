@@ -1,7 +1,9 @@
 {
   "database": {
-    "host": "168.75.92.241",
+    "host": "localhost",
     "port": 3306,
+    "username": "jsMyAdmin_user",
+    "password": "5GKJp{i23$a}4)}-",
     "defaultDatabase": "mysql",
     "charset": "utf8mb4",
     "collation": "utf8mb4_unicode_ci",
@@ -24,5 +26,10 @@
     "allowMultipleStatements": false,
     "allowLocalInfile": false,
     "requireSSL": false
+  },
+  "ai": {
+    "geminiApiKey": "",
+    "openAIApiKey": "",
+    "anthropicApiKey": ""
   }
 }
