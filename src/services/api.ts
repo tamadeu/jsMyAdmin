@@ -142,6 +142,7 @@ export interface SystemUserConfig {
 export interface SetupFinalizationData {
   systemUser: SystemUserConfig;
   sessionSecretKey: string;
+  language: string;
 }
 
 export interface TableColumnDefinition {

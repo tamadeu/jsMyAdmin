@@ -505,5 +505,71 @@
     "errorGeneratingSql": "Error Generating SQL",
     "failedToGenerateSql": "Failed to generate SQL with AI.",
     "cancel": "Cancel"
+  },
+  "setup": {
+    "title": "jsMyAdmin Initial Setup",
+    "subtitle": "Configure the system for first use",
+    "progress": {
+      "title": "Progress",
+      "description": "{{completed}} of {{total}} steps completed"
+    },
+    "languageStep": {
+      "title": "Language Selection",
+      "description": "Choose your preferred language",
+      "instruction": "Please select your preferred language for the application",
+      "selectLabel": "Select Language",
+      "continueButton": "Continue",
+      "success": "Language configured successfully!"
+    },
+    "connectionStep": {
+      "title": "Administrative Connection",
+      "description": "Configure connection with an administrative user (root or similar)",
+      "host": "Host",
+      "port": "Port",
+      "username": "Username",
+      "password": "Password",
+      "passwordPlaceholder": "Root user password",
+      "testButton": "Test Connection",
+      "success": "Connection established successfully!",
+      "error": "Connection failed"
+    },
+    "databaseStep": {
+      "title": "System Database",
+      "description": "Creation of the javascriptmyadmin_meta database",
+      "instruction": "The javascriptmyadmin_meta database will be created with the necessary tables for system operation, including query history and configurations.",
+      "createButton": "Create System Database",
+      "success": "System database created successfully!",
+      "error": "Failed to create database"
+    },
+    "userStep": {
+      "title": "System User",
+      "description": "Configuration of the jsmyadmin_system user",
+      "username": "Username",
+      "password": "Password",
+      "passwordPlaceholder": "Enter a secure password (min. 8 characters)",
+      "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Confirm the password",
+      "generateButton": "Generate",
+      "passwordGenerated": "Secure password generated automatically. Please save this password in a safe place.",
+      "passwordAutoConfirmed": "Password automatically confirmed",
+      "createButton": "Create System User",
+      "success": "System user created successfully!",
+      "error": "Failed to create user",
+      "passwordMismatch": "Passwords do not match",
+      "passwordTooShort": "Password must be at least 8 characters"
+    },
+    "environmentStep": {
+      "title": "Environment Configuration",
+      "description": "Configuration of environment variables",
+      "sessionKey": "Session Key",
+      "sessionKeyPlaceholder": "Secret key for session encryption",
+      "generateButton": "Generate",
+      "keyGenerated": "Key generated automatically. Please keep this key in a safe place.",
+      "envAlert": "Settings will be saved to the project .env file. Make sure to backup this file.",
+      "finalizeButton": "Finalize Configuration",
+      "success": "Initial setup completed successfully! Redirecting to login...",
+      "error": "Failed to finalize setup",
+      "sessionKeyRequired": "Session key is required"
+    }
   }
 }

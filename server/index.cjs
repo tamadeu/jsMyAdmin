@@ -4,14 +4,39 @@ const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
-require('dotenv').config();
+
+// Load .env only if it exists and has required variables
+const envPath = path.join(__dirname, '../.env');
+let envExists = false;
+
+try {
+  const envContent = require('fs').readFileSync(envPath, 'utf8');
+  const hasSystemUser = envContent.includes('MYSQL_SYSTEM_USER=');
+  const hasSystemPassword = envContent.includes('MYSQL_SYSTEM_PASSWORD=');
+  const hasSessionKey = envContent.includes('SESSION_SECRET_KEY=');
+  
+  if (hasSystemUser && hasSystemPassword && hasSessionKey) {
+    require('dotenv').config();
+    envExists = true;
+    console.log('.env file found and loaded with required variables.');
+  } else {
+    console.log('.env file exists but missing required setup variables. Running in setup mode.');
+  }
+} catch (error) {
+  console.log('No .env file found or error reading it. Running in setup mode.');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // --- Session Encryption ---
-const SESSION_SECRET_KEY = process.env.SESSION_SECRET_KEY;
-if (!SESSION_SECRET_KEY || SESSION_SECRET_KEY === 'sua_chave_secreta_super_segura_aqui') {
+let SESSION_SECRET_KEY = process.env.SESSION_SECRET_KEY;
+
+// If we don't have a session key and we're in setup mode, create a temporary one
+if (!SESSION_SECRET_KEY && !envExists) {
+  SESSION_SECRET_KEY = 'temp_setup_key_' + crypto.randomBytes(32).toString('hex');
+  console.log('Using temporary session key for setup mode.');
+} else if (!SESSION_SECRET_KEY) {
   console.error("FATAL ERROR: SESSION_SECRET_KEY is not defined in the .env file.");
   console.error("Please generate a secure key and add it to your .env file.");
   process.exit(1);
@@ -46,13 +71,16 @@ let serverConfig = null;
 let systemDbPool = null;
 
 // System user credentials (for internal backend operations)
-const MYSQL_SYSTEM_USER = process.env.MYSQL_SYSTEM_USER;
-const MYSQL_SYSTEM_PASSWORD = process.env.MYSQL_SYSTEM_PASSWORD;
+let MYSQL_SYSTEM_USER = process.env.MYSQL_SYSTEM_USER;
+let MYSQL_SYSTEM_PASSWORD = process.env.MYSQL_SYSTEM_PASSWORD;
 
-if (!MYSQL_SYSTEM_USER || !MYSQL_SYSTEM_PASSWORD) {
+// Only require system credentials if we have a complete .env file
+if (envExists && (!MYSQL_SYSTEM_USER || !MYSQL_SYSTEM_PASSWORD)) {
   console.error("FATAL ERROR: MYSQL_SYSTEM_USER or MYSQL_SYSTEM_PASSWORD are not defined in the .env file.");
   console.error("Please add the credentials for a MySQL user with CREATE DATABASE and CREATE TABLE privileges for the backend.");
   process.exit(1);
+} else if (!envExists) {
+  console.log('Running without system credentials - setup mode active.');
 }
 
 // Function to load server configuration once
@@ -61,14 +89,19 @@ async function loadServerConfig() {
     const configPath = path.join(__dirname, '../database-config.json');
     const configData = await fs.readFile(configPath, 'utf8');
     serverConfig = JSON.parse(configData);
-    // Adds system user credentials to in-memory configuration
-    serverConfig.database.username = MYSQL_SYSTEM_USER;
-    serverConfig.database.password = MYSQL_SYSTEM_PASSWORD;
-    console.log('Server configuration loaded successfully.');
+    
+    // Only add system user credentials if they exist (post-setup)
+    if (MYSQL_SYSTEM_USER && MYSQL_SYSTEM_PASSWORD) {
+      serverConfig.database.username = MYSQL_SYSTEM_USER;
+      serverConfig.database.password = MYSQL_SYSTEM_PASSWORD;
+      console.log('Server configuration loaded successfully with system credentials.');
+    } else {
+      console.log('Server configuration loaded in setup mode (no system credentials).');
+    }
   } catch (error) {
     console.error('Error loading server config at startup:', error);
-    serverConfig = null; // Ensures it's null if loading fails
-    throw error; // Re-throw the error so server initialization fails if config can't be loaded
+    serverConfig = null;
+    throw error;
   }
 }
 
@@ -1287,6 +1320,11 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
 
 // Endpoint to check system status (if meta tables exist)
 app.get('/api/system/status', async (req, res) => { // Removed authMiddleware
+  // Check if we have the .env file with required variables
+  if (!envExists || !MYSQL_SYSTEM_USER || !MYSQL_SYSTEM_PASSWORD || !SESSION_SECRET_KEY || SESSION_SECRET_KEY.startsWith('temp_setup_key_')) {
+    return res.json({ status: 'needs_initialization', message: 'System requires initial setup.' });
+  }
+
   let connection;
   try {
     connection = await getSystemPooledConnection();
@@ -1314,7 +1352,7 @@ app.get('/api/system/status', async (req, res) => { // Removed authMiddleware
     res.json({ status: 'ready', message: 'System is initialized.' });
   } catch (error) {
     console.error('Error checking system status:', error);
-    res.status(500).json({ success: false, error: error.message });
+    return res.json({ status: 'needs_initialization', message: 'System database not accessible.' });
   } finally {
     if (connection) connection.release();
   }
@@ -1510,7 +1548,7 @@ app.post('/api/system/create-user', async (req, res) => {
 
 // Endpoint para finalizar a configuração do sistema
 app.post('/api/system/finalize-setup', async (req, res) => {
-  const { systemUser, sessionSecretKey } = req.body;
+  const { systemUser, sessionSecretKey, language } = req.body;
   
   try {
     // Atualizar o arquivo .env com as novas configurações
@@ -1538,6 +1576,11 @@ app.post('/api/system/finalize-setup', async (req, res) => {
     envContent = updateEnvVar(envContent, 'MYSQL_SYSTEM_PASSWORD', systemUser.password);
     envContent = updateEnvVar(envContent, 'SESSION_SECRET_KEY', sessionSecretKey);
     
+    // Salvar a preferência de idioma
+    if (language) {
+      envContent = updateEnvVar(envContent, 'DEFAULT_LANGUAGE', language);
+    }
+    
     // Garantir que temos o PORT se não estiver definido
     if (!envContent.includes('PORT=')) {
       envContent = updateEnvVar(envContent, 'PORT', '3001');
@@ -1545,9 +1588,23 @@ app.post('/api/system/finalize-setup', async (req, res) => {
     
     await fs.writeFile(envPath, envContent);
     
+    // Recarregar as variáveis de ambiente
+    require('dotenv').config({ override: true });
+    
+    // Atualizar as variáveis globais do servidor
+    process.env.MYSQL_SYSTEM_USER = systemUser.username;
+    process.env.MYSQL_SYSTEM_PASSWORD = systemUser.password;
+    process.env.SESSION_SECRET_KEY = sessionSecretKey;
+    if (language) {
+      process.env.DEFAULT_LANGUAGE = language;
+    }
+    
+    // Recriar a configuração do servidor em memória
+    await reloadServerConfiguration();
+    
     res.json({ 
       success: true, 
-      message: 'Configuração inicial concluída com sucesso! O sistema será reiniciado para aplicar as alterações.' 
+      message: 'Configuração inicial concluída com sucesso! As configurações foram aplicadas automaticamente.' 
     });
     
   } catch (error) {
@@ -1556,32 +1613,89 @@ app.post('/api/system/finalize-setup', async (req, res) => {
   }
 });
 
+// Função para recarregar a configuração do servidor
+async function reloadServerConfiguration() {
+  try {
+    console.log('Reloading server configuration...');
+    
+    // Fechar o pool de conexões atual se existir
+    if (systemDbPool) {
+      await systemDbPool.end();
+      console.log('Previous database pool closed.');
+    }
+    
+    // Atualizar as variáveis globais
+    MYSQL_SYSTEM_USER = process.env.MYSQL_SYSTEM_USER;
+    MYSQL_SYSTEM_PASSWORD = process.env.MYSQL_SYSTEM_PASSWORD;
+    SESSION_SECRET_KEY = process.env.SESSION_SECRET_KEY;
+    envExists = true;
+    
+    // Recarregar a configuração do servidor
+    await loadServerConfig();
+    
+    // Recriar o pool de conexões com as novas credenciais
+    systemDbPool = mysql.createPool({
+      host: serverConfig.database.host,
+      port: serverConfig.database.port,
+      user: serverConfig.database.username,
+      password: serverConfig.database.password,
+      waitForConnections: true,
+      connectionLimit: serverConfig.database.maxConnections || 10,
+      queueLimit: 0,
+      timezone: '+00:00'
+    });
+    
+    console.log('Server configuration reloaded successfully with new credentials.');
+  } catch (error) {
+    console.error('Error reloading server configuration:', error);
+    throw error;
+  }
+}
+
 
 // Initialize server configuration and then start the server
 async function startServer() {
   try {
     await loadServerConfig();
-    console.log("Initial serverConfig loaded:", serverConfig.database.username, serverConfig.database.password ? "password_set" : "password_not_set");
-    // Initialize connection pool after configuration is loaded
-    systemDbPool = mysql.createPool({
-      host: serverConfig.database.host,
-      port: serverConfig.database.port,
-      user: serverConfig.database.username, // System user
-      password: serverConfig.database.password, // Senha do System user
-      waitForConnections: true,
-      connectionLimit: serverConfig.database.maxConnections || 10, // Use maxConnections from config
-      queueLimit: 0, // No limit on request queue
-      timezone: '+00:00'
-    });
-    console.log('Database connection pool initialized.');
+    
+    // Only initialize connection pool if we have system credentials
+    if (MYSQL_SYSTEM_USER && MYSQL_SYSTEM_PASSWORD && serverConfig) {
+      console.log("Initial serverConfig loaded:", serverConfig.database.username, serverConfig.database.password ? "password_set" : "password_not_set");
+      systemDbPool = mysql.createPool({
+        host: serverConfig.database.host,
+        port: serverConfig.database.port,
+        user: serverConfig.database.username,
+        password: serverConfig.database.password,
+        waitForConnections: true,
+        connectionLimit: serverConfig.database.maxConnections || 10,
+        queueLimit: 0,
+        timezone: '+00:00'
+      });
+      console.log('Database connection pool initialized.');
+    } else {
+      console.log('Starting server in setup mode - no database pool initialized yet.');
+    }
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`API available at http://localhost:${PORT}/api`);
+      if (!envExists) {
+        console.log('🔧 Server is running in SETUP MODE - please complete the initial setup wizard.');
+      }
     });
   } catch (error) {
     console.error('Failed to start server due to configuration error:', error);
-    process.exit(1); // Exit process if initial configuration fails
+    // In setup mode, we should still start the server even if config loading fails
+    if (!envExists) {
+      console.log('Starting server in setup mode despite config error...');
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT} (SETUP MODE)`);
+        console.log(`API available at http://localhost:${PORT}/api`);
+        console.log('🔧 Please complete the initial setup wizard.');
+      });
+    } else {
+      process.exit(1);
+    }
   }
 }
 

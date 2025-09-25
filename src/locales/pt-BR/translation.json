@@ -505,5 +505,71 @@
     "errorGeneratingSql": "Erro ao Gerar SQL",
     "failedToGenerateSql": "Falha ao gerar SQL com IA.",
     "cancel": "Cancelar"
+  },
+  "setup": {
+    "title": "Configuração Inicial do jsMyAdmin",
+    "subtitle": "Configure o sistema para o primeiro uso",
+    "progress": {
+      "title": "Progresso",
+      "description": "{{completed}} de {{total}} etapas concluídas"
+    },
+    "languageStep": {
+      "title": "Seleção de Idioma",
+      "description": "Escolha seu idioma preferido",
+      "instruction": "Por favor, selecione seu idioma preferido para a aplicação",
+      "selectLabel": "Selecionar Idioma",
+      "continueButton": "Continuar",
+      "success": "Idioma configurado com sucesso!"
+    },
+    "connectionStep": {
+      "title": "Conexão Administrativa",
+      "description": "Configure a conexão com um usuário administrativo (root ou similar)",
+      "host": "Host",
+      "port": "Porta",
+      "username": "Usuário",
+      "password": "Senha",
+      "passwordPlaceholder": "Senha do usuário root",
+      "testButton": "Testar Conexão",
+      "success": "Conexão estabelecida com sucesso!",
+      "error": "Falha na conexão"
+    },
+    "databaseStep": {
+      "title": "Banco de Sistema",
+      "description": "Criação do banco de dados javascriptmyadmin_meta",
+      "instruction": "Será criado o banco de dados javascriptmyadmin_meta com as tabelas necessárias para o funcionamento do sistema, incluindo histórico de consultas e configurações.",
+      "createButton": "Criar Banco de Sistema",
+      "success": "Banco de dados do sistema criado com sucesso!",
+      "error": "Falha na criação do banco"
+    },
+    "userStep": {
+      "title": "Usuário do Sistema",
+      "description": "Configuração do usuário jsmyadmin_system",
+      "username": "Nome do Usuário",
+      "password": "Senha",
+      "passwordPlaceholder": "Digite uma senha segura (min. 8 caracteres)",
+      "confirmPassword": "Confirmar Senha",
+      "confirmPasswordPlaceholder": "Confirme a senha",
+      "generateButton": "Gerar",
+      "passwordGenerated": "Senha segura gerada automaticamente. Por favor, guarde esta senha em local seguro.",
+      "passwordAutoConfirmed": "Senha confirmada automaticamente",
+      "createButton": "Criar Usuário do Sistema",
+      "success": "Usuário do sistema criado com sucesso!",
+      "error": "Falha na criação do usuário",
+      "passwordMismatch": "As senhas não coincidem",
+      "passwordTooShort": "A senha deve ter pelo menos 8 caracteres"
+    },
+    "environmentStep": {
+      "title": "Configuração de Ambiente",
+      "description": "Configuração das variáveis de ambiente",
+      "sessionKey": "Chave de Sessão",
+      "sessionKeyPlaceholder": "Chave secreta para criptografia de sessões",
+      "generateButton": "Gerar",
+      "keyGenerated": "Chave gerada automaticamente. Guarde esta chave em local seguro.",
+      "envAlert": "As configurações serão salvas no arquivo .env do projeto. Certifique-se de fazer backup deste arquivo.",
+      "finalizeButton": "Finalizar Configuração",
+      "success": "Configuração inicial concluída com sucesso! Redirecionando para o login...",
+      "error": "Falha na finalização da configuração",
+      "sessionKeyRequired": "Chave de sessão é obrigatória"
+    }
   }
 }

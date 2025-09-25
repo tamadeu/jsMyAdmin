@@ -23,19 +23,31 @@ const AppContent = () => {
   const navigate = useNavigate();
   const [systemStatus, setSystemStatus] = useState<'checking' | 'ready' | 'needs_initialization'>('checking');
 
+  const checkSystemStatus = async () => {
+    try {
+      const status = await apiService.getSystemStatus();
+      setSystemStatus(status.status);
+    } catch (error) {
+      console.error('Error checking system status:', error);
+      // Se houver erro ao verificar o status, assumimos que precisa de inicialização
+      setSystemStatus('needs_initialization');
+    }
+  };
+
   useEffect(() => {
-    const checkSystemStatus = async () => {
-      try {
-        const status = await apiService.getSystemStatus();
-        setSystemStatus(status.status);
-      } catch (error) {
-        console.error('Error checking system status:', error);
-        // Se houver erro ao verificar o status, assumimos que precisa de inicialização
-        setSystemStatus('needs_initialization');
-      }
+    checkSystemStatus();
+
+    // Listen for setup completion event
+    const handleSetupCompleted = () => {
+      console.log('Setup completed event received, rechecking system status...');
+      checkSystemStatus();
     };
 
-    checkSystemStatus();
+    window.addEventListener('setupCompleted', handleSetupCompleted);
+
+    return () => {
+      window.removeEventListener('setupCompleted', handleSetupCompleted);
+    };
   }, []);
 
   // Mostrar loading enquanto verifica o sistema ou está inicializando autenticação

@@ -17,14 +17,19 @@ Antes de iniciar a configuração, certifique-se de que:
 
 ## Processo de Configuração
 
-O wizard irá guiá-lo através de 4 etapas:
+O wizard irá guiá-lo através de 5 etapas:
 
-### 1. Conexão Administrativa
+### 1. Seleção de Idioma
+- Escolha seu idioma preferido para a interface da aplicação
+- Idiomas disponíveis: English, Português (Brasil)
+- Esta configuração será salva e aplicada automaticamente
+
+### 2. Conexão Administrativa
 - Configure a conexão com o MySQL usando um usuário com privilégios administrativos
 - Normalmente será o usuário `root`
 - O sistema verificará se o usuário tem as permissões necessárias
 
-### 2. Banco de Sistema
+### 3. Banco de Sistema
 - Criação automática do banco `javascriptmyadmin_meta`
 - Criação das tabelas necessárias para o funcionamento do sistema:
   - `_jsma_query_history` - Histórico de consultas
@@ -32,14 +37,15 @@ O wizard irá guiá-lo através de 4 etapas:
   - `_jsma_favorite_tables` - Tabelas favoritas  
   - `_jsma_sessions` - Sessões de usuário
 
-### 3. Usuário do Sistema
+### 4. Usuário do Sistema
 - Criação do usuário `jsmyadmin_system` (ou personalizado)
 - Definição de senha segura para este usuário
 - Atribuição automática dos privilégios necessários para operação do sistema
 
-### 4. Configuração de Ambiente
+### 5. Configuração de Ambiente
 - Geração automática da `SESSION_SECRET_KEY` para criptografia
 - Atualização do arquivo `.env` com as configurações
+- Salvamento da preferência de idioma
 - Finalização da configuração inicial
 
 ## Após a Configuração
