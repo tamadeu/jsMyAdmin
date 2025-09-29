@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Play, Save, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw, Edit, Brain } from "lucide-react";
+import { Play, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw, Edit, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiService, QueryResult, QueryHistoryPayload } from "@/services/api";
@@ -66,7 +66,7 @@ const SqlEditor = () => {
         setSqlQuery("SELECT * FROM your_table;");
       }
     }
-  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]);
+  }, [sqlQuery, activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]);
 
   // Effect to push local sqlQuery state to context when it changes (e.g., user typing)
   useEffect(() => {
@@ -137,15 +137,9 @@ const SqlEditor = () => {
         });
       }
     }
-  }, [sqlQuery, addTab, toast, fetchQueryHistory, activeTab, activeTabId, removeTab, t]);
+  }, [sqlQuery, addTab, toast, fetchQueryHistory, t]);
 
-  const saveQuery = () => {
-    toast({
-      title: t("sqlEditor.featureNotImplemented"),
-      description: t("sqlEditor.savingQueriesNotAvailable"),
-      variant: "default"
-    });
-  };
+
 
   const formatQuery = useCallback(() => {
     try {
@@ -198,10 +192,6 @@ const SqlEditor = () => {
           <Button variant="outline" size="sm" onClick={formatQuery}>
             <AlignLeft className="h-4 w-4 mr-2" />
             {t("sqlEditor.formatSql")}
-          </Button>
-          <Button variant="outline" size="sm" onClick={saveQuery}>
-            <Save className="h-4 w-4 mr-2" />
-            {t("sqlEditor.save")}
           </Button>
           <Button size="sm" onClick={executeQuery} disabled={isExecuting}>
             <Play className="h-4 w-4 mr-2" />

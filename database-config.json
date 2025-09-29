@@ -26,10 +26,5 @@
     "allowMultipleStatements": false,
     "allowLocalInfile": false,
     "requireSSL": false
-  },
-  "ai": {
-    "geminiApiKey": "",
-    "openAIApiKey": "",
-    "anthropicApiKey": ""
   }
 }
