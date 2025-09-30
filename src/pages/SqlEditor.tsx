@@ -27,24 +27,7 @@ const SqlEditor = () => {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isSqlAgentDialogOpen, setIsSqlAgentDialogOpen] = useState(false); // State for AI Agent dialog
 
-  const fetchQueryHistory = useCallback(async () => {
-    setIsLoadingHistory(true);
-    setHistoryError(null);
-    try {
-      const historyData = await apiService.getQueryHistory();
-      setQueryHistory(historyData);
-    } catch (error) {
-      console.error('Error fetching query history:', error);
-      setHistoryError(error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"));
-      toast({
-        title: t("sqlEditor.errorLoadingHistory"),
-        description: error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"),
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [toast, t]);
+
 
   // Effect to synchronize local sqlQuery state with activeTab.sqlQueryContent when activeTab changes
   useEffect(() => {
@@ -56,17 +39,60 @@ const SqlEditor = () => {
       const newSqlQueryValue = tabContentFromContext !== undefined ? tabContentFromContext : defaultQuery;
 
       // Only update local state if it's different from the new source of truth
-      if (sqlQuery !== newSqlQueryValue) {
-        setSqlQuery(newSqlQueryValue);
-      }
-      fetchQueryHistory();
+      setSqlQuery(prevQuery => {
+        if (prevQuery !== newSqlQueryValue) {
+          return newSqlQueryValue;
+        }
+        return prevQuery;
+      });
     } else {
       // If not an SQL editor tab, reset local state to default if it's not already
-      if (sqlQuery !== "SELECT * FROM your_table;") {
-        setSqlQuery("SELECT * FROM your_table;");
-      }
+      setSqlQuery(prevQuery => {
+        if (prevQuery !== "SELECT * FROM your_table;") {
+          return "SELECT * FROM your_table;";
+        }
+        return prevQuery;
+      });
     }
-  }, [sqlQuery, activeTabId, activeTab?.type, activeTab?.sqlQueryContent, fetchQueryHistory]);
+  }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent]);
+
+  // Separate effect for fetching history when tab becomes active
+  useEffect(() => {
+    let isMounted = true;
+    
+    if (activeTab?.type === 'sql-editor') {
+      const loadHistory = async () => {
+        setIsLoadingHistory(true);
+        setHistoryError(null);
+        try {
+          const historyData = await apiService.getQueryHistory();
+          if (isMounted) {
+            setQueryHistory(historyData);
+          }
+        } catch (error) {
+          if (isMounted) {
+            console.error('Error fetching query history:', error);
+            setHistoryError(error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"));
+            toast({
+              title: t("sqlEditor.errorLoadingHistory"),
+              description: error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"),
+              variant: "destructive"
+            });
+          }
+        } finally {
+          if (isMounted) {
+            setIsLoadingHistory(false);
+          }
+        }
+      };
+      
+      loadHistory();
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTabId, activeTab?.type, toast, t]);
 
   // Effect to push local sqlQuery state to context when it changes (e.g., user typing)
   useEffect(() => {
@@ -131,13 +157,18 @@ const SqlEditor = () => {
           status: result.success ? 'success' : 'error',
           error_message: result.error,
         }).then(() => {
-          fetchQueryHistory(); // Refresh history after saving a new query
+          // Refresh history after saving a new query
+          apiService.getQueryHistory().then(historyData => {
+            setQueryHistory(historyData);
+          }).catch(err => {
+            console.warn("Could not refresh query history:", err);
+          });
         }).catch(err => {
           console.warn("Could not save query to history:", err);
         });
       }
     }
-  }, [sqlQuery, addTab, toast, fetchQueryHistory, t]);
+  }, [sqlQuery, addTab, toast, t]);
 
 
 
@@ -229,7 +260,22 @@ const SqlEditor = () => {
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={fetchQueryHistory} 
+              onClick={() => {
+                setIsLoadingHistory(true);
+                setHistoryError(null);
+                apiService.getQueryHistory()
+                  .then(historyData => setQueryHistory(historyData))
+                  .catch(error => {
+                    console.error('Error fetching query history:', error);
+                    setHistoryError(error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"));
+                    toast({
+                      title: t("sqlEditor.errorLoadingHistory"),
+                      description: error instanceof Error ? error.message : t("sqlEditor.failedToLoadHistory"),
+                      variant: "destructive"
+                    });
+                  })
+                  .finally(() => setIsLoadingHistory(false));
+              }} 
               disabled={isLoadingHistory}
               className="h-8 w-8 p-0"
             >

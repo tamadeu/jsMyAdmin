@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const https = require('https');
 const http = require('http');
+const axios = require('axios');
 
 // Load .env only if it exists and has required variables
 const envPath = path.join(__dirname, '../.env');
@@ -1324,6 +1325,542 @@ app.delete('/api/users/:user/:host/database-privileges', authMiddleware, async (
   }
 });
 
+// AI Configuration endpoints
+// Get AI configuration
+app.get('/api/config/ai', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getSystemPooledConnection();
+    
+    // Check if the config table exists, create it if it doesn't
+    try {
+      await connection.execute(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_config\``);
+    } catch (error) {
+      if (error.code === 'ER_NO_SUCH_TABLE') {
+        console.log('Creating _jsma_config table...');
+        await connection.execute(
+          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_config\` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            config_key VARCHAR(255) NOT NULL UNIQUE,
+            config_value TEXT,
+            encrypted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          )`
+        );
+      } else {
+        throw error;
+      }
+    }
+    
+    const [configs] = await connection.execute(
+      `SELECT config_key, config_value, encrypted FROM \`${SYSTEM_DATABASE}\`.\`_jsma_config\` WHERE config_key IN (?, ?, ?)`,
+      ['geminiApiKey', 'openAIApiKey', 'anthropicApiKey']
+    );
+    
+    const aiConfig = {
+      geminiApiKey: '',
+      openAIApiKey: '',
+      anthropicApiKey: ''
+    };
+    
+    for (const config of configs) {
+      if (config.encrypted && config.config_value) {
+        try {
+          aiConfig[config.config_key] = decrypt(config.config_value);
+        } catch (error) {
+          console.error(`Error decrypting ${config.config_key}:`, error);
+          aiConfig[config.config_key] = '';
+        }
+      } else {
+        aiConfig[config.config_key] = config.config_value || '';
+      }
+    }
+    
+    res.json(aiConfig);
+  } catch (error) {
+    console.error('Error getting AI configuration:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Save AI configuration
+app.post('/api/config/ai', authMiddleware, async (req, res) => {
+  let connection;
+  try {
+    connection = await getSystemPooledConnection();
+    
+    // Check if the config table exists, create it if it doesn't
+    try {
+      await connection.execute(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_config\``);
+    } catch (error) {
+      if (error.code === 'ER_NO_SUCH_TABLE') {
+        console.log('Creating _jsma_config table...');
+        await connection.execute(
+          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_config\` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            config_key VARCHAR(255) NOT NULL UNIQUE,
+            config_value TEXT,
+            encrypted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          )`
+        );
+      } else {
+        throw error;
+      }
+    }
+    
+    const { geminiApiKey, openAIApiKey, anthropicApiKey } = req.body;
+    
+    const configs = [
+      { key: 'geminiApiKey', value: geminiApiKey },
+      { key: 'openAIApiKey', value: openAIApiKey },
+      { key: 'anthropicApiKey', value: anthropicApiKey }
+    ];
+    
+    for (const config of configs) {
+      if (config.value && config.value.trim()) {
+        // Encrypt and save non-empty values
+        const encryptedValue = encrypt(config.value);
+        await connection.execute(
+          `INSERT INTO \`${SYSTEM_DATABASE}\`.\`_jsma_config\` (config_key, config_value, encrypted) 
+           VALUES (?, ?, true) ON DUPLICATE KEY UPDATE config_value = VALUES(config_value), encrypted = VALUES(encrypted), updated_at = CURRENT_TIMESTAMP`,
+          [config.key, encryptedValue]
+        );
+      } else {
+        // Remove empty values
+        await connection.execute(
+          `DELETE FROM \`${SYSTEM_DATABASE}\`.\`_jsma_config\` WHERE config_key = ?`,
+          [config.key]
+        );
+      }
+    }
+    
+    res.json({ success: true, message: 'AI configuration saved successfully' });
+  } catch (error) {
+    console.error('Error saving AI configuration:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// Helper function to get database schema information
+async function getDatabaseSchema(connection, database) {
+  try {
+    // Get tables information
+    const [tables] = await connection.execute(`
+      SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT, ENGINE
+      FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = ? 
+      ORDER BY TABLE_NAME
+    `, [database]);
+
+    const schema = { database, tables: [] };
+
+    // Get columns for each table
+    for (const table of tables) {
+      const [columns] = await connection.execute(`
+        SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_KEY, 
+               COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT
+        FROM information_schema.COLUMNS 
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? 
+        ORDER BY ORDINAL_POSITION
+      `, [database, table.TABLE_NAME]);
+
+      // Get foreign keys for the table
+      const [foreignKeys] = await connection.execute(`
+        SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+        FROM information_schema.KEY_COLUMN_USAGE
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? 
+              AND REFERENCED_TABLE_NAME IS NOT NULL
+      `, [database, table.TABLE_NAME]);
+
+      schema.tables.push({
+        name: table.TABLE_NAME,
+        type: table.TABLE_TYPE,
+        comment: table.TABLE_COMMENT,
+        engine: table.ENGINE,
+        columns: columns.map(col => ({
+          name: col.COLUMN_NAME,
+          type: col.DATA_TYPE,
+          nullable: col.IS_NULLABLE === 'YES',
+          key: col.COLUMN_KEY,
+          default: col.COLUMN_DEFAULT,
+          extra: col.EXTRA,
+          comment: col.COLUMN_COMMENT
+        })),
+        foreignKeys: foreignKeys.map(fk => ({
+          column: fk.COLUMN_NAME,
+          referencedTable: fk.REFERENCED_TABLE_NAME,
+          referencedColumn: fk.REFERENCED_COLUMN_NAME
+        }))
+      });
+    }
+
+    // Validate that we have at least some tables
+    if (schema.tables.length === 0) {
+      throw new Error(`Database '${database}' contains no tables. Cannot generate SQL without table structure.`);
+    }
+
+    return schema;
+  } catch (error) {
+    console.error('Error getting database schema:', error);
+    throw error;
+  }
+}
+
+// Helper function to create a structured prompt for AI
+function createSQLGenerationPrompt(userPrompt, schema) {
+  // Validate inputs
+  if (!schema || !schema.tables || schema.tables.length === 0) {
+    throw new Error('Invalid or empty database schema provided');
+  }
+  
+  if (!userPrompt || !userPrompt.trim()) {
+    throw new Error('User prompt cannot be empty');
+  }
+  const schemaDescription = schema.tables.map(table => {
+    const tableDesc = `Table: ${table.name} (${table.type})${table.comment ? ` - ${table.comment}` : ''}`;
+    const columnsDesc = table.columns.map(col => {
+      const keyInfo = col.key === 'PRI' ? ' [PRIMARY KEY]' : col.key === 'UNI' ? ' [UNIQUE]' : '';
+      const nullableInfo = col.nullable ? '' : ' [NOT NULL]';
+      const extraInfo = col.extra ? ` [${col.extra}]` : '';
+      const commentInfo = col.comment ? ` // ${col.comment}` : '';
+      return `  - ${col.name}: ${col.type}${keyInfo}${nullableInfo}${extraInfo}${commentInfo}`;
+    }).join('\n');
+    
+    const fkDesc = table.foreignKeys.length > 0 
+      ? '\n  Foreign Keys:\n' + table.foreignKeys.map(fk => 
+          `    - ${fk.column} -> ${fk.referencedTable}.${fk.referencedColumn}`
+        ).join('\n')
+      : '';
+    
+    return `${tableDesc}\n${columnsDesc}${fkDesc}`;
+  }).join('\n\n');
+
+  return `You are a SQL expert assistant. Generate a MySQL query based on the user's request and the provided database schema.
+
+Database Schema for "${schema.database}":
+${schemaDescription}
+
+User Request: ${userPrompt}
+
+CRITICAL INSTRUCTIONS:
+1. ONLY use tables and columns that exist in the "${schema.database}" database schema provided above
+2. DO NOT create or assume table names like "users", "products", etc. if they don't exist in the schema
+3. Look for the most appropriate table in the schema that matches the user's request
+4. Use exact table and column names as shown in the schema (case-sensitive)
+5. If asking for "users" but no "users" table exists, look for alternatives like "clients_*", "customers", "pessoas", etc.
+6. If asking for "gender" but that column doesn't exist, look for "genero", "sexo", or similar columns
+7. Always analyze the schema first to find the right table/columns before generating SQL
+8. Use proper MySQL syntax with JOINs, WHERE clauses, ORDER BY, and LIMIT as needed
+9. Generate queries that will actually work with the provided schema
+10. Always use the database schema "${schema.database}" in the query, por exemple: FROM \`${schema.database}\`.\`my_table\`
+
+EXAMPLE: If user asks "select male users" and there's no "users" table but there's a "clients_viz" table with "genero" column, generate:
+SELECT * FROM clients_viz WHERE genero = 'masculino';
+
+Respond with ONLY the SQL query, no explanations or additional text.`;
+}
+
+// Helper function to create a generic prompt for AI without specific database context
+function createGenericSQLPrompt(userPrompt, database = null) {
+  // Validate inputs
+  if (!userPrompt || !userPrompt.trim()) {
+    throw new Error('User prompt cannot be empty');
+  }
+
+  const databaseContext = database ? `for the "${database}" database` : '';
+  
+  return `You are a SQL expert assistant. Generate a MySQL query based on the user's request ${databaseContext}.
+
+User Request: ${userPrompt}
+
+Please generate a MySQL query that:
+1. Uses proper MySQL syntax
+2. Uses common table and column naming conventions if specific names aren't provided
+3. Includes appropriate JOINs, WHERE clauses, ORDER BY, and LIMIT as needed
+4. Is optimized for performance
+5. Uses realistic example table and column names if not specified
+
+Note: ${database ? `This query is intended for the "${database}" database.` : 'No specific database context provided - use generic table/column names.'}
+
+Respond with ONLY the SQL query, no explanations or additional text.`;
+}
+
+// AI API call functions
+async function callGeminiAPI(apiKey, prompt) {
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        contents: [{
+          parts: [{ text: prompt }]
+        }]
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 45000,
+        validateStatus: function (status) {
+          return status >= 200 && status < 300;
+        }
+      }
+    );
+
+    if (response.data && response.data.candidates && response.data.candidates[0]) {
+      return response.data.candidates[0].content.parts[0].text.trim();
+    }
+    throw new Error('Invalid response from Gemini API');
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Request timeout - Gemini API took too long to respond');
+    }
+    if (error.response && error.response.status === 429) {
+      throw new Error('Rate limit exceeded for Gemini API');
+    }
+    if (error.response && error.response.status === 401) {
+      throw new Error('Invalid API key for Gemini');
+    }
+    throw error;
+  }
+}
+
+async function callOpenAIAPI(apiKey, prompt) {
+  try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 500,
+        temperature: 0.1
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 45000,
+        validateStatus: function (status) {
+          return status >= 200 && status < 300;
+        }
+      }
+    );
+
+    if (response.data && response.data.choices && response.data.choices[0]) {
+      return response.data.choices[0].message.content.trim();
+    }
+    throw new Error('Invalid response from OpenAI API');
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Request timeout - OpenAI API took too long to respond');
+    }
+    if (error.response && error.response.status === 429) {
+      throw new Error('Rate limit exceeded for OpenAI API');
+    }
+    if (error.response && error.response.status === 401) {
+      throw new Error('Invalid API key for OpenAI');
+    }
+    if (error.response && error.response.status === 402) {
+      throw new Error('Insufficient credits for OpenAI API');
+    }
+    throw error;
+  }
+}
+
+async function callAnthropicAPI(apiKey, prompt) {
+  try {
+    const response = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
+        model: 'claude-3-sonnet-20240229',
+        max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01'
+        },
+        timeout: 45000,
+        validateStatus: function (status) {
+          return status >= 200 && status < 300;
+        }
+      }
+    );
+
+    if (response.data && response.data.content && response.data.content[0]) {
+      return response.data.content[0].text.trim();
+    }
+    throw new Error('Invalid response from Anthropic API');
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Request timeout - Anthropic API took too long to respond');
+    }
+    if (error.response && error.response.status === 429) {
+      throw new Error('Rate limit exceeded for Anthropic API');
+    }
+    if (error.response && error.response.status === 401) {
+      throw new Error('Invalid API key for Anthropic');
+    }
+    if (error.response && error.response.status === 402) {
+      throw new Error('Insufficient credits for Anthropic API');
+    }
+    throw error;
+  }
+}
+
+// Generate SQL with AI
+app.post('/api/ai/generate-sql', authMiddleware, async (req, res) => {
+  let connection;
+  let userConnection;
+  try {
+    connection = await getSystemPooledConnection();
+    const { prompt, model, database } = req.body;
+    
+    // Check if the config table exists, create it if it doesn't
+    try {
+      await connection.execute(`DESCRIBE \`${SYSTEM_DATABASE}\`.\`_jsma_config\``);
+    } catch (error) {
+      if (error.code === 'ER_NO_SUCH_TABLE') {
+        console.log('Creating _jsma_config table...');
+        await connection.execute(
+          `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_config\` (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            config_key VARCHAR(255) NOT NULL UNIQUE,
+            config_value TEXT,
+            encrypted BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          )`
+        );
+      } else {
+        throw error;
+      }
+    }
+    
+    // Get the API key for the selected model
+    const [configs] = await connection.execute(
+      `SELECT config_value FROM \`${SYSTEM_DATABASE}\`.\`_jsma_config\` WHERE config_key = ? AND encrypted = true`,
+      [`${model}ApiKey`]
+    );
+    
+    if (configs.length === 0) {
+      return res.status(400).json({ error: `API key not configured for model: ${model}` });
+    }
+    
+    const apiKey = decrypt(configs[0].config_value);
+    
+    // Validate required parameters
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+    
+    let aiPrompt;
+    
+    if (database) {
+      // Get user connection to access the specified database
+      userConnection = await getUserPooledConnection(req);
+      
+      try {
+        // Get database schema
+        const schema = await getDatabaseSchema(userConnection, database);
+        
+        // Create structured prompt for AI with database context
+        aiPrompt = createSQLGenerationPrompt(prompt, schema);
+      } catch (schemaError) {
+        console.error('Error getting database schema:', schemaError);
+        // Fall back to generic prompt if schema retrieval fails
+        aiPrompt = createGenericSQLPrompt(prompt, database);
+      }
+    } else {
+      // Create generic SQL prompt without specific database context
+      aiPrompt = createGenericSQLPrompt(prompt);
+    }
+    
+    let generatedSQL;
+    let aiModel;
+    
+    // Call the appropriate AI API based on the selected model
+    try {
+        switch (model) {
+          case 'gemini':
+            generatedSQL = await callGeminiAPI(apiKey, aiPrompt);
+            aiModel = 'Google Gemini';
+            break;
+          case 'openAI':
+            generatedSQL = await callOpenAIAPI(apiKey, aiPrompt);
+            aiModel = 'OpenAI GPT';
+            break;
+          case 'anthropic':
+            generatedSQL = await callAnthropicAPI(apiKey, aiPrompt);
+            aiModel = 'Anthropic Claude';
+            break;
+          default:
+            return res.status(400).json({ error: `Unsupported model: ${model}` });
+        }
+    } catch (aiError) {
+      console.error(`Error calling ${model} API:`, aiError);
+      return res.status(500).json({ 
+        error: `Failed to generate SQL using ${model}: ${aiError.message}`,
+        details: 'Please check your API key and try again'
+      });
+    }
+    
+    // Clean up the generated SQL (remove markdown code blocks if present)
+    let cleanSQL = generatedSQL
+      .replace(/```sql\s*/gi, '')
+      .replace(/```\s*/g, '')
+      .trim();
+    
+    // Remove any trailing semicolon and add one back for consistency
+    cleanSQL = cleanSQL.replace(/;+$/, '') + ';';
+    
+    // Basic validation - ensure it looks like SQL
+    if (!cleanSQL || cleanSQL.length < 5) {
+      return res.status(500).json({ 
+        error: 'AI generated invalid or empty SQL',
+        generatedText: generatedSQL
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      sql: cleanSQL,
+      message: `SQL generated successfully using ${aiModel}`,
+      model: aiModel,
+      originalPrompt: prompt,
+      databaseContext: database
+    });
+    
+  } catch (error) {
+    console.error('Error generating SQL with AI:', error);
+    
+    // Provide more specific error messages
+    let errorMessage = error.message;
+    if (error.code === 'ER_BAD_DB_ERROR') {
+      errorMessage = `Database '${database}' does not exist or is not accessible`;
+    } else if (error.code === 'ER_ACCESS_DENIED_ERROR') {
+      errorMessage = `Access denied to database '${database}'`;
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+      errorMessage = 'Network error: Unable to reach AI service';
+    }
+    
+    res.status(500).json({ 
+      error: errorMessage,
+      code: error.code || 'UNKNOWN_ERROR'
+    });
+  } finally {
+    if (userConnection) userConnection.release();
+    if (connection) connection.release();
+  }
+});
+
 // Endpoint to check system status (simplified approach - no DB connection required)
 app.get('/api/system/status', async (req, res) => { // No auth required
   try {
@@ -1356,7 +1893,8 @@ app.post('/api/system/initialize', async (req, res) => { // Removed authMiddlewa
       `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_query_history\` ( id INT AUTO_INCREMENT PRIMARY KEY, query_text TEXT NOT NULL, database_context VARCHAR(255), executed_by VARCHAR(255) NOT NULL, executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, execution_time_ms INT, status ENUM('success', 'error') NOT NULL, error_message TEXT );`,
       `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_queries\` ( id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, query_text TEXT NOT NULL, database_context VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP );`,
       `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_favorite_tables\` ( id INT AUTO_INCREMENT PRIMARY KEY, database_name VARCHAR(255) NOT NULL, table_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_favorite (database_name, table_name) );`,
-      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_sessions\` ( id INT AUTO_INCREMENT PRIMARY KEY, session_token VARCHAR(128) NOT NULL UNIQUE, user VARCHAR(255) NOT NULL, host VARCHAR(255) NOT NULL, encrypted_password TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, INDEX idx_token (session_token), INDEX idx_expires (expires_at) );`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_config\` ( id INT AUTO_INCREMENT PRIMARY KEY, config_key VARCHAR(255) NOT NULL UNIQUE, config_value TEXT, encrypted BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP );`
     ];
 
     for (const query of tableCreationQueries) {
@@ -1474,6 +2012,14 @@ app.post('/api/system/create-database', async (req, res) => {
         expires_at DATETIME NOT NULL,
         INDEX idx_token (session_token),
         INDEX idx_expires (expires_at)
+      )`,
+      `CREATE TABLE IF NOT EXISTS \`${SYSTEM_DATABASE}\`.\`_jsma_config\` (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        config_key VARCHAR(255) NOT NULL UNIQUE,
+        config_value TEXT,
+        encrypted BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )`
     ];
     

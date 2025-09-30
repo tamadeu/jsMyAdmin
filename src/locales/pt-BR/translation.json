@@ -504,6 +504,18 @@
     "sqlGeneratedSuccessfully": "Consulta SQL gerada com sucesso pela IA.",
     "errorGeneratingSql": "Erro ao Gerar SQL",
     "failedToGenerateSql": "Falha ao gerar SQL com IA.",
+    "noDatabaseSelected": "Nenhum Banco (SQL Genérico)",
+    "selectDatabaseFirst": "Por favor, selecione um banco de dados primeiro para fornecer contexto para a geração de SQL.",
+    "selectedDatabase": "Banco Selecionado",
+    "warning": "Aviso",
+    "noDatabaseContext": "Nenhum banco selecionado. A geração de SQL pode ser menos precisa sem o contexto do banco de dados.",
+    "selectDatabase": "Banco de Dados",
+    "selectDatabasePlaceholder": "Escolha um banco para contexto...",
+    "loadingDatabases": "Carregando bancos...",
+    "errorLoadingDatabases": "Erro ao Carregar Bancos",
+    "failedToLoadDatabases": "Falha ao carregar bancos de dados disponíveis.",
+    "databaseContextInfo": "Usando a estrutura deste banco para gerar consultas SQL mais precisas.",
+    "noDatabaseContextWarning": "Nenhum banco selecionado. A geração de SQL usará nomes genéricos de tabelas e colunas.",
     "cancel": "Cancelar"
   },
   "setup": {

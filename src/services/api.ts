@@ -842,6 +842,31 @@ class ApiService {
     }
     return response.json();
   }
+
+  async getAiConfig(): Promise<{ geminiApiKey: string; openAIApiKey: string; anthropicApiKey: string }> {
+    const response = await fetch(`${this.baseUrl}/config/ai`, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch AI configuration");
+    }
+    return response.json();
+  }
+
+  async saveAiConfig(config: { geminiApiKey: string; openAIApiKey: string; anthropicApiKey: string }): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseUrl}/config/ai`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify(config),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to save AI configuration");
+    }
+    return response.json();
+  }
 }
 
 export const apiService = new ApiService();

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/services/api";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { DatabaseConfig } from "@/services/api";
 
 interface SqlAgentProps {
   open: boolean;
@@ -24,20 +25,64 @@ const SqlAgent = ({ open, onOpenChange, onGenerateSql, currentDatabase }: SqlAge
   const [prompt, setPrompt] = useState("");
   const [selectedModel, setSelectedModel] = useState("gemini"); // Default to Gemini
   const [isGenerating, setIsGenerating] = useState(false);
-  const [config, setConfig] = useState<any>(null); // To store AI API keys
+  const [config, setConfig] = useState<DatabaseConfig['ai'] | null>(null); // To store AI API keys
+  const [databases, setDatabases] = useState<string[]>([]);
+  const [selectedDatabase, setSelectedDatabase] = useState<string>("");
+  const [loadingDatabases, setLoadingDatabases] = useState(false);
 
   useEffect(() => {
-    // Load AI config from localStorage
-    try {
-      const savedConfigJson = localStorage.getItem('database-config');
-      if (savedConfigJson) {
-        const savedConfig = JSON.parse(savedConfigJson);
-        setConfig(savedConfig.ai);
+    // Load AI config from API
+    const loadAiConfig = async () => {
+      try {
+        const aiConfig = await apiService.getAiConfig();
+        setConfig(aiConfig);
+      } catch (e) {
+        console.error("Failed to load AI config from API", e);
+        // Fallback to localStorage for backwards compatibility
+        try {
+          const savedConfigJson = localStorage.getItem('database-config');
+          if (savedConfigJson) {
+            const savedConfig = JSON.parse(savedConfigJson);
+            setConfig(savedConfig.ai);
+          }
+        } catch (fallbackError) {
+          console.error("Failed to load AI config from localStorage", fallbackError);
+        }
       }
-    } catch (e) {
-      console.error("Failed to load AI config from localStorage", e);
-    }
+    };
+
+    loadAiConfig();
   }, []);
+
+  // Load databases when dialog opens
+  useEffect(() => {
+    const loadDatabases = async () => {
+      setLoadingDatabases(true);
+      try {
+        const databaseList = await apiService.getDatabases();
+        setDatabases(databaseList);
+      } catch (error) {
+        console.error("Error loading databases:", error);
+        toast({
+          title: t("sqlAgent.errorLoadingDatabases"),
+          description: t("sqlAgent.failedToLoadDatabases"),
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingDatabases(false);
+      }
+    };
+
+    if (open) {
+      loadDatabases();
+      // Set current database as selected if provided, otherwise set to "__none__"
+      if (currentDatabase) {
+        setSelectedDatabase(currentDatabase);
+      } else {
+        setSelectedDatabase("__none__");
+      }
+    }
+  }, [open, currentDatabase, t, toast]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -61,7 +106,7 @@ const SqlAgent = ({ open, onOpenChange, onGenerateSql, currentDatabase }: SqlAge
     // Check if the selected model has its API key configured
     let apiKeyPresent = false;
     if (selectedModel === 'gemini' && config.geminiApiKey) apiKeyPresent = true;
-    if (selectedModel === 'openai' && config.openAIApiKey) apiKeyPresent = true;
+    if (selectedModel === 'openAI' && config.openAIApiKey) apiKeyPresent = true;
     if (selectedModel === 'anthropic' && config.anthropicApiKey) apiKeyPresent = true;
 
     if (!apiKeyPresent) {
@@ -73,9 +118,14 @@ const SqlAgent = ({ open, onOpenChange, onGenerateSql, currentDatabase }: SqlAge
       return;
     }
 
+    // Allow generation without database context, but with warning
+    // The backend will handle this case gracefully
+
     setIsGenerating(true);
     try {
-      const result = await apiService.generateSqlWithAi(prompt, selectedModel, currentDatabase);
+      // Use selectedDatabase, but convert "__none__" to undefined
+      const databaseToUse = selectedDatabase === "__none__" ? undefined : selectedDatabase;
+      const result = await apiService.generateSqlWithAi(prompt, selectedModel, databaseToUse);
       if (result.success) {
         onGenerateSql(result.sql);
         toast({
@@ -108,6 +158,34 @@ const SqlAgent = ({ open, onOpenChange, onGenerateSql, currentDatabase }: SqlAge
           <DialogDescription>{t("sqlAgent.description")}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          {/* Database Selection */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">{t("sqlAgent.selectDatabase")}:</label>
+            <Select value={selectedDatabase} onValueChange={setSelectedDatabase} disabled={isGenerating || loadingDatabases}>
+              <SelectTrigger>
+                <SelectValue placeholder={loadingDatabases ? t("sqlAgent.loadingDatabases") : t("sqlAgent.selectDatabasePlaceholder")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{t("sqlAgent.noDatabaseSelected")}</SelectItem>
+                {databases.map((db) => (
+                  <SelectItem key={db} value={db}>{db}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedDatabase && selectedDatabase !== "__none__" ? (
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md p-2">
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  {t("sqlAgent.databaseContextInfo")}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-md p-2">
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                  {t("sqlAgent.noDatabaseContextWarning")}
+                </p>
+              </div>
+            )}
+          </div>
           <Textarea
             placeholder={t("sqlAgent.promptPlaceholder")}
             value={prompt}
@@ -122,7 +200,7 @@ const SqlAgent = ({ open, onOpenChange, onGenerateSql, currentDatabase }: SqlAge
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="gemini">Google Gemini</SelectItem>
-                <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                <SelectItem value="openAI">OpenAI (GPT)</SelectItem>
                 <SelectItem value="anthropic">Anthropic (Claude)</SelectItem>
               </SelectContent>
             </Select>

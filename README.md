@@ -15,6 +15,7 @@ A modern web-based MySQL administration tool built with React, TypeScript, and N
 - 🚀 **User Management**: View and manage MySQL user accounts and their privileges.
 - 🏗️ **Table Structure Editor**: View and modify table structures, including adding, removing, and reordering columns.
 - 📤 **Data Export**: Export table data in various formats (CSV, JSON, SQL).
+- 🤖 **AI SQL Generation**: Generate SQL queries using natural language with support for Google Gemini, OpenAI GPT, and Anthropic Claude.
 
 ![Descrição da imagem](gh-images/tables.png)
 
@@ -179,6 +180,57 @@ The backend provides the following API endpoints:
 -   `DELETE /api/users/:user/:host/database-privileges` - Revoke all privileges on a specific database for a user.
 -   `GET /api/system/status` - Check the status of jsMyAdmin's internal system tables.
 -   `POST /api/system/initialize` - Initialize jsMyAdmin's internal system tables.
+-   `GET /api/config/ai` - Get AI API configuration.
+-   `POST /api/config/ai` - Save AI API keys (encrypted).
+-   `POST /api/ai/generate-sql` - Generate SQL queries using AI with natural language prompts.
+
+## AI-Powered SQL Generation
+
+jsMyAdmin now includes AI-powered SQL generation capabilities that allow you to generate SQL queries using natural language prompts. This feature supports three major AI providers:
+
+### Supported AI Models
+
+-   **Google Gemini**: Fast and accurate SQL generation using Google's Gemini Pro model
+-   **OpenAI GPT**: Industry-leading language model for complex query generation
+-   **Anthropic Claude**: Advanced reasoning for complex database operations
+
+### How It Works
+
+1. **Schema Analysis**: The system automatically analyzes your database structure including:
+   - Tables and their relationships
+   - Column types and constraints
+   - Foreign key relationships
+   - Indexes and primary keys
+
+2. **Intelligent Prompting**: Your natural language request is combined with the database schema to create a comprehensive prompt for the AI model
+
+3. **SQL Generation**: The AI generates optimized MySQL queries based on your request and database structure
+
+### Setup
+
+1. **Configure API Keys**: Go to Configuration → AI Settings and add your API keys for the desired providers:
+   - **Gemini**: Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+   - **OpenAI**: Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+   - **Anthropic**: Get your API key from [Anthropic Console](https://console.anthropic.com/)
+
+2. **Select Database**: Choose the database context for query generation
+
+3. **Write Natural Language Prompts**: Examples:
+   ```
+   - "Find all users who registered in the last 30 days"
+   - "Calculate total sales by product category"
+   - "List the top 10 customers by order value"
+   - "Show products with low inventory (less than 10 items)"
+   ```
+
+### Security & Privacy
+
+-   API keys are encrypted using AES-256-CBC before storage
+-   Only database schema (structure) is sent to AI providers, never actual data
+-   Generated queries are validated before execution
+-   All AI interactions are logged for security auditing
+
+For detailed documentation, see [AI_SQL_GENERATION.md](AI_SQL_GENERATION.md)
 
 ## Security Features
 

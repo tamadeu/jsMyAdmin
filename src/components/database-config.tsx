@@ -32,25 +32,37 @@ const DatabaseConfigComponent = () => {
   }, []);
 
   const loadConfig = async () => {
+    setIsLoading(true);
     try {
       const savedConfig = localStorage.getItem('database-config');
+      let parsedConfig;
+      
       if (savedConfig) {
-        const parsedConfig = JSON.parse(savedConfig);
-        // Ensure AI section exists and has default values if not present
-        if (!parsedConfig.ai) {
-          parsedConfig.ai = { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" };
-        }
+        parsedConfig = JSON.parse(savedConfig);
         parsedConfig.database.username = ""; 
         parsedConfig.database.password = "";
-        setConfig(parsedConfig);
       } else {
-        setConfig({
+        parsedConfig = {
           database: { host: "localhost", port: 3306, username: "", password: "", defaultDatabase: "mysql", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", connectionTimeout: 10000, maxConnections: 10, ssl: false, sslCertificate: "", sslKey: "", sslCA: "" },
           application: { theme: "dark", language: "en", queryTimeout: 30000, maxQueryResults: 1000, autoRefresh: false, refreshInterval: 30000 },
           security: { allowMultipleStatements: false, allowLocalInfile: false, requireSSL: false },
-          ai: { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" } // Default AI config
-        });
+          ai: { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" }
+        };
       }
+      
+      // Load AI config from API (encrypted and secure)
+      try {
+        const aiConfig = await apiService.getAiConfig();
+        parsedConfig.ai = aiConfig;
+      } catch (aiError) {
+        console.error("Failed to load AI config from API:", aiError);
+        // Fallback to default AI config if API fails
+        if (!parsedConfig.ai) {
+          parsedConfig.ai = { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" };
+        }
+      }
+      
+      setConfig(parsedConfig);
     } catch (error) {
       toast({ title: t("configurationPage.errorLoadingConfig"), description: t("configurationPage.failedToLoadConfig"), variant: "destructive" });
     } finally {
@@ -62,10 +74,19 @@ const DatabaseConfigComponent = () => {
     if (!config) return;
     try {
       setIsSaving(true);
+      
+      // Save AI config separately to the database (encrypted)
+      const aiConfigResult = await apiService.saveAiConfig(config.ai);
+      if (!aiConfigResult.success) {
+        throw new Error(aiConfigResult.message);
+      }
+      
       const configToSave = {
         database: {
           host: config.database.host,
           port: config.database.port,
+          username: "", // Don't save credentials in file
+          password: "", // Don't save credentials in file
           defaultDatabase: config.database.defaultDatabase,
           charset: config.database.charset,
           collation: config.database.collation,
@@ -78,7 +99,7 @@ const DatabaseConfigComponent = () => {
         },
         application: config.application,
         security: config.security,
-        ai: config.ai // Include AI config
+        ai: { geminiApiKey: "", openAIApiKey: "", anthropicApiKey: "" } // Save empty AI config in file
       };
 
       const result = await apiService.saveConfig(configToSave);

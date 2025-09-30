@@ -504,6 +504,18 @@
     "sqlGeneratedSuccessfully": "SQL query generated successfully by AI.",
     "errorGeneratingSql": "Error Generating SQL",
     "failedToGenerateSql": "Failed to generate SQL with AI.",
+    "noDatabaseSelected": "No Database (Generic SQL)",
+    "selectDatabaseFirst": "Please select a database first to provide context for SQL generation.",
+    "selectedDatabase": "Selected Database",
+    "warning": "Warning",
+    "noDatabaseContext": "No database selected. SQL generation may be less accurate without database context.",
+    "selectDatabase": "Database",
+    "selectDatabasePlaceholder": "Choose a database for context...",
+    "loadingDatabases": "Loading databases...",
+    "errorLoadingDatabases": "Error Loading Databases",
+    "failedToLoadDatabases": "Failed to load available databases.",
+    "databaseContextInfo": "Using this database structure to generate more accurate SQL queries.",
+    "noDatabaseContextWarning": "No database selected. SQL generation will use generic table and column names.",
     "cancel": "Cancel"
   },
   "setup": {
