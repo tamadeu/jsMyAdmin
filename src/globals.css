@@ -207,3 +207,52 @@
 .token.comment.sql {
   color: hsl(var(--muted-foreground)); /* SQL comments */
 }
+
+/* Resizable table styles */
+.resizable-table {
+  table-layout: fixed;
+  width: max-content;
+}
+
+.resizable-table th,
+.resizable-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.column-resizer:hover {
+  background-color: hsl(var(--primary) / 0.3);
+}
+
+.column-resizer.resizing {
+  background-color: hsl(var(--primary) / 0.6);
+}
+
+/* Prevent text selection during resize */
+body.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Column resize cursor for the entire body during resize */
+body.col-resize {
+  cursor: col-resize !important;
+}
+
+body.col-resize * {
+  cursor: col-resize !important;
+}

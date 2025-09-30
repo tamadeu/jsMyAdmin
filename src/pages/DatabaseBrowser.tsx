@@ -12,8 +12,10 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useColumnResizing } from "@/hooks/useColumnResizing";
 import { useAuth } from "@/context/AuthContext";
 import { useDatabaseCache } from "@/context/DatabaseCacheContext";
+import ColumnSelector from "@/components/ColumnSelector";
 import { useTabs } from "@/context/TabContext";
 import InsertRowDialog from "@/components/InsertRowDialog";
 import ExportDataDialog from "@/components/ExportDataDialog"; // Import the new ExportDataDialog
@@ -77,6 +79,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [offset, setOffset] = useState(0);
   const [queryTime, setQueryTime] = useState<string>("0.0000");
   const [editingCell, setEditingCell] = useState<{rowIndex: number, columnName: string} | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
   const [editValue, setEditValue] = useState<string>("");
   const [editingRow, setEditingRow] = useState<{rowIndex: number, data: Record<string, any>} | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set()); // Corrigido aqui
@@ -86,6 +89,19 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
   const debouncedSearchTerm = useDebounce(searchInput, 500);
   const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
+
+  // Column resizing hook
+  const { 
+    columnWidths, 
+    isResizing, 
+    resizingColumn, 
+    handleMouseDown, 
+    getColumnWidth 
+  } = useColumnResizing({ 
+    columns: tableData?.columns || [], 
+    defaultWidth: 150, 
+    minWidth: 100 
+  });
 
   const primaryKeyColumn = useMemo(() => {
     return tableData?.columns.find(col => col.key === 'PRI') || null;
@@ -148,6 +164,14 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       console.error('Error loading table info:', error);
     }
   };
+
+  // Initialize visible columns when table data changes
+  useEffect(() => {
+    if (tableData && tableData.columns.length > 0) {
+      const allColumns = new Set(tableData.columns.map(col => col.name));
+      setVisibleColumns(allColumns);
+    }
+  }, [tableData]);
 
   const handleSearchInputChange = (value: string) => {
     setSearchInput(value);
@@ -539,6 +563,13 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                     {t("queryResultTable.clearAll")}
                   </Button>
                 )}
+                {tableData && (
+                  <ColumnSelector
+                    columns={tableData.columns}
+                    visibleColumns={visibleColumns}
+                    onVisibleColumnsChange={setVisibleColumns}
+                  />
+                )}
                 <Select value={limit.toString()} onValueChange={handleLimitChange}>
                   <SelectTrigger className="w-32">
                     <SelectValue />
@@ -566,7 +597,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   )}
                   {hasActiveFilters && (
                     <Badge variant="outline">
-                      {Object.keys(debouncedColumnFilters).length} {t("queryResultTable.columnFilters")}
+                      {t("queryResultTable.columnFilters", { count: Object.keys(debouncedColumnFilters).length })}
                     </Badge>
                   )}
                 </div>
@@ -576,26 +607,33 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                 <>
                   <div className="border rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
+                      <table className="resizable-table text-xs">
                         <thead className="bg-muted">
                           <tr>
                             {/* Actions column - only show if table has PK and user has privileges */}
                             {hasPrimaryKey && (canPerformDatabaseAction("UPDATE") || canPerformDatabaseAction("INSERT") || canPerformDatabaseAction("DELETE")) && (
-                              <th className="p-2 text-left w-24">
+                              <th className="p-2 text-left border-r border-border" style={{ width: '96px' }}>
                                 <span className="text-sm font-medium">{t("queryResultTable.actions")}</span>
                               </th>
                             )}
                             {/* Checkbox column - only show if table has PK */}
                             {hasPrimaryKey && (
-                              <th className="p-2 text-left w-12">
+                              <th className="p-2 text-left border-r border-border" style={{ width: '48px' }}>
                                 <Checkbox 
                                   checked={selectedRows.size === tableData.data.length && tableData.data.length > 0}
                                   onCheckedChange={handleSelectAll}
                                 />
                               </th>
                             )}
-                            {tableData.columns.map((column) => (
-                              <th key={column.name} className="p-2 text-left min-w-[150px]">
+                            {tableData.columns.filter(column => visibleColumns.has(column.name)).map((column, index, filteredColumns) => (
+                              <th 
+                                key={column.name} 
+                                className="p-2 text-left border-r border-border relative" 
+                                style={{ 
+                                  width: `${getColumnWidth(column.name)}px`,
+                                  minWidth: '100px'
+                                }}
+                              >
                                 <div className="flex flex-col space-y-2">
                                   <div className="flex flex-col">
                                     <span className="font-medium text-sm">{column.name}</span>
@@ -624,6 +662,16 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                     )}
                                   </div>
                                 </div>
+                                {/* Column Resizer - only show if not the last column */}
+                                {index < filteredColumns.length - 1 && (
+                                  <div
+                                    className={`column-resizer ${
+                                      resizingColumn === column.name ? 'resizing' : ''
+                                    }`}
+                                    onMouseDown={(e) => handleMouseDown(column.name, e)}
+                                    title={t("queryResultTable.resizeColumn") || "Resize column"}
+                                  />
+                                )}
                               </th>
                             ))}
                           </tr>
@@ -633,7 +681,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                             <tr key={rowIndex} className="border-t hover:bg-muted/50">
                               {/* Actions column - only show if table has PK and user has privileges */}
                               {hasPrimaryKey && (canPerformDatabaseAction("UPDATE") || canPerformDatabaseAction("INSERT") || canPerformDatabaseAction("DELETE")) && (
-                                <td className="p-2">
+                                <td className="p-2 border-r border-border" style={{ width: '96px' }}>
                                   <div className="flex gap-1">
                                     {canPerformDatabaseAction("UPDATE") && (
                                       <Button 
@@ -673,17 +721,21 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                               )}
                               {/* Checkbox column - only show if table has PK */}
                               {hasPrimaryKey && (
-                                <td className="p-2">
+                                <td className="p-2 border-r border-border" style={{ width: '48px' }}>
                                   <Checkbox 
                                     checked={selectedRows.has(rowIndex)}
                                     onCheckedChange={(checked) => handleRowSelect(rowIndex, checked as boolean)}
                                   />
                                 </td>
                               )}
-                              {tableData.columns.map((column) => (
+                              {tableData.columns.filter(column => visibleColumns.has(column.name)).map((column) => (
                                 <td 
                                   key={column.name} 
-                                  className="p-2 max-w-xs cursor-pointer"
+                                  className="p-2 border-r border-border cursor-pointer"
+                                  style={{ 
+                                    width: `${getColumnWidth(column.name)}px`,
+                                    minWidth: '100px'
+                                  }}
                                   onDoubleClick={() => handleCellDoubleClick(rowIndex, column.name, row[column.name])}
                                   title={hasPrimaryKey && canPerformDatabaseAction("UPDATE") ? t("queryResultTable.doubleClickToEdit") : undefined}
                                 >

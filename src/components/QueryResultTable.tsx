@@ -437,7 +437,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                   )}
                   {hasActiveFilters && (
                     <Badge variant="outline">
-                      {Object.keys(debouncedColumnFilters).length} {t("queryResultTable.columnFilters")}
+                      {t("queryResultTable.columnFilters", { count: Object.keys(debouncedColumnFilters).length })}
                     </Badge>
                   )}
                 </div>

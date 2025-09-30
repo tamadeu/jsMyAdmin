@@ -446,6 +446,13 @@
     "dbPrivilegesUpdated": "Database Privileges Updated",
     "close": "Close"
   },
+  "columnSelector": {
+    "columns": "Columns",
+    "selectColumns": "Select Columns",
+    "all": "All",
+    "none": "None",
+    "noColumnsSelected": "No columns selected. The table will be empty."
+  },
   "keyboardShortcutsDialog": {
     "title": "Keyboard Shortcuts",
     "description": "Here are the available keyboard shortcuts to navigate and interact with the application.",

@@ -446,6 +446,13 @@
     "dbPrivilegesUpdated": "Privilégios do Banco de Dados Atualizados",
     "close": "Fechar"
   },
+  "columnSelector": {
+    "columns": "Colunas",
+    "selectColumns": "Selecionar Colunas",
+    "all": "Todas",
+    "none": "Nenhuma",
+    "noColumnsSelected": "Nenhuma coluna selecionada. A tabela ficará vazia."
+  },
   "keyboardShortcutsDialog": {
     "title": "Atalhos de Teclado",
     "description": "Aqui estão os atalhos de teclado disponíveis para navegar e interagir com a aplicação.",
