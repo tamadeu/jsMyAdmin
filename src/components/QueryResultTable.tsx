@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
 import { format } from "sql-formatter";
 import { useTranslation } from "react-i18next"; // Import useTranslation
+import RowViewDialog from "./RowViewDialog";
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -65,6 +66,9 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isQueryExpanded, setIsQueryExpanded] = useState(false);
+  const [selectedRowData, setSelectedRowData] = useState<Record<string, any> | null>(null);
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
+  const [isRowViewDialogOpen, setIsRowViewDialogOpen] = useState(false);
 
   const debouncedSearchTerm = useDebounce(searchInput, 300);
   const debouncedColumnFilters = useDebounceObject(columnFilters, 300);
@@ -232,6 +236,18 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
       }
     }
   }, [currentQueryResult.originalQuery, addTab, removeTab, activeTabId, toast, t]);
+
+  const handleRowClick = useCallback((rowData: Record<string, any>, rowIndex: number) => {
+    setSelectedRowData(rowData);
+    setSelectedRowIndex(rowIndex);
+    setIsRowViewDialogOpen(true);
+  }, []);
+
+  const handleCloseRowViewDialog = useCallback(() => {
+    setIsRowViewDialogOpen(false);
+    setSelectedRowData(null);
+    setSelectedRowIndex(-1);
+  }, []);
 
   if (isLoadingData) {
     return (
@@ -493,7 +509,16 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                         </thead>
                         <tbody>
                           {paginatedData.map((row, rowIndex) => (
-                            <tr key={rowIndex} className="border-t hover:bg-muted/50">
+                            <tr 
+                              key={rowIndex} 
+                              className="border-t hover:bg-muted/50 cursor-pointer"
+                              onClick={(e) => {
+                                if (e.ctrlKey || e.metaKey) {
+                                  handleRowClick(row, offset + rowIndex);
+                                }
+                              }}
+                              title={t("rowViewDialog.ctrlClickToView")}
+                            >
                               {currentQueryResult.fields?.map((column) => (
                                 <td 
                                   key={column.name} 
@@ -560,6 +585,17 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
           </CardContent>
         </Card>
       </div>
+
+      {/* Row View Dialog */}
+      {selectedRowData && currentQueryResult.fields && (
+        <RowViewDialog
+          isOpen={isRowViewDialogOpen}
+          onClose={handleCloseRowViewDialog}
+          rowData={selectedRowData}
+          fields={currentQueryResult.fields}
+          rowIndex={selectedRowIndex}
+        />
+      )}
     </div>
   );
 };

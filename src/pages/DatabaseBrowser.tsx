@@ -19,6 +19,7 @@ import ColumnSelector from "@/components/ColumnSelector";
 import { useTabs } from "@/context/TabContext";
 import InsertRowDialog from "@/components/InsertRowDialog";
 import ExportDataDialog from "@/components/ExportDataDialog"; // Import the new ExportDataDialog
+import RowViewDialog from "@/components/RowViewDialog";
 import { useTranslation } from "react-i18next"; // Import useTranslation
 import { useNavigate } from "react-router-dom"; // Import useNavigate
 
@@ -88,6 +89,9 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false); // State for export dialog
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('ASC');
+  const [selectedRowData, setSelectedRowData] = useState<Record<string, any> | null>(null);
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number>(-1);
+  const [isRowViewDialogOpen, setIsRowViewDialogOpen] = useState(false);
 
   const debouncedSearchTerm = useDebounce(searchInput, 500);
   const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
@@ -465,6 +469,18 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     });
   };
 
+  const handleRowClick = useCallback((rowData: Record<string, any>, rowIndex: number) => {
+    setSelectedRowData(rowData);
+    setSelectedRowIndex(rowIndex);
+    setIsRowViewDialogOpen(true);
+  }, []);
+
+  const handleCloseRowViewDialog = useCallback(() => {
+    setIsRowViewDialogOpen(false);
+    setSelectedRowData(null);
+    setSelectedRowIndex(-1);
+  }, []);
+
   const isTable = tableInfo?.table_type !== 'VIEW';
 
   if (isLoading) {
@@ -727,7 +743,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                         </thead>
                         <tbody>
                           {tableData.data.map((row, rowIndex) => (
-                            <tr key={rowIndex} className="border-t hover:bg-muted/50">
+                            <tr 
+                              key={rowIndex} 
+                              className="border-t hover:bg-muted/50"
+                            >
                               {/* Actions column - only show if table has PK and user has privileges */}
                               {hasPrimaryKey && (canPerformDatabaseAction("UPDATE") || canPerformDatabaseAction("INSERT") || canPerformDatabaseAction("DELETE")) && (
                                 <td className="p-2 border-r border-border" style={{ width: '96px' }}>
@@ -738,7 +757,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         size="sm" 
                                         className="h-6 w-6 p-0"
                                         title={t("queryResultTable.editRowAction")}
-                                        onClick={() => handleEditRow(rowIndex)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEditRow(rowIndex);
+                                        }}
                                       >
                                         <Edit className="h-3 w-3 text-blue-600" />
                                       </Button>
@@ -749,7 +771,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         size="sm" 
                                         className="h-6 w-6 p-0"
                                         title={t("queryResultTable.copyRow")}
-                                        onClick={() => handleCopyRow(rowIndex)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleCopyRow(rowIndex);
+                                        }}
                                       >
                                         <Copy className="h-3 w-3 text-green-600" />
                                       </Button>
@@ -760,7 +785,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                         size="sm" 
                                         className="h-6 w-6 p-0"
                                         title={t("queryResultTable.deleteRowAction")}
-                                        onClick={() => handleDeleteRow(rowIndex)}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteRow(rowIndex);
+                                        }}
                                       >
                                         <Trash2 className="h-3 w-3 text-red-600" />
                                       </Button>
@@ -770,7 +798,11 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                               )}
                               {/* Checkbox column - only show if table has PK */}
                               {hasPrimaryKey && (
-                                <td className="p-2 border-r border-border" style={{ width: '48px' }}>
+                                <td 
+                                  className="p-2 border-r border-border" 
+                                  style={{ width: '48px' }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <Checkbox 
                                     checked={selectedRows.has(rowIndex)}
                                     onCheckedChange={(checked) => handleRowSelect(rowIndex, checked as boolean)}
@@ -785,8 +817,13 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                     width: `${getColumnWidth(column.name)}px`,
                                     minWidth: '100px'
                                   }}
+                                  onClick={(e) => {
+                                    if (e.ctrlKey || e.metaKey) {
+                                      handleRowClick(row, offset + rowIndex);
+                                    }
+                                  }}
                                   onDoubleClick={() => handleCellDoubleClick(rowIndex, column.name, row[column.name])}
-                                  title={hasPrimaryKey && canPerformDatabaseAction("UPDATE") ? t("queryResultTable.doubleClickToEdit") : undefined}
+                                  title={hasPrimaryKey && canPerformDatabaseAction("UPDATE") ? `${t("queryResultTable.doubleClickToEdit")} | ${t("rowViewDialog.ctrlClickToView")}` : t("rowViewDialog.ctrlClickToView")}
                                 >
                                   {editingCell?.rowIndex === rowIndex && editingCell?.columnName === column.name ? (
                                     <Input
@@ -963,6 +1000,17 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
             currentSearchTerm={debouncedSearchTerm}
             currentColumnFilters={debouncedColumnFilters}
             totalRowsAvailable={tableData.total}
+          />
+        )}
+
+        {/* Row View Dialog */}
+        {selectedRowData && tableData && (
+          <RowViewDialog
+            isOpen={isRowViewDialogOpen}
+            onClose={handleCloseRowViewDialog}
+            rowData={selectedRowData}
+            fields={tableData.columns}
+            rowIndex={selectedRowIndex}
           />
         )}
       </div>

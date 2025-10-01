@@ -191,6 +191,22 @@
     "loadingTableData": "Loading data for table...",
     "clickToSort": "Click to sort by {{columnName}}"
   },
+  "rowViewDialog": {
+    "title": "View Row Data",
+    "description": "Detailed view of all fields in this record (read-only mode)",
+    "rowNumber": "Row {{index}}",
+    "characterCount": "{{count}} characters",
+    "searchColumns": "Search columns or values...",
+    "showingFields": "Showing {{showing}} of {{total}} fields",
+    "noFieldsFound": "No fields found",
+    "noFieldsMatchSearch": "No fields match your search",
+    "tryDifferentSearch": "Try a different search term or clear the filter",
+    "columns": "Columns",
+    "selectColumns": "Select Columns",
+    "noColumnsSelected": "No columns selected",
+    "selectColumnsToView": "Select columns from the filter above to view field data",
+    "ctrlClickToView": "Ctrl+Click to view row details"
+  },
   "configurationPage": {
     "title": "Application Configuration",
     "subtitle": "Configure application and database server settings",

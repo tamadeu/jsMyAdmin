@@ -191,6 +191,22 @@
     "loadingTableData": "Carregando dados da tabela...",
     "clickToSort": "Clique para ordenar por {{columnName}}"
   },
+  "rowViewDialog": {
+    "title": "Visualizar Dados da Linha",
+    "description": "Visualização detalhada de todos os campos neste registro (modo somente leitura)",
+    "rowNumber": "Linha {{index}}",
+    "characterCount": "{{count}} caracteres",
+    "searchColumns": "Buscar colunas ou valores...",
+    "showingFields": "Mostrando {{showing}} de {{total}} campos",
+    "noFieldsFound": "Nenhum campo encontrado",
+    "noFieldsMatchSearch": "Nenhum campo corresponde à sua busca",
+    "tryDifferentSearch": "Tente um termo de busca diferente ou limpe o filtro",
+    "columns": "Colunas",
+    "selectColumns": "Selecionar Colunas",
+    "noColumnsSelected": "Nenhuma coluna selecionada",
+    "selectColumnsToView": "Selecione colunas no filtro acima para visualizar os dados dos campos",
+    "ctrlClickToView": "Ctrl+Clique para ver detalhes da linha"
+  },
   "configurationPage": {
     "title": "Configuração da Aplicação",
     "subtitle": "Configure as definições do servidor de banco de dados e da aplicação",
