@@ -256,3 +256,49 @@ body.col-resize {
 body.col-resize * {
   cursor: col-resize !important;
 }
+
+/* Mobile and responsive improvements */
+@media (max-width: 640px) {
+  /* Improve touch targets on mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent horizontal scroll on very small screens */
+  html, body {
+    overflow-x: hidden;
+  }
+  
+  /* Better text sizing on mobile */
+  .responsive-text {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  
+  /* Improve table readability on mobile */
+  .mobile-table {
+    font-size: 0.75rem;
+  }
+  
+  /* Better spacing for form elements on mobile */
+  .mobile-form input,
+  .mobile-form select,
+  .mobile-form textarea {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+}
+
+/* Tablet-specific adjustments */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .tablet-layout {
+    /* Tablet-specific styles */
+  }
+}
+
+/* High DPI display improvements */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .high-dpi-border {
+    border-width: 0.5px;
+  }
+}

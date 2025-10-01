@@ -206,8 +206,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
       try {
         const formattedQuery = format(currentQueryResult.originalQuery, {
           language: 'mysql',
-          indent: '  ',
-          linesBetweenQueries: 2,
+          indentStyle: 'standard',
         });
         addTab({
           title: t("header.sqlEditorTitle"),
@@ -320,11 +319,11 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
 
   return (
     <div className="h-full">
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
         {/* Query Information */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-2 text-sm">
+          <CardContent className="pt-4 sm:pt-6">
+            <div className="space-y-2 text-xs sm:text-sm">
               <div>
                 {t("queryResultTable.showingRecords", {
                   start: startRow + 1,
@@ -335,11 +334,13 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                 })}
               </div>
               {currentQueryResult.originalQuery && (
-                <div className="font-mono text-xs bg-muted p-2 rounded flex items-center justify-between">
-                  <div>
-                    {displayedQuery}
+                <div className="font-mono text-xs bg-muted p-2 rounded flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate sm:whitespace-normal">
+                      {displayedQuery}
+                    </div>
                     {currentQueryResult.originalQuery.length > 300 && (
-                      <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 ml-2 text-xs">
+                      <Button variant="link" size="sm" onClick={toggleQueryExpansion} className="h-auto p-0 text-xs sm:ml-2">
                         {isQueryExpanded ? (
                           <>
                             <ChevronUp className="h-3 w-3 mr-1" /> {t("sqlEditor.viewLess")}
@@ -352,9 +353,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                       </Button>
                     )}
                   </div>
-                  <Button variant="outline" size="sm" onClick={handleEditQuery} className="ml-2">
-                    <Edit className="h-4 w-4 mr-2" />
-                    {t("sqlEditor.editQuery")}
+                  <Button variant="outline" size="sm" onClick={handleEditQuery} className="flex-shrink-0">
+                    <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">{t("sqlEditor.editQuery")}</span>
+                    <span className="sm:hidden">{t("sqlEditor.edit")}</span>
                   </Button>
                 </div>
               )}
@@ -365,62 +367,67 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
         {/* Browse Data */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <CardTitle>{t("queryResultTable.browseData")}</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-base sm:text-lg">{t("queryResultTable.browseData")}</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
                   {currentQueryResult.rowCount?.toLocaleString() || 0} {t("queryResultTable.totalRows")}
                   {hasAnyFilters && ` • ${t("queryResultTable.clientFiltered")}`}
                 </CardDescription>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-shrink-0">
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={() => currentQueryResult.originalQuery ? reExecuteQuery(currentQueryResult.originalQuery) : setCurrentQueryResult(initialQueryResult)}
                 >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  {t("queryResultTable.refresh")}
+                  <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">{t("queryResultTable.refresh")}</span>
+                  <span className="sm:hidden text-xs">Refresh</span>
                 </Button>
                 <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  {t("queryResultTable.export")}
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">{t("queryResultTable.export")}</span>
+                  <span className="sm:hidden text-xs">Export</span>
                 </Button>
               </div>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                   {isSearching && (
-                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 animate-spin text-muted-foreground" />
                   )}
                   <Input 
                     placeholder={t("queryResultTable.searchInResults")}
-                    className="pl-10 pr-10"
+                    className="pl-8 sm:pl-10 pr-8 sm:pr-10 text-xs sm:text-sm h-8 sm:h-9"
                     value={searchInput}
                     onChange={(e) => handleSearchInputChange(e.target.value)}
                   />
                 </div>
-                {hasAnyFilters && (
-                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                    <X className="h-4 w-4 mr-2" />
-                    {t("queryResultTable.clearAll")}
-                  </Button>
-                )}
-                <Select value={limit.toString()} onValueChange={handleLimitChange}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10 {t("queryResultTable.rows")}</SelectItem>
-                    <SelectItem value="25">25 {t("queryResultTable.rows")}</SelectItem>
-                    <SelectItem value="50">50 {t("queryResultTable.rows")}</SelectItem>
-                    <SelectItem value="100">100 {t("queryResultTable.rows")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2 flex-shrink-0">
+                  {hasAnyFilters && (
+                    <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                      <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">{t("queryResultTable.clearAll")}</span>
+                      <span className="sm:hidden text-xs">Clear</span>
+                    </Button>
+                  )}
+                  <Select value={limit.toString()} onValueChange={handleLimitChange}>
+                    <SelectTrigger className="w-24 sm:w-32 text-xs sm:text-sm h-8 sm:h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 {t("queryResultTable.rows")}</SelectItem>
+                      <SelectItem value="25">25 {t("queryResultTable.rows")}</SelectItem>
+                      <SelectItem value="50">50 {t("queryResultTable.rows")}</SelectItem>
+                      <SelectItem value="100">100 {t("queryResultTable.rows")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Search Status */}
@@ -447,14 +454,16 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                 <>
                   <div className="border rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
-                      <table className="text-xs">
+                      <table className="w-full text-xs">
                         <thead className="bg-muted">
                           <tr>
                             {currentQueryResult.fields?.map((column) => (
-                              <th key={column.name} className="p-2 text-left min-w-[150px]">
-                                <div className="flex flex-col space-y-2">
+                              <th key={column.name} className="p-2 sm:p-3 text-left min-w-[120px] sm:min-w-[150px]">
+                                <div className="flex flex-col space-y-1 sm:space-y-2">
                                   <div className="flex flex-col">
-                                    <span className="font-medium text-sm">{column.name}</span>
+                                    <span className="font-medium text-xs sm:text-sm truncate" title={column.name}>
+                                      {column.name}
+                                    </span>
                                     <span className="text-xs text-muted-foreground font-normal">
                                       {column.type}
                                     </span>
@@ -462,7 +471,7 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                                   <div className="relative">
                                     <Input
                                       placeholder={t("queryResultTable.filter")}
-                                      className="h-7 text-xs"
+                                      className="h-6 sm:h-7 text-xs"
                                       value={columnFilters[column.name] || ''}
                                       onChange={(e) => handleColumnFilter(column.name, e.target.value)}
                                     />
@@ -470,10 +479,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-5 w-5 p-0"
+                                        className="absolute right-1 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 p-0"
                                         onClick={() => clearColumnFilter(column.name)}
                                       >
-                                        <X className="h-3 w-3" />
+                                        <X className="h-2 w-2 sm:h-3 sm:w-3" />
                                       </Button>
                                     )}
                                   </div>
@@ -488,10 +497,10 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                               {currentQueryResult.fields?.map((column) => (
                                 <td 
                                   key={column.name} 
-                                  className="p-2 min-w-[150px]"
+                                  className="p-2 sm:p-3 min-w-[120px] sm:min-w-[150px] max-w-[200px] sm:max-w-[300px]"
                                   title={String(row[column.name])}
                                 >
-                                  <div className="truncate">
+                                  <div className="truncate text-xs">
                                     {formatCellValue(row[column.name])}
                                   </div>
                                 </td>
@@ -503,8 +512,8 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 text-xs sm:text-sm text-muted-foreground">
+                    <span className="text-center sm:text-left">
                       {t("queryResultTable.showingEntries", {
                         start: startRow + 1,
                         end: endRow + 1,
@@ -512,25 +521,29 @@ const QueryResultTable = ({ queryResult: initialQueryResult, database }: QueryRe
                       })}
                       {hasAnyFilters && ` (${t("queryResultTable.clientFiltered")})`}
                     </span>
-                    <div className="flex gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={handlePrevPage}
                         disabled={offset === 0}
+                        className="text-xs sm:text-sm h-7 sm:h-8"
                       >
-                        {t("queryResultTable.previous")}
+                        <span className="hidden sm:inline">{t("queryResultTable.previous")}</span>
+                        <span className="sm:hidden">Prev</span>
                       </Button>
-                      <span className="flex items-center px-3">
-                        {t("queryResultTable.page")} {currentPage} {t("queryResultTable.of")} {totalPages}
+                      <span className="flex items-center px-2 sm:px-3 text-xs sm:text-sm">
+                        {currentPage}/{totalPages}
                       </span>
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={handleNextPage}
                         disabled={offset + limit >= filteredData.length}
+                        className="text-xs sm:text-sm h-7 sm:h-8"
                       >
-                        {t("queryResultTable.next")}
+                        <span className="hidden sm:inline">{t("queryResultTable.next")}</span>
+                        <span className="sm:hidden">Next</span>
                       </Button>
                     </div>
                   </div>

@@ -172,37 +172,39 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
   const hasContent = filteredItems.length > 0;
 
   return (
-    <div className="p-6 space-y-6 h-full overflow-y-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{getTitle()}</h1>
-          <p className="text-muted-foreground">{getDescription()}</p>
+    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 h-full overflow-y-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg sm:text-xl lg:text-2xl font-bold truncate">{getTitle()}</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground truncate">{getDescription()}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0">
           <Button variant="outline" size="sm" onClick={() => refreshDatabases({ databaseName: database, force: true })}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            {t("databaseTablesList.refresh")}
+            <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">{t("databaseTablesList.refresh")}</span>
+            <span className="sm:hidden text-xs">Refresh</span>
           </Button>
           {hasPrivilege("CREATE") && filterType !== 'views' && (
             <Button size="sm" onClick={() => setIsCreateTableDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              {t("databaseTablesList.createTable")}
+              <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">{t("databaseTablesList.createTable")}</span>
+              <span className="sm:hidden text-xs">Create</span>
             </Button>
           )}
         </div>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{t("databaseTablesList.searchFilter")}</CardTitle>
-          <CardDescription>{t("databaseTablesList.searchFilterDescription")}</CardDescription>
+        <CardHeader className="pb-3 sm:pb-6">
+          <CardTitle className="text-base sm:text-lg">{t("databaseTablesList.searchFilter")}</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">{t("databaseTablesList.searchFilterDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             <Input
               placeholder={t("databaseTablesList.searchPlaceholder")}
-              className="pl-10"
+              className="pl-8 sm:pl-10 text-xs sm:text-sm h-8 sm:h-9"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -234,66 +236,74 @@ const DatabaseTablesList = ({ database, filterType = 'all' }: DatabaseTablesList
 
       {filteredItems.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Table className="h-5 w-5" />
-              {filterType === 'tables' ? t("databaseTablesList.tables") : filterType === 'views' ? t("databaseTablesList.views") : t("databaseTablesList.items")} ({filteredItems.length})
+          <CardHeader className="pb-3 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Table className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="truncate">
+                {filterType === 'tables' ? t("databaseTablesList.tables") : filterType === 'views' ? t("databaseTablesList.views") : t("databaseTablesList.items")} ({filteredItems.length})
+              </span>
             </CardTitle>
-            <CardDescription>{t("databaseTablesList.listOfItems", { type: filterType === 'tables' ? t("databaseTablesList.tables") : filterType === 'views' ? t("databaseTablesList.views") : t("databaseTablesList.items"), databaseName: database })}</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">{t("databaseTablesList.listOfItems", { type: filterType === 'tables' ? t("databaseTablesList.tables") : filterType === 'views' ? t("databaseTablesList.views") : t("databaseTablesList.items"), databaseName: database })}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-hidden">
-              <ShadcnTable>
+              <div className="overflow-x-auto">
+                <ShadcnTable className="w-full">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("databaseTablesList.name")}</TableHead>
-                    <TableHead>{t("databaseTablesList.type")}</TableHead>
-                    <TableHead>{t("databaseTablesList.rows")}</TableHead>
-                    <TableHead>{t("databaseTablesList.size")}</TableHead>
-                    <TableHead>{t("databaseTablesList.engine")}</TableHead>
-                    <TableHead>{t("databaseTablesList.collation")}</TableHead>
+                    <TableHead className="min-w-[150px] sm:min-w-[200px]">{t("databaseTablesList.name")}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t("databaseTablesList.type")}</TableHead>
+                    <TableHead className="text-center min-w-[80px]">{t("databaseTablesList.rows")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("databaseTablesList.size")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("databaseTablesList.engine")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("databaseTablesList.collation")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredItems.map((item) => (
                     <TableRow key={item.name} className="group"> {/* Add group class here */}
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium min-w-[150px] sm:min-w-[200px]">
                         <div className="flex flex-col">
                           <span 
-                            className="cursor-pointer text-blue-600 hover:underline" 
+                            className="cursor-pointer text-blue-600 hover:underline truncate text-sm sm:text-base" 
                             onClick={() => handleOpenTable(item.name)}
+                            title={item.name}
                           >
                             {item.name}
                           </span>
-                          <div className="flex gap-1 mt-1 text-[11px] opacity-0 group-hover:opacity-100 transition-opacity duration-200"> {/* Adjusted font size and added hover effect */}
-                            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={() => handleOpenTableStructure(item.name)}>
-                              <LayoutPanelTop className="h-3 w-3 mr-1" />
-                              {t("databaseTablesList.structure")}
+                          <div className="flex flex-wrap gap-1 mt-1 text-[10px] sm:text-[11px] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            <Button variant="ghost" size="sm" className="h-5 sm:h-6 px-1 sm:px-2 text-[10px] sm:text-[11px]" onClick={() => handleOpenTableStructure(item.name)}>
+                              <LayoutPanelTop className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                              <span className="hidden sm:inline">{t("databaseTablesList.structure")}</span>
+                              <span className="sm:hidden">Struct</span>
                             </Button>
                             {allTables.some(t => t.name === item.name) && canPerformDatabaseAction("DELETE") && (
-                              <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="h-6 px-2 text-[11px] text-orange-500 hover:bg-accent hover:text-orange-600">
-                                <Eraser className="h-3 w-3 mr-1" />
-                                {t("databaseTablesList.empty")}
+                              <Button variant="ghost" size="sm" onClick={() => setTruncateTableConfirm(item.name)} className="h-5 sm:h-6 px-1 sm:px-2 text-[10px] sm:text-[11px] text-orange-500 hover:bg-accent hover:text-orange-600">
+                                <Eraser className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                                <span className="hidden sm:inline">{t("databaseTablesList.empty")}</span>
+                                <span className="sm:hidden">Empty</span>
                               </Button>
                             )}
                             {allTables.some(t => t.name === item.name) && canPerformDatabaseAction("DROP") && (
-                              <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="h-6 px-2 text-[11px] text-red-500 hover:bg-accent hover:text-red-600">
-                                <Trash2 className="h-3 w-3 mr-1" />
-                                {t("databaseTablesList.delete")}
+                              <Button variant="ghost" size="sm" onClick={() => setDeleteTableConfirm(item.name)} className="h-5 sm:h-6 px-1 sm:px-2 text-[10px] sm:text-[11px] text-red-500 hover:bg-accent hover:text-red-600">
+                                <Trash2 className="h-2 w-2 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                                <span className="hidden sm:inline">{t("databaseTablesList.delete")}</span>
+                                <span className="sm:hidden">Del</span>
                               </Button>
                             )}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{allTables.some(t => t.name === item.name) ? t("databaseTablesList.table") : t("databaseTablesList.view")}</TableCell>
-                      <TableCell>{item.rows.toLocaleString()}</TableCell>
-                      <TableCell>{item.size}</TableCell>
-                      <TableCell>{item.engine}</TableCell>
-                      <TableCell>{item.collation}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{allTables.some(t => t.name === item.name) ? t("databaseTablesList.table") : t("databaseTablesList.view")}</TableCell>
+                      <TableCell className="text-center text-xs sm:text-sm">{item.rows.toLocaleString()}</TableCell>
+                      <TableCell className="hidden md:table-cell">{item.size}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{item.engine}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{item.collation}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
-              </ShadcnTable>
+                </ShadcnTable>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -74,52 +74,84 @@ const Header = () => {
   };
 
   return (
-    <header className="border-b border-border px-6 py-4 bg-card">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <header className="border-b border-border px-3 sm:px-4 lg:px-6 py-3 sm:py-4 bg-card">
+      <div className="flex items-center justify-between min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {isMobile && <MobileSidebar />}
-          <div className="flex flex-col gap-1">
-            <h1 className="text-xl font-semibold">{headerTitle}</h1>
+          <div className="flex flex-col gap-0.5 sm:gap-1 min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl font-semibold truncate">{headerTitle}</h1>
             {headerSubtitle && (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-xs sm:text-sm text-muted-foreground truncate">
                 {headerSubtitle}
               </div>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 px-0"
-            onClick={() => setIsShortcutsDialogOpen(true)}
-            title={t("header.keyboardShortcuts")}
-          >
-            <Keyboard className="h-4 w-4" />
-            <span className="sr-only">{t("header.keyboardShortcuts")}</span>
-          </Button>
+        <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 flex-shrink-0">
+          {/* Desktop: Show all buttons */}
+          <div className="hidden lg:flex items-center gap-3">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 px-0"
+              onClick={() => setIsShortcutsDialogOpen(true)}
+              title={t("header.keyboardShortcuts")}
+            >
+              <Keyboard className="h-4 w-4" />
+              <span className="sr-only">{t("header.keyboardShortcuts")}</span>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 px-0">
+                  <Globe className="h-[1.2rem] w-[1.2rem]" />
+                  <span className="sr-only">Change language</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => changeLanguage('en')}>
+                  <span>English</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => changeLanguage('pt-BR')}>
+                  <span>Português (BR)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ThemeToggle />
+          </div>
+          
+          {/* Mobile & Tablet: Compact layout */}
+          <div className="flex lg:hidden items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 px-0">
+                  <Globe className="h-4 w-4" />
+                  <span className="sr-only">Options</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setIsShortcutsDialogOpen(true)}>
+                  <Keyboard className="mr-2 h-4 w-4" />
+                  <span>{t("header.keyboardShortcuts")}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => changeLanguage('en')}>
+                  <Globe className="mr-2 h-4 w-4" />
+                  <span>English</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => changeLanguage('pt-BR')}>
+                  <Globe className="mr-2 h-4 w-4" />
+                  <span>Português (BR)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <ThemeToggle />
+          </div>
+          
+          {/* User menu - always visible */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 px-0">
-                <Globe className="h-[1.2rem] w-[1.2rem]" />
-                <span className="sr-only">Change language</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => changeLanguage('en')}>
-                <span>English</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => changeLanguage('pt-BR')}>
-                <span>Português (BR)</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <ThemeToggle /> {/* Moved ThemeToggle here */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 bg-accent px-3 py-1 rounded-md cursor-pointer">
-                <User className="h-4 w-4" />
-                <span className="text-sm">{user?.username || 'AD'}</span>
+              <div className="flex items-center gap-1 sm:gap-2 bg-accent px-2 sm:px-3 py-1 rounded-md cursor-pointer">
+                <User className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="text-xs sm:text-sm hidden xs:inline">{user?.username || 'AD'}</span>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

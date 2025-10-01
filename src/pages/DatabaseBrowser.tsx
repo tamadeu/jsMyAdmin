@@ -481,7 +481,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
   return (
     <div className="h-full">
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
         {/* Query Information */}
         <Card>
           <CardContent className="pt-6">
@@ -504,21 +504,22 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
 
         {/* Browse Data */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>{t("queryResultTable.browseData")}</CardTitle>
-                <CardDescription>
+          <CardHeader className="pb-3 sm:pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-base sm:text-lg">{t("queryResultTable.browseData")}</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
                   {tableData ? `${tableData.total.toLocaleString()} ${t("queryResultTable.totalRows")}` : t("queryResultTable.noData")}
                   {hasAnyFilters && ` • ${t("queryResultTable.serverFiltered")}`}
                   {hasPrimaryKey && ` • ${t("queryResultTable.editableHasPk")}`}
                 </CardDescription>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-shrink-0">
                 {isTable && canPerformDatabaseAction("ALTER") && (
                   <Button variant="outline" size="sm" onClick={handleViewStructure}>
-                    <LayoutPanelTop className="h-4 w-4 mr-2" />
-                    {t("databaseBrowser.structure")}
+                    <LayoutPanelTop className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">{t("databaseBrowser.structure")}</span>
+                    <span className="sm:hidden text-xs">Struct</span>
                   </Button>
                 )}
                 <Button 
@@ -526,52 +527,61 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                   size="sm" 
                   onClick={loadTableData}
                 >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  {t("queryResultTable.refresh")}
+                  <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">{t("queryResultTable.refresh")}</span>
+                  <span className="sm:hidden text-xs">Refresh</span>
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)}> {/* Open export dialog */}
-                  <Download className="h-4 w-4 mr-2" />
-                  {t("queryResultTable.export")}
+                <Button variant="outline" size="sm" onClick={() => setIsExportDialogOpen(true)}>
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">{t("queryResultTable.export")}</span>
+                  <span className="sm:hidden text-xs">Export</span>
                 </Button>
                 {canPerformDatabaseAction("INSERT") && (
-                  <Button size="sm" onClick={() => setIsInsertRowDialogOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    {t("queryResultTable.insertRow")}
+                  <Button 
+                    size="sm" 
+                    onClick={() => setIsInsertRowDialogOpen(true)}
+                    title={t("queryResultTable.insertRow")}
+                    className="px-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="sr-only">{t("queryResultTable.insertRow")}</span>
                   </Button>
                 )}
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                   {isSearching && (
-                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                    <Loader2 className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 animate-spin text-muted-foreground" />
                   )}
                   <Input 
                     placeholder={t("queryResultTable.searchInDatabase")}
-                    className="pl-10 pr-10"
+                    className="pl-8 sm:pl-10 pr-8 sm:pr-10 text-xs sm:text-sm h-8 sm:h-9"
                     value={searchInput}
                     onChange={(e) => handleSearchInputChange(e.target.value)}
                   />
                 </div>
-                {hasAnyFilters && (
-                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                    <X className="h-4 w-4 mr-2" />
-                    {t("queryResultTable.clearAll")}
-                  </Button>
-                )}
-                {tableData && (
-                  <ColumnSelector
-                    columns={tableData.columns}
-                    visibleColumns={visibleColumns}
-                    onVisibleColumnsChange={setVisibleColumns}
-                  />
-                )}
-                <Select value={limit.toString()} onValueChange={handleLimitChange}>
-                  <SelectTrigger className="w-32">
+                <div className="flex gap-2 flex-shrink-0">
+                  {hasAnyFilters && (
+                    <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                      <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">{t("queryResultTable.clearAll")}</span>
+                      <span className="sm:hidden text-xs">Clear</span>
+                    </Button>
+                  )}
+                  {tableData && (
+                    <ColumnSelector
+                      columns={tableData.columns}
+                      visibleColumns={visibleColumns}
+                      onVisibleColumnsChange={setVisibleColumns}
+                    />
+                  )}
+                  <Select value={limit.toString()} onValueChange={handleLimitChange}>
+                    <SelectTrigger className="w-24 sm:w-32 text-xs sm:text-sm h-8 sm:h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -580,7 +590,8 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                     <SelectItem value="50">50 {t("queryResultTable.rows")}</SelectItem>
                     <SelectItem value="100">100 {t("queryResultTable.rows")}</SelectItem>
                   </SelectContent>
-                </Select>
+                  </Select>
+                </div>
               </div>
 
               {/* Search Status */}
@@ -762,8 +773,8 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <span>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 text-xs sm:text-sm text-muted-foreground">
+                    <span className="text-center sm:text-left">
                       {t("queryResultTable.showingEntries", {
                         start: startRow + 1,
                         end: endRow + 1,
@@ -772,25 +783,29 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                       {hasAnyFilters && ` (${t("queryResultTable.serverFiltered")})`}
                       {selectedRows.size > 0 && ` • ${selectedRows.size} ${t("queryResultTable.selected")}`}
                     </span>
-                    <div className="flex gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={handlePrevPage}
                         disabled={offset === 0}
+                        className="text-xs sm:text-sm h-7 sm:h-8"
                       >
-                        {t("queryResultTable.previous")}
+                        <span className="hidden sm:inline">{t("queryResultTable.previous")}</span>
+                        <span className="sm:hidden">Prev</span>
                       </Button>
-                      <span className="flex items-center px-3">
-                        {t("queryResultTable.page")} {currentPage} {t("queryResultTable.of")} {totalPages}
+                      <span className="flex items-center px-2 sm:px-3 text-xs sm:text-sm">
+                        {currentPage}/{totalPages}
                       </span>
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={handleNextPage}
                         disabled={offset + limit >= tableData.total}
+                        className="text-xs sm:text-sm h-7 sm:h-8"
                       >
-                        {t("queryResultTable.next")}
+                        <span className="hidden sm:inline">{t("queryResultTable.next")}</span>
+                        <span className="sm:hidden">Next</span>
                       </Button>
                     </div>
                   </div>
