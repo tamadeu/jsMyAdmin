@@ -188,7 +188,8 @@
     "copyRow": "Copiar Linha",
     "deleteRowAction": "Excluir Linha",
     "editRowAction": "Editar Linha",
-    "loadingTableData": "Carregando dados da tabela..."
+    "loadingTableData": "Carregando dados da tabela...",
+    "clickToSort": "Clique para ordenar por {{columnName}}"
   },
   "configurationPage": {
     "title": "Configuração da Aplicação",

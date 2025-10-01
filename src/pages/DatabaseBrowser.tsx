@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { QueryResult, apiService, TableData } from "@/services/api";
+import { QueryResult, apiService, TableData, SortDirection } from "@/services/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp, Plus, Edit, Copy, Trash2, Save, XCircle, LayoutPanelTop } from "lucide-react";
+import { AlertCircle, Table as TableIcon, Search, Filter, RotateCcw, Download, X, Loader2, ChevronDown, ChevronUp, Plus, Edit, Copy, Trash2, Save, XCircle, LayoutPanelTop, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -86,6 +86,8 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
   const [deleteConfirm, setDeleteConfirm] = useState<{rowIndex: number, primaryKey: any} | null>(null);
   const [isInsertRowDialogOpen, setIsInsertRowDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false); // State for export dialog
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('ASC');
 
   const debouncedSearchTerm = useDebounce(searchInput, 500);
   const debouncedColumnFilters = useDebounceObject(columnFilters, 500);
@@ -114,7 +116,7 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
       loadTableData();
       loadTableInfo();
     }
-  }, [database, table, limit, offset, debouncedSearchTerm, debouncedColumnFilters]);
+  }, [database, table, limit, offset, debouncedSearchTerm, debouncedColumnFilters, sortColumn, sortDirection]);
 
   const loadTableData = async () => {
     if (!database || !table) return;
@@ -132,7 +134,9 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
         limit,
         offset,
         search: debouncedSearchTerm,
-        columnFilters: debouncedColumnFilters
+        columnFilters: debouncedColumnFilters,
+        orderBy: sortColumn || undefined,
+        orderDirection: sortColumn ? sortDirection : undefined
       });
       const endTime = Date.now();
       
@@ -396,6 +400,19 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     }
   };
 
+  const handleSort = (columnName: string) => {
+    if (sortColumn === columnName) {
+      // Se já está ordenando por esta coluna, alterna a direção
+      setSortDirection(prev => prev === 'ASC' ? 'DESC' : 'ASC');
+    } else {
+      // Nova coluna, começa com ASC
+      setSortColumn(columnName);
+      setSortDirection('ASC');
+    }
+    // Reset da paginação para a primeira página
+    setOffset(0);
+  };
+
   const formatCellValue = (value: any) => {
     if (value === null) return <span className="text-muted-foreground italic">{t("queryResultTable.null")}</span>;
     if (typeof value === 'boolean') return value ? 'true' : 'false';
@@ -423,6 +440,10 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
     
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    if (sortColumn) {
+      query += ` ORDER BY \`${sortColumn}\` ${sortDirection}`;
     }
     
     if (limit) {
@@ -646,8 +667,25 @@ const DatabaseBrowser = ({ database, table }: DatabaseBrowserProps) => {
                                 }}
                               >
                                 <div className="flex flex-col space-y-2">
-                                  <div className="flex flex-col">
-                                    <span className="font-medium text-sm">{column.name}</span>
+                                  <div 
+                                    className="flex flex-col cursor-pointer hover:bg-muted/50 p-1 rounded -m-1 transition-colors"
+                                    onClick={() => handleSort(column.name)}
+                                    title={t("queryResultTable.clickToSort", { columnName: column.name })}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-medium text-sm">{column.name}</span>
+                                      <div className="ml-2 flex-shrink-0">
+                                        {sortColumn === column.name ? (
+                                          sortDirection === 'ASC' ? (
+                                            <ArrowUp className="h-3 w-3 text-primary" />
+                                          ) : (
+                                            <ArrowDown className="h-3 w-3 text-primary" />
+                                          )
+                                        ) : (
+                                          <ArrowUpDown className="h-3 w-3 text-muted-foreground opacity-50" />
+                                        )}
+                                      </div>
+                                    </div>
                                     <span className="text-xs text-muted-foreground font-normal">
                                       {column.type}
                                       {column.key === 'PRI' && ` (${t("queryResultTable.pk")})`}

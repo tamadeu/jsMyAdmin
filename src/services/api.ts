@@ -6,6 +6,13 @@ export interface TableInfo {
   collation: string;
 }
 
+export type SortDirection = 'ASC' | 'DESC';
+
+export interface SortOptions {
+  column: string;
+  direction: SortDirection;
+}
+
 export interface DatabaseTablesResponse {
   tables: TableInfo[];
   views: TableInfo[];
@@ -504,6 +511,8 @@ class ApiService {
       offset?: number;
       search?: string;
       columnFilters?: Record<string, string>;
+      orderBy?: string;
+      orderDirection?: SortDirection;
     } = {},
   ): Promise<TableData> {
     const params = new URLSearchParams();
@@ -511,6 +520,8 @@ class ApiService {
     if (options.limit) params.append("limit", options.limit.toString());
     if (options.offset) params.append("offset", options.offset.toString());
     if (options.search) params.append("search", options.search);
+    if (options.orderBy) params.append("orderBy", options.orderBy);
+    if (options.orderDirection) params.append("orderDirection", options.orderDirection);
 
     if (options.columnFilters) {
       Object.entries(options.columnFilters).forEach(([column, value]) => {

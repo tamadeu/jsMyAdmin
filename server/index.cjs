@@ -907,7 +907,7 @@ app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (re
   try {
     connection = await getUserPooledConnection(req); // Get pool connection
     const { database, table } = req.params;
-    const { limit = 25, offset = 0, search = '' } = req.query;
+    const { limit = 25, offset = 0, search = '', orderBy = '', orderDirection = 'ASC' } = req.query;
     
     const columnFilters = {};
     Object.keys(req.query).forEach(key => {
@@ -936,7 +936,19 @@ app.get('/api/databases/:database/tables/:table/data', authMiddleware, async (re
     });
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-    const dataQuery = `SELECT * FROM \`${table}\` ${whereClause} LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
+    
+    // Add ORDER BY clause if orderBy is specified
+    let orderByClause = '';
+    if (orderBy && orderBy.trim()) {
+      // Validate that the column exists to prevent SQL injection
+      const validColumn = columns.find(col => col.Field === orderBy.trim());
+      if (validColumn) {
+        const direction = orderDirection.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+        orderByClause = `ORDER BY \`${orderBy.trim()}\` ${direction}`;
+      }
+    }
+    
+    const dataQuery = `SELECT * FROM \`${table}\` ${whereClause} ${orderByClause} LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}`;
     const countQuery = `SELECT COUNT(*) as total FROM \`${table}\` ${whereClause}`;
     
     const [rows] = await connection.query(dataQuery, queryParams);

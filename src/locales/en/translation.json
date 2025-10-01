@@ -188,7 +188,8 @@
     "copyRow": "Copy Row",
     "deleteRowAction": "Delete Row",
     "editRowAction": "Edit Row",
-    "loadingTableData": "Loading data for table..."
+    "loadingTableData": "Loading data for table...",
+    "clickToSort": "Click to sort by {{columnName}}"
   },
   "configurationPage": {
     "title": "Application Configuration",
