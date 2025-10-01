@@ -19,17 +19,12 @@
     "language": "en",
     "queryTimeout": 30000,
     "maxQueryResults": 1000,
-    "autoRefresh": false,
-    "refreshInterval": 30000
+    "autoRefresh": true,
+    "refreshInterval": 10000
   },
   "security": {
     "allowMultipleStatements": false,
     "allowLocalInfile": false,
     "requireSSL": false
-  },
-  "ai": {
-    "geminiApiKey": "",
-    "openAIApiKey": "",
-    "anthropicApiKey": ""
   }
 }

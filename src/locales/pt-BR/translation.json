@@ -106,7 +106,11 @@
     "viewLess": "Ver Menos",
     "viewMore": "Ver Mais",
     "editQuery": "Editar Consulta",
-    "generateWithAi": "Gerar com IA"
+    "generateWithAi": "Gerar com IA",
+    "advancedEditor": "Editor Avançado",
+    "lineNumbers": "Números de Linha",
+    "autocomplete": "Autocompletar",
+    "syntaxValidation": "Validação de Sintaxe"
   },
   "queryResultTable": {
     "showingRecords": "Mostrando registros {{start}} - {{end}} ({{total}} no total, {{filteredByServer}}Consulta levou {{time}} segundos.)",

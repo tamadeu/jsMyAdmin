@@ -106,7 +106,11 @@
     "viewLess": "View Less",
     "viewMore": "View More",
     "editQuery": "Edit Query",
-    "generateWithAi": "Generate with AI"
+    "generateWithAi": "Generate with AI",
+    "advancedEditor": "Advanced Editor",
+    "lineNumbers": "Line Numbers",
+    "autocomplete": "Autocomplete",
+    "syntaxValidation": "Syntax Validation"
   },
   "queryResultTable": {
     "showingRecords": "Showing records {{start}} - {{end}} ({{total}} total, {{filteredByServer}}Query took {{time}} seconds.)",

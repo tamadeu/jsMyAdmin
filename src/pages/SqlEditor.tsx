@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Play, RotateCcw, AlertCircle, AlignLeft, History, Loader2, RefreshCw, Edit, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { apiService, QueryResult, QueryHistoryPayload } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useTabs } from "@/context/TabContext";
+import { useDatabaseCache } from "@/context/DatabaseCacheContext";
 import { format } from "sql-formatter";
 import SqlCodeEditor from "@/components/SqlCodeEditor";
 import SqlAgent from "@/components/SqlAgent"; // Import the new SqlAgent component
@@ -16,6 +17,7 @@ const SqlEditor = () => {
   const { t } = useTranslation(); // Initialize useTranslation
   const { toast } = useToast();
   const { addTab, activeTabId, getTabById, updateTabContent, removeTab } = useTabs();
+  const { databases } = useDatabaseCache();
   
   const activeTab = getTabById(activeTabId);
 
@@ -27,32 +29,26 @@ const SqlEditor = () => {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isSqlAgentDialogOpen, setIsSqlAgentDialogOpen] = useState(false); // State for AI Agent dialog
 
+  // Track the last tab ID to detect tab switches
+  const lastActiveTabId = useRef(activeTabId);
 
-
-  // Effect to synchronize local sqlQuery state with activeTab.sqlQueryContent when activeTab changes
+  // Effect to synchronize local sqlQuery state when switching tabs
   useEffect(() => {
-    if (activeTab?.type === 'sql-editor') {
-      const tabContentFromContext = activeTab.sqlQueryContent;
-      const defaultQuery = "SELECT * FROM your_table;";
+    // Only update when the tab actually changes, not on every render
+    if (lastActiveTabId.current !== activeTabId) {
+      lastActiveTabId.current = activeTabId;
       
-      // If context has content, use it. Otherwise, use default.
-      const newSqlQueryValue = tabContentFromContext !== undefined ? tabContentFromContext : defaultQuery;
-
-      // Only update local state if it's different from the new source of truth
-      setSqlQuery(prevQuery => {
-        if (prevQuery !== newSqlQueryValue) {
-          return newSqlQueryValue;
-        }
-        return prevQuery;
-      });
-    } else {
-      // If not an SQL editor tab, reset local state to default if it's not already
-      setSqlQuery(prevQuery => {
-        if (prevQuery !== "SELECT * FROM your_table;") {
-          return "SELECT * FROM your_table;";
-        }
-        return prevQuery;
-      });
+      if (activeTab?.type === 'sql-editor') {
+        const tabContentFromContext = activeTab.sqlQueryContent;
+        const defaultQuery = "SELECT * FROM your_table;";
+        
+        // If context has content, use it. Otherwise, use default.
+        const newSqlQueryValue = tabContentFromContext !== undefined ? tabContentFromContext : defaultQuery;
+        setSqlQuery(newSqlQueryValue);
+      } else {
+        // If not an SQL editor tab, reset to default
+        setSqlQuery("SELECT * FROM your_table;");
+      }
     }
   }, [activeTabId, activeTab?.type, activeTab?.sqlQueryContent]);
 
@@ -95,21 +91,24 @@ const SqlEditor = () => {
   }, [activeTabId, activeTab?.type, toast, t]);
 
   // Effect to push local sqlQuery state to context when it changes (e.g., user typing)
+  // Using debouncing to avoid excessive updates during typing
   useEffect(() => {
     if (activeTabId && activeTab?.type === 'sql-editor') {
-      const tabContentFromContext = activeTab.sqlQueryContent;
-      // Only update context if local state is different from context state
-      if (sqlQuery !== tabContentFromContext) {
+      // Debounce the update to context to avoid excessive calls during typing
+      const timeoutId = setTimeout(() => {
         updateTabContent(activeTabId, { sqlQueryContent: sqlQuery });
-      }
-    }
-  }, [sqlQuery, activeTabId, activeTab?.type, activeTab?.sqlQueryContent, updateTabContent]);
+      }, 500); // 500ms debounce
 
-  const executeQuery = useCallback(async () => {
+      return () => clearTimeout(timeoutId);
+    }
+  }, [sqlQuery, activeTabId, activeTab?.type, updateTabContent]);
+
+  const executeQueryInternal = useCallback(async (queryToExecute?: string) => {
+    const query = queryToExecute || sqlQuery;
     setIsExecuting(true);
     let result: QueryResult | null = null;
     try {
-      result = await apiService.executeQuery(sqlQuery);
+      result = await apiService.executeQuery(query);
 
       if (result.success) {
         const isSelect = sqlQuery.trim().toLowerCase().startsWith('select');
@@ -152,7 +151,7 @@ const SqlEditor = () => {
       setIsExecuting(false);
       if (result) {
         apiService.saveQueryToHistory({
-          query_text: sqlQuery,
+          query_text: query,
           execution_time_ms: result.executionTime,
           status: result.success ? 'success' : 'error',
           error_message: result.error,
@@ -169,6 +168,14 @@ const SqlEditor = () => {
       }
     }
   }, [sqlQuery, addTab, toast, t]);
+
+  // Wrapper functions for different use cases
+  const executeQuery = useCallback(() => executeQueryInternal(), [executeQueryInternal]);
+  const executeCurrentQuery = useCallback((query: string) => {
+    // Atualizar o estado local primeiro
+    setSqlQuery(query);
+    executeQueryInternal(query);
+  }, [executeQueryInternal]);
 
 
 
@@ -208,6 +215,56 @@ const SqlEditor = () => {
   // Determine the current database context for the AI agent
   const currentDatabaseContext = activeTab?.params?.database;
 
+  // Memoized computations to avoid unnecessary recalculations
+  const autocompleteData = useMemo(() => {
+    const databaseNames = [...new Set(databases.map(db => db.name))]; // Remove duplicatas
+    const currentDatabase = databases.find(db => db.name === currentDatabaseContext);
+    
+    // Usar Set para evitar duplicatas na origem
+    const tableSet = new Set<string>();
+    
+    if (currentDatabase) {
+      // Adicionar tabelas do banco atual (sem prefixo)
+      currentDatabase.tables.forEach(table => {
+        tableSet.add(table.name);
+      });
+      
+      // Adicionar tabelas de outros bancos (com prefixo)
+      databases
+        .filter(db => db.name !== currentDatabaseContext)
+        .forEach(db => {
+          db.tables.forEach(table => {
+            tableSet.add(`${db.name}.${table.name}`);
+          });
+        });
+    } else {
+      // Se não há banco selecionado, mostrar todas as tabelas com prefixo
+      databases.forEach(db => {
+        db.tables.forEach(table => {
+          tableSet.add(`${db.name}.${table.name}`);
+        });
+      });
+    }
+    
+    const tablesForAutocomplete = Array.from(tableSet);
+
+    // Preparar informações detalhadas das tabelas para autocompletar
+    // Por enquanto, usando apenas nomes de tabelas sem informações de colunas
+    // TODO: Implementar API para obter estrutura das colunas das tabelas
+    const tablesWithColumns = currentDatabase 
+      ? currentDatabase.tables.map(table => ({
+          name: table.name,
+          columns: [] // Vazio por enquanto até implementarmos API de colunas
+        }))
+      : [];
+
+    return {
+      databaseNames,
+      tablesForAutocomplete,
+      tablesWithColumns
+    };
+  }, [databases, currentDatabaseContext]);
+
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -240,12 +297,30 @@ const SqlEditor = () => {
       />
 
       {/* Query Editor Area */}
-      <div className="flex-1">
+      <div className="flex-1 space-y-2">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center space-x-4">
+            <span>✨ {t("sqlEditor.advancedEditor")}</span>
+            <span>📝 {t("sqlEditor.lineNumbers")}</span>
+            <span>🎯 {t("sqlEditor.autocomplete")}</span>
+            <span>🔍 {t("sqlEditor.syntaxValidation")}</span>
+          </div>
+          <div className="flex items-center space-x-2 text-xs">
+            <kbd className="px-1.5 py-0.5 bg-muted rounded border">Ctrl+Enter</kbd>
+            <span>{t("sqlEditor.execute")}</span>
+            <kbd className="px-1.5 py-0.5 bg-muted rounded border">Ctrl+Shift+F</kbd>
+            <span>{t("sqlEditor.formatSql")}</span>
+          </div>
+        </div>
         <SqlCodeEditor
           value={sqlQuery}
           onValueChange={setSqlQuery}
           onKeyDown={handleKeyDown}
+          onExecute={executeCurrentQuery}
           placeholder="SELECT * FROM your_table;"
+          tables={autocompleteData.tablesForAutocomplete}
+          databases={autocompleteData.databaseNames}
+          tablesWithColumns={autocompleteData.tablesWithColumns}
         />
       </div>
 
